@@ -63,7 +63,7 @@ fn main() -> wry::Result<()> {
 
 #[cfg(target_os = "macos")]
 pub unsafe fn decorate_window(window: *mut Object, position: LogicalPosition<f64>) {
-  NSWindow::setTitlebarAppearsTransparent_(window, true);
+  NSWindow::setTitlebarAppearsTransparent_(window, cocoa::base::YES);
   NSWindow::setTitleVisibility_(window, NSWindowTitleVisibility::NSWindowTitleHidden);
   NSWindow::setStyleMask_(
     window,
