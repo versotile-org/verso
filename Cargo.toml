@@ -29,7 +29,6 @@ cfg_aliases = "0.1"
 [dependencies]
 log = "0.4"
 thiserror = "1.0"
-url = "2.4"
 raw-window-handle = { version = "0.5", features = ["std"] }
 # Servo
 libservo = { git = "https://github.com/servo/servo.git", rev = "e7d2d23", features = ["max_log_level", "native-bluetooth", "webdriver"] }
