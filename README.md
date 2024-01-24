@@ -2,6 +2,8 @@
 
 A web browser.
 
+https://github.com/wusyong/Yippee/assets/8409985/a7a92fa4-5980-44d1-a9b5-81ff23c01ba6
+
 # Usage
 
 The current demo works best on macOS at the moment, since it tries to customize its traffic light buttons to be seamless in the window.
