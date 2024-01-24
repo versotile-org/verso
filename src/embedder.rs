@@ -22,7 +22,7 @@ use winit::{
   window::CursorIcon,
 };
 
-use super::window::WebView;
+use super::webview::WebView;
 
 /// The Servo embedder to communicate with servo instance.
 pub struct Embedder {
@@ -280,7 +280,7 @@ impl Embedder {
     self.is_shutdown
   }
 
-  pub fn servo_client(&mut self) -> &mut Option<Servo<WebView>> {
+  pub fn servo(&mut self) -> &mut Option<Servo<WebView>> {
     &mut self.servo
   }
 }

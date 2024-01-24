@@ -1,14 +1,10 @@
-// Copyright 2020-2023 Tauri Programme within The Commons Conservancy
-// SPDX-License-Identifier: Apache-2.0
-// SPDX-License-Identifier: MIT
-
 use winit::{
   dpi::PhysicalSize,
   event::{Event, WindowEvent},
   event_loop::{ControlFlow, EventLoop},
   window::WindowBuilder,
 };
-use wry::{WebViewBuilder, WebViewBuilderExtServo, WebViewExtServo};
+use yippee::Yippee;
 
 /* window decoration */
 #[cfg(target_os = "macos")]
@@ -24,7 +20,7 @@ use winit::dpi::LogicalPosition;
 #[cfg(target_os = "macos")]
 use winit::platform::macos::WindowBuilderExtMacOS;
 
-fn main() -> wry::Result<()> {
+fn main() {
   let event_loop = EventLoop::new().unwrap();
   let window = WindowBuilder::new()
     .with_inner_size(PhysicalSize::new(1000, 500))
@@ -40,25 +36,21 @@ fn main() -> wry::Result<()> {
   }
 
   #[allow(unused_mut)]
-  let mut builder = WebViewBuilder::new_servo(window, event_loop.create_proxy());
-  let mut webview = builder.build()?;
-
+  let mut webview = Yippee::new(window, event_loop.create_proxy());
   event_loop
     .run(move |event, evl| {
-      if !evl.exiting() && webview.servo().is_shutdown() {
-        if let Some(servo) = webview.servo().servo_client().take() {
+      if !evl.exiting() && webview.embedder().is_shutdown() {
+        if let Some(servo) = webview.embedder().servo().take() {
           servo.deinit();
         }
         evl.exit();
       } else {
-        webview.servo().set_control_flow(&event, evl);
-        webview.servo().handle_winit_event(event);
-        webview.servo().handle_servo_messages();
+        webview.embedder().set_control_flow(&event, evl);
+        webview.embedder().handle_winit_event(event);
+        webview.embedder().handle_servo_messages();
       }
     })
     .unwrap();
-
-  Ok(())
 }
 
 #[cfg(target_os = "macos")]

@@ -31,6 +31,12 @@ For now, please follow the instructions in [Servo - Build Setup](https://github.
 MOZJS_MIRROR=path/to/libmozjs.tar.gz
 ```
 
+For powershell:
+
+```sh
+$env:MOZJS_MIRROR='path/to/libmozjs.tar.gz'
+```
+
 - **NixOS only:** add `wayland` and `libGL` to `LD_LIBRARY_PATH` in `../servo/etc/shell.nix`
 
 - Run demo

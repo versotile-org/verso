@@ -2,17 +2,10 @@ use std::{env, fs, path::PathBuf};
 
 use servo::embedder_traits::resources::{self, Resource, ResourceReaderMethods};
 
-use crate::WebContext;
-
 struct ResourceReader(PathBuf);
 
-pub fn init(context: Option<&mut WebContext>) {
-  match context {
-    Some(c) if c.data_directory().is_some() => resources::set(Box::new(ResourceReader(
-      c.data_directory().unwrap().to_path_buf(),
-    ))),
-    _ => resources::set(Box::new(ResourceReader(resources_dir_path()))),
-  }
+pub fn init() {
+  resources::set(Box::new(ResourceReader(resources_dir_path())));
 }
 
 impl ResourceReaderMethods for ResourceReader {
