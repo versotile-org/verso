@@ -1,10 +1,5 @@
-use winit::{
-    dpi::PhysicalSize,
-    event::{Event, WindowEvent},
-    event_loop::{ControlFlow, EventLoop},
-    window::WindowBuilder,
-};
-use yippee::Yippee;
+use winit::{dpi::PhysicalSize, event_loop::EventLoop, window::WindowBuilder};
+use yippee::{Result, Yippee};
 
 /* window decoration */
 #[cfg(target_os = "macos")]
@@ -20,13 +15,12 @@ use winit::dpi::LogicalPosition;
 #[cfg(target_os = "macos")]
 use winit::platform::macos::WindowBuilderExtMacOS;
 
-fn main() {
-    let event_loop = EventLoop::new().unwrap();
+fn main() -> Result<()> {
+    let event_loop = EventLoop::new()?;
     let window = WindowBuilder::new()
         .with_title("(*ﾟ▽ﾟ)ﾉ Yippee")
         .with_inner_size(PhysicalSize::new(1000, 500))
-        .build(&event_loop)
-        .unwrap();
+        .build(&event_loop)?;
 
     #[cfg(target_os = "macos")]
     unsafe {
@@ -37,21 +31,16 @@ fn main() {
     }
 
     #[allow(unused_mut)]
-    let mut webview = Yippee::new(window, event_loop.create_proxy());
-    event_loop
-        .run(move |event, evl| {
-            if !evl.exiting() && webview.is_shutdown() {
-                if let Some(servo) = webview.servo().take() {
-                    servo.deinit();
-                }
-                evl.exit();
-            } else {
-                webview.set_control_flow(&event, evl);
-                webview.handle_winit_event(event);
-                webview.handle_servo_messages();
-            }
-        })
-        .unwrap();
+    let mut yippee = Yippee::new(window, event_loop.create_proxy());
+    event_loop.run(move |event, evl| {
+        if !evl.exiting() && yippee.servo().is_none() {
+            evl.exit();
+        } else {
+            yippee.run(event, evl);
+        }
+    })?;
+
+    Ok(())
 }
 
 #[cfg(target_os = "macos")]

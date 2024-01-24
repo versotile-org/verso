@@ -3,6 +3,9 @@ use std::{collections::HashMap, env, fs::File, io::Read};
 use getopts::Options;
 use servo::config::{basedir, opts, prefs};
 
+/// Init options and preferences.
+///
+/// TODO write down how prefs and opts work.
 pub fn init() {
     // Reads opts first and then prefs.
     let args: Vec<String> = env::args().collect();

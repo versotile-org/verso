@@ -13,14 +13,17 @@ use surfman::{Connection, GLApi, GLVersion, SurfaceType};
 use servo_media::player::context::{GlApi, GlContext, NativeDisplay};
 use winit::window::Window;
 
-/// This is the type for servo embedder. Not for public usage.
+/// A web view is an area to display web browsing context. It's what user will treat as a "web page".
 pub struct WebView {
+    /// Access to webrender surfman
     pub webrender_surfman: WebrenderSurfman,
     animation_state: Cell<AnimationState>,
+    /// Access to winit winodw
     pub window: Window,
 }
 
 impl WebView {
+    /// Create a web view from winit window.
     pub fn new(window: Window) -> Self {
         let connection = Connection::new().expect("Failed to create surfman connection");
         let adapter = connection
@@ -41,14 +44,17 @@ impl WebView {
         }
     }
 
+    /// Check if web view is animating.
     pub fn is_animating(&self) -> bool {
         self.animation_state.get() == AnimationState::Animating
     }
 
+    /// Resize the web view.
     pub fn resize(&self, size: Size2D<i32, UnknownUnit>) {
         let _ = self.webrender_surfman.resize(size);
     }
 
+    /// Request winit window to emit redraw event.
     pub fn request_redraw(&self) {
         self.window.request_redraw();
     }

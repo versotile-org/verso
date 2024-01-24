@@ -24,7 +24,7 @@ use winit::{
 
 use crate::{prefs, resources, webview::WebView};
 
-/// The Yippee to communicate with servo instance.
+/// Main entry point of Yippee browser.
 pub struct Yippee {
     servo: Option<Servo<WebView>>,
     // TODO TopLevelBrowsingContextId
@@ -32,10 +32,10 @@ pub struct Yippee {
     webview: Rc<WebView>,
     events: Vec<EmbedderEvent>,
     mouse_position: PhysicalPosition<f64>,
-    is_shutdown: bool,
 }
 
 impl Yippee {
+    /// Create an Yippee instance from winit's window and event loop proxy.
     pub fn new(window: Window, proxy: EventLoopProxy<()>) -> Self {
         resources::init();
         prefs::init();
@@ -62,12 +62,22 @@ impl Yippee {
             webview,
             events: vec![],
             mouse_position: PhysicalPosition::default(),
-            is_shutdown: false,
             browser_id: None,
         }
     }
 
-    pub fn set_control_flow(&self, event: &Event<()>, evl: &EventLoopWindowTarget<()>) {
+    /// Run an iteration of Servo handling cycle. An iteration will perform following actions:
+    ///
+    /// - Set the control flow of winit event loop
+    /// - Hnadle Winit's event and push to Yipppee's embedder event queue.
+    /// - Consume Servo's messages and then send all embedder events to Servo.
+    pub fn run(&mut self, event: Event<()>, evl: &EventLoopWindowTarget<()>) {
+        self.set_control_flow(&event, evl);
+        self.handle_winit_event(event);
+        self.handle_servo_messages();
+    }
+
+    fn set_control_flow(&self, event: &Event<()>, evl: &EventLoopWindowTarget<()>) {
         let control_flow = if !self.webview.is_animating() || *event == Event::Suspended {
             ControlFlow::Wait
         } else {
@@ -77,7 +87,7 @@ impl Yippee {
         log::trace!("Yippee sets control flow to: {control_flow:?}");
     }
 
-    pub fn handle_winit_event(&mut self, event: Event<()>) {
+    fn handle_winit_event(&mut self, event: Event<()>) {
         log::trace!("Yippee is creating ebedder event from: {event:?}");
         match event {
             Event::Suspended => {}
@@ -199,12 +209,13 @@ impl Yippee {
         }
     }
 
-    pub fn handle_servo_messages(&mut self) {
+    fn handle_servo_messages(&mut self) {
         let Some(servo) = self.servo.as_mut() else {
             return;
         };
 
         let mut need_present = false;
+        let mut shutdown = false;
 
         servo.get_events().into_iter().for_each(|(w, m)| {
             log::trace!("Yippee is handling servo message: {m:?} with browser id: {w:?}");
@@ -268,7 +279,7 @@ impl Yippee {
                     self.events.push(EmbedderEvent::Quit);
                 }
                 EmbedderMsg::Shutdown => {
-                    self.is_shutdown = true;
+                    shutdown = true;
                 }
                 e => {
                     log::warn!("Yippee hasn't supported handling this message yet: {e:?}")
@@ -283,19 +294,22 @@ impl Yippee {
         } else if need_present {
             self.webview.request_redraw();
         }
+
+        if shutdown {
+            log::trace!("Yippee is shutting down Servo");
+            self.servo.take().map(Servo::deinit);
+        }
     }
 
-    pub fn is_shutdown(&self) -> bool {
-        self.is_shutdown
-    }
-
+    /// Helper method to access Servo instance. This can be used to check if Servo is shut down as well.
     pub fn servo(&mut self) -> &mut Option<Servo<WebView>> {
         &mut self.servo
     }
 }
 
+/// Embedder is required by Servo creation. Servo will use this type to wake up winit's event loop.
 #[derive(Debug, Clone)]
-pub struct Embedder(pub EventLoopProxy<()>);
+struct Embedder(pub EventLoopProxy<()>);
 
 impl EmbedderMethods for Embedder {
     fn create_event_loop_waker(&mut self) -> Box<dyn EventLoopWaker> {

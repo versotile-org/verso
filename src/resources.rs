@@ -4,6 +4,7 @@ use servo::embedder_traits::resources::{self, Resource, ResourceReaderMethods};
 
 struct ResourceReader(PathBuf);
 
+/// Initialize resource files. We currently read from `resources` directory only.
 pub fn init() {
     resources::set(Box::new(ResourceReader(resources_dir_path())));
 }
