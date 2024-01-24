@@ -8,7 +8,9 @@ https://github.com/wusyong/Yippee/assets/8409985/a7a92fa4-5980-44d1-a9b5-81ff23c
 
 The current demo works best on macOS at the moment, since it tries to customize its traffic light buttons to be seamless in the window.
 
-It should also work on Windows, as well as Linux with X11. You may encounter problems running the demo on Linux with Wayland or Xwayland.
+However, We plan to focus on Windows as main target support.
+
+Linux with X11 should work, but You may encounter problems running the demo on Linux with Wayland or Xwayland.
 
 ## Prerequisites
 
@@ -19,6 +21,15 @@ It should also work on Windows, as well as Linux with X11. You may encounter pro
 
 ```sh
 scoop install git python llvm cmake curl
+```
+
+### MacOS
+
+- Install [Xcode](https://developer.apple.com/xcode/)
+- Install [Homebrew](https://brew.sh/) and install
+
+```sh
+brew install cmake pkg-config
 ```
 
 ### Others(WIP)
