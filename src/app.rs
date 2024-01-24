@@ -69,7 +69,7 @@ impl Yippee {
     /// Run an iteration of Servo handling cycle. An iteration will perform following actions:
     ///
     /// - Set the control flow of winit event loop
-    /// - Hnadle Winit's event and push to Yipppee's embedder event queue.
+    /// - Hnadle Winit's event, create Servo's embedder event and push to Yipppee's event queue.
     /// - Consume Servo's messages and then send all embedder events to Servo.
     pub fn run(&mut self, event: Event<()>, evl: &EventLoopWindowTarget<()>) {
         self.set_control_flow(&event, evl);

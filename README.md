@@ -18,7 +18,7 @@ It should also work on Windows, as well as Linux with X11. You may encounter pro
 - Install [scoop](https://scoop.sh/) and then install other tools from it. You can install them manually but this is easier and recommended:
 
 ```sh
-scoop install git python llvm cmake
+scoop install git python llvm cmake curl
 ```
 
 ### Others(WIP)
@@ -26,18 +26,6 @@ scoop install git python llvm cmake
 For now, please follow the instructions in [Servo - Build Setup](https://github.com/servo/servo) to bootstrap first.
 
 ## Build
-
-- Download [mozjs binary](https://github.com/wusyong/mozjs/releases/tag/tag-8410b587d66a36f1660cc3b828359e199eb0760a) and set the environment variable:
-
-```sh
-MOZJS_MIRROR=path/to/libmozjs.tar.gz
-```
-
-For powershell:
-
-```sh
-$env:MOZJS_MIRROR='path/to/libmozjs.tar.gz'
-```
 
 - **NixOS only:** add `wayland` and `libGL` to `LD_LIBRARY_PATH` in `../servo/etc/shell.nix`
 
