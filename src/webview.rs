@@ -2,16 +2,27 @@ use std::cell::Cell;
 
 use raw_window_handle::HasRawWindowHandle;
 use servo::{
-    compositing::windowing::{AnimationState, EmbedderCoordinates, WindowMethods},
+    compositing::windowing::{
+        AnimationState, EmbedderCoordinates, EmbedderEvent, MouseWindowEvent, WindowMethods,
+    },
     config::pref,
     euclid::{Point2D, Scale, Size2D, UnknownUnit},
-    webrender_api::units::DeviceIntRect,
+    script_traits::{TouchEventType, WheelDelta, WheelMode},
+    webrender_api::{
+        units::{DeviceIntPoint, DeviceIntRect, DevicePoint, LayoutVector2D},
+        ScrollLocation,
+    },
     webrender_surfman::WebrenderSurfman,
+    Servo,
 };
 use surfman::{Connection, GLApi, GLVersion, SurfaceType};
 // FIXME servo should re-export this.
 use servo_media::player::context::{GlApi, GlContext, NativeDisplay};
-use winit::window::Window;
+use winit::{
+    dpi::PhysicalPosition,
+    event::{ElementState, TouchPhase, WindowEvent},
+    window::Window,
+};
 
 /// A web view is an area to display web browsing context. It's what user will treat as a "web page".
 pub struct WebView {
@@ -57,6 +68,108 @@ impl WebView {
     /// Request winit window to emit redraw event.
     pub fn request_redraw(&self) {
         self.window.request_redraw();
+    }
+
+    /// Handle winit window event.
+    pub fn handle_winit_window_event(
+        &self,
+        servo: &mut Option<Servo<WebView>>,
+        events: &mut Vec<EmbedderEvent>,
+        mouse_position: &mut PhysicalPosition<f64>,
+        event: &winit::event::WindowEvent,
+    ) {
+        match event {
+            WindowEvent::RedrawRequested => {
+                let Some(servo) = servo.as_mut() else {
+                    return;
+                };
+                servo.recomposite();
+                servo.present();
+                events.push(EmbedderEvent::Idle);
+            }
+            WindowEvent::Resized(size) => {
+                let size = Size2D::new(size.width, size.height);
+                let _ = self.resize(size.to_i32());
+                events.push(EmbedderEvent::Resize);
+            }
+            WindowEvent::CursorMoved { position, .. } => {
+                let event: DevicePoint = DevicePoint::new(position.x as f32, position.y as f32);
+                *mouse_position = *position;
+                events.push(EmbedderEvent::MouseWindowMoveEventClass(event));
+            }
+            WindowEvent::MouseInput { state, button, .. } => {
+                let button: servo::script_traits::MouseButton = match button {
+                    winit::event::MouseButton::Left => servo::script_traits::MouseButton::Left,
+                    winit::event::MouseButton::Right => servo::script_traits::MouseButton::Right,
+                    winit::event::MouseButton::Middle => servo::script_traits::MouseButton::Middle,
+                    _ => {
+                        log::warn!("Yippee hasn't supported this mouse button yet: {button:?}");
+                        return;
+                    }
+                };
+                let position = Point2D::new(mouse_position.x as f32, mouse_position.y as f32);
+
+                let event: MouseWindowEvent = match state {
+                    ElementState::Pressed => MouseWindowEvent::MouseDown(button, position),
+                    ElementState::Released => MouseWindowEvent::MouseUp(button, position),
+                };
+                events.push(EmbedderEvent::MouseWindowEventClass(event));
+
+                // winit didn't send click event, so we send it after mouse up
+                if *state == ElementState::Released {
+                    let event: MouseWindowEvent = MouseWindowEvent::Click(button, position);
+                    events.push(EmbedderEvent::MouseWindowEventClass(event));
+                }
+            }
+            WindowEvent::TouchpadMagnify { delta, .. } => {
+                events.push(EmbedderEvent::Zoom(1.0 + *delta as f32));
+            }
+            WindowEvent::MouseWheel { delta, phase, .. } => {
+                // FIXME: Pixels per line, should be configurable (from browser setting?) and vary by zoom level.
+                const LINE_HEIGHT: f32 = 38.0;
+
+                let (mut x, mut y, mode) = match delta {
+                    winit::event::MouseScrollDelta::LineDelta(x, y) => {
+                        (*x as f64, (*y * LINE_HEIGHT) as f64, WheelMode::DeltaLine)
+                    }
+                    winit::event::MouseScrollDelta::PixelDelta(position) => {
+                        let position = position.to_logical::<f64>(self.window.scale_factor());
+                        (position.x, position.y, WheelMode::DeltaPixel)
+                    }
+                };
+
+                // Wheel Event
+                events.push(EmbedderEvent::Wheel(
+                    WheelDelta { x, y, z: 0.0, mode },
+                    DevicePoint::new(mouse_position.x as f32, mouse_position.y as f32),
+                ));
+
+                // Scroll Event
+                // Do one axis at a time.
+                if y.abs() >= x.abs() {
+                    x = 0.0;
+                } else {
+                    y = 0.0;
+                }
+
+                let phase: TouchEventType = match phase {
+                    TouchPhase::Started => TouchEventType::Down,
+                    TouchPhase::Moved => TouchEventType::Move,
+                    TouchPhase::Ended => TouchEventType::Up,
+                    TouchPhase::Cancelled => TouchEventType::Cancel,
+                };
+
+                events.push(EmbedderEvent::Scroll(
+                    ScrollLocation::Delta(LayoutVector2D::new(x as f32, y as f32)),
+                    DeviceIntPoint::new(mouse_position.x as i32, mouse_position.y as i32),
+                    phase,
+                ));
+            }
+            WindowEvent::CloseRequested => {
+                events.push(EmbedderEvent::Quit);
+            }
+            e => log::warn!("Yippee hasn't supported this window event yet: {e:?}"),
+        }
     }
 }
 
