@@ -10,7 +10,6 @@ use servo::{
     BrowserId, Servo,
 };
 use winit::{
-    dpi::PhysicalPosition,
     event::Event,
     event_loop::{ControlFlow, EventLoopProxy, EventLoopWindowTarget},
     window::{CursorIcon, Window},
@@ -40,7 +39,6 @@ pub struct Yippee {
     webview: Rc<WebView>,
     events: Vec<EmbedderEvent>,
     // TODO following fields should move to webvew
-    mouse_position: PhysicalPosition<f64>,
     status: Status,
 }
 
@@ -71,7 +69,6 @@ impl Yippee {
             servo: Some(init_servo.servo),
             webview,
             events: vec![],
-            mouse_position: PhysicalPosition::default(),
             browser_id: None,
             status: Status::None,
         }
@@ -110,10 +107,9 @@ impl Yippee {
             Event::WindowEvent {
                 window_id: _,
                 event,
-            } => self.webview.handle_winit_window_event(
+            } => self.webview.clone().handle_winit_window_event(
                 &mut self.servo,
                 &mut self.events,
-                &mut self.mouse_position,
                 &event,
             ),
             e => log::warn!("Yippee hasn't supported this event yet: {e:?}"),

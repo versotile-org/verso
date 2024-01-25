@@ -31,6 +31,7 @@ pub struct WebView {
     animation_state: Cell<AnimationState>,
     /// Access to winit winodw
     pub window: Window,
+    mouse_position: Cell<PhysicalPosition<f64>>,
 }
 
 impl WebView {
@@ -52,6 +53,7 @@ impl WebView {
             webrender_surfman,
             animation_state: Cell::new(AnimationState::Idle),
             window,
+            mouse_position: Cell::new(PhysicalPosition::default()),
         }
     }
 
@@ -75,7 +77,6 @@ impl WebView {
         &self,
         servo: &mut Option<Servo<WebView>>,
         events: &mut Vec<EmbedderEvent>,
-        mouse_position: &mut PhysicalPosition<f64>,
         event: &winit::event::WindowEvent,
     ) {
         match event {
@@ -94,7 +95,7 @@ impl WebView {
             }
             WindowEvent::CursorMoved { position, .. } => {
                 let event: DevicePoint = DevicePoint::new(position.x as f32, position.y as f32);
-                *mouse_position = *position;
+                self.mouse_position.set(*position);
                 events.push(EmbedderEvent::MouseWindowMoveEventClass(event));
             }
             WindowEvent::MouseInput { state, button, .. } => {
@@ -107,7 +108,10 @@ impl WebView {
                         return;
                     }
                 };
-                let position = Point2D::new(mouse_position.x as f32, mouse_position.y as f32);
+                let position = Point2D::new(
+                    self.mouse_position.get().x as f32,
+                    self.mouse_position.get().y as f32,
+                );
 
                 let event: MouseWindowEvent = match state {
                     ElementState::Pressed => MouseWindowEvent::MouseDown(button, position),
@@ -141,7 +145,10 @@ impl WebView {
                 // Wheel Event
                 events.push(EmbedderEvent::Wheel(
                     WheelDelta { x, y, z: 0.0, mode },
-                    DevicePoint::new(mouse_position.x as f32, mouse_position.y as f32),
+                    DevicePoint::new(
+                        self.mouse_position.get().x as f32,
+                        self.mouse_position.get().y as f32,
+                    ),
                 ));
 
                 // Scroll Event
@@ -161,7 +168,10 @@ impl WebView {
 
                 events.push(EmbedderEvent::Scroll(
                     ScrollLocation::Delta(LayoutVector2D::new(x as f32, y as f32)),
-                    DeviceIntPoint::new(mouse_position.x as i32, mouse_position.y as i32),
+                    DeviceIntPoint::new(
+                        self.mouse_position.get().x as i32,
+                        self.mouse_position.get().y as i32,
+                    ),
                     phase,
                 ));
             }
