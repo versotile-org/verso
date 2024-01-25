@@ -27,6 +27,7 @@ default = []
 cfg_aliases = "0.1"
 
 [dependencies]
+owo-colors = "4.0"
 log = "0.4"
 thiserror = "1.0"
 raw-window-handle = { version = "0.5", features = ["std"] }
@@ -56,3 +57,7 @@ webrender_api = { git = "https://github.com/servo/servo.git" }
 
 [patch."https://github.com/servo/mozjs"]
 mozjs = { git = "https://github.com/wusyong/mozjs", branch = "mozjs_download" }
+
+[[test]]
+name = "general"
+harness = false

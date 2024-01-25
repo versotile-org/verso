@@ -24,6 +24,20 @@ use winit::{
 
 use crate::{prefs, resources, webview::WebView};
 
+/// Status of webview.
+#[derive(Clone, Copy, Debug, Default)]
+pub enum Status {
+    /// Nothing happed to this webview yet
+    #[default]
+    None,
+    /// Loading of webview has started.
+    LoadStart,
+    /// Loading of webivew has completed.
+    LoadComplete,
+    /// Yippee has shut down.
+    Shutdown,
+}
+
 /// Main entry point of Yippee browser.
 pub struct Yippee {
     servo: Option<Servo<WebView>>,
@@ -31,7 +45,9 @@ pub struct Yippee {
     browser_id: Option<BrowserId>,
     webview: Rc<WebView>,
     events: Vec<EmbedderEvent>,
+    // TODO following fields should move to webvew
     mouse_position: PhysicalPosition<f64>,
+    status: Status,
 }
 
 impl Yippee {
@@ -63,6 +79,7 @@ impl Yippee {
             events: vec![],
             mouse_position: PhysicalPosition::default(),
             browser_id: None,
+            status: Status::None,
         }
     }
 
@@ -71,10 +88,12 @@ impl Yippee {
     /// - Set the control flow of winit event loop
     /// - Hnadle Winit's event, create Servo's embedder event and push to Yipppee's event queue.
     /// - Consume Servo's messages and then send all embedder events to Servo.
-    pub fn run(&mut self, event: Event<()>, evl: &EventLoopWindowTarget<()>) {
+    /// - And the last step is returning the status of Yippee.
+    pub fn run(&mut self, event: Event<()>, evl: &EventLoopWindowTarget<()>) -> Status {
         self.set_control_flow(&event, evl);
         self.handle_winit_event(event);
         self.handle_servo_messages();
+        self.status
     }
 
     fn set_control_flow(&self, event: &Event<()>, evl: &EventLoopWindowTarget<()>) {
@@ -215,7 +234,6 @@ impl Yippee {
         };
 
         let mut need_present = false;
-        let mut shutdown = false;
 
         servo.get_events().into_iter().for_each(|(w, m)| {
             log::trace!("Yippee is handling servo message: {m:?} with browser id: {w:?}");
@@ -229,6 +247,8 @@ impl Yippee {
                 EmbedderMsg::ReadyToPresent => {
                     need_present = true;
                 }
+                EmbedderMsg::LoadStart => self.status = Status::LoadStart,
+                EmbedderMsg::LoadComplete => self.status = Status::LoadComplete,
                 EmbedderMsg::SetCursor(cursor) => {
                     let winit_cursor = match cursor {
                         Cursor::Default => CursorIcon::Default,
@@ -279,7 +299,7 @@ impl Yippee {
                     self.events.push(EmbedderEvent::Quit);
                 }
                 EmbedderMsg::Shutdown => {
-                    shutdown = true;
+                    self.status = Status::Shutdown;
                 }
                 e => {
                     log::warn!("Yippee hasn't supported handling this message yet: {e:?}")
@@ -295,7 +315,7 @@ impl Yippee {
             self.webview.request_redraw();
         }
 
-        if shutdown {
+        if let Status::Shutdown = self.status {
             log::trace!("Yippee is shutting down Servo");
             self.servo.take().map(Servo::deinit);
         }
@@ -304,6 +324,11 @@ impl Yippee {
     /// Helper method to access Servo instance. This can be used to check if Servo is shut down as well.
     pub fn servo(&mut self) -> &mut Option<Servo<WebView>> {
         &mut self.servo
+    }
+
+    /// Tell Yippee to shutdown Servo safely.
+    pub fn shutdown(&mut self) {
+        self.events.push(EmbedderEvent::Quit);
     }
 }
 

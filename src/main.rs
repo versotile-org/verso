@@ -1,5 +1,5 @@
 use winit::{dpi::PhysicalSize, event_loop::EventLoop, window::WindowBuilder};
-use yippee::{Result, Yippee};
+use yippee::{Result, Status, Yippee};
 
 /* window decoration */
 #[cfg(target_os = "macos")]
@@ -30,14 +30,10 @@ fn main() -> Result<()> {
         }
     }
 
-    #[allow(unused_mut)]
     let mut yippee = Yippee::new(window, event_loop.create_proxy());
-    event_loop.run(move |event, evl| {
-        if !evl.exiting() && yippee.servo().is_none() {
-            evl.exit();
-        } else {
-            yippee.run(event, evl);
-        }
+    event_loop.run(move |event, evl| match yippee.run(event, evl) {
+        Status::Shutdown => evl.exit(),
+        _ => (),
     })?;
 
     Ok(())
