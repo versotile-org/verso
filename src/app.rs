@@ -107,7 +107,7 @@ impl Yippee {
             Event::WindowEvent {
                 window_id: _,
                 event,
-            } => self.webview.clone().handle_winit_window_event(
+            } => self.webview.handle_winit_window_event(
                 &mut self.servo,
                 &mut self.events,
                 &event,
