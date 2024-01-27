@@ -7,6 +7,7 @@ use servo::{
     },
     config::pref,
     euclid::{Point2D, Scale, Size2D, UnknownUnit},
+    media::{GlApi, GlContext, NativeDisplay},
     script_traits::{TouchEventType, WheelDelta, WheelMode},
     webrender_api::{
         units::{DeviceIntPoint, DeviceIntRect, DevicePoint, LayoutVector2D},
@@ -16,8 +17,6 @@ use servo::{
     Servo,
 };
 use surfman::{Connection, GLApi, GLVersion, SurfaceType};
-// FIXME servo should re-export this.
-use servo_media::player::context::{GlApi, GlContext, NativeDisplay};
 use winit::{
     dpi::PhysicalPosition,
     event::{ElementState, TouchPhase, WindowEvent},

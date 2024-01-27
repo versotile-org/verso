@@ -7,7 +7,7 @@ use servo::{
     },
     embedder_traits::{Cursor, EmbedderMsg, EventLoopWaker},
     servo_url::ServoUrl,
-    BrowserId, Servo,
+    Servo, TopLevelBrowsingContextId,
 };
 use winit::{
     event::Event,
@@ -34,8 +34,7 @@ pub enum Status {
 /// Main entry point of Yippee browser.
 pub struct Yippee {
     servo: Option<Servo<WebView>>,
-    // TODO TopLevelBrowsingContextId
-    browser_id: Option<BrowserId>,
+    webview_id: Option<TopLevelBrowsingContextId>,
     webview: Rc<WebView>,
     events: Vec<EmbedderEvent>,
     // TODO following fields should move to webvew
@@ -63,13 +62,13 @@ impl Yippee {
         let url = ServoUrl::from_file_path(demo_path.to_str().unwrap()).unwrap();
         init_servo
             .servo
-            .handle_events(vec![EmbedderEvent::NewBrowser(url, init_servo.browser_id)]);
+            .handle_events(vec![EmbedderEvent::NewWebView(url, init_servo.browser_id)]);
         init_servo.servo.setup_logging();
         Yippee {
             servo: Some(init_servo.servo),
             webview,
             events: vec![],
-            browser_id: None,
+            webview_id: None,
             status: Status::None,
         }
     }
@@ -107,11 +106,9 @@ impl Yippee {
             Event::WindowEvent {
                 window_id: _,
                 event,
-            } => self.webview.handle_winit_window_event(
-                &mut self.servo,
-                &mut self.events,
-                &event,
-            ),
+            } => self
+                .webview
+                .handle_winit_window_event(&mut self.servo, &mut self.events, &event),
             e => log::warn!("Yippee hasn't supported this event yet: {e:?}"),
         }
     }
@@ -126,11 +123,11 @@ impl Yippee {
         servo.get_events().into_iter().for_each(|(w, m)| {
             log::trace!("Yippee is handling servo message: {m:?} with browser id: {w:?}");
             match m {
-                EmbedderMsg::BrowserCreated(w) => {
-                    if self.browser_id.is_none() {
-                        self.browser_id = Some(w);
+                EmbedderMsg::WebViewOpened(w) => {
+                    if self.webview_id.is_none() {
+                        self.webview_id = Some(w);
                     }
-                    self.events.push(EmbedderEvent::SelectBrowser(w));
+                    self.events.push(EmbedderEvent::FocusWebView(w));
                 }
                 EmbedderMsg::ReadyToPresent => {
                     need_present = true;
@@ -183,7 +180,7 @@ impl Yippee {
                             .push(EmbedderEvent::AllowNavigationResponse(pipeline_id, true));
                     }
                 }
-                EmbedderMsg::CloseBrowser => {
+                EmbedderMsg::WebViewClosed(_w) => {
                     self.events.push(EmbedderEvent::Quit);
                 }
                 EmbedderMsg::Shutdown => {
