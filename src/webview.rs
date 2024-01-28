@@ -1,6 +1,6 @@
 use std::cell::Cell;
 
-use raw_window_handle::HasRawWindowHandle;
+use raw_window_handle::{HasRawDisplayHandle, HasRawWindowHandle};
 use servo::{
     compositing::windowing::{
         AnimationState, EmbedderCoordinates, EmbedderEvent, MouseWindowEvent, WindowMethods,
@@ -36,7 +36,9 @@ pub struct WebView {
 impl WebView {
     /// Create a web view from winit window.
     pub fn new(window: Window) -> Self {
-        let connection = Connection::new().expect("Failed to create surfman connection");
+        let display_handle = window.raw_display_handle();
+        let connection = Connection::from_raw_display_handle(display_handle)
+            .expect("Failed to create connection");
         let adapter = connection
             .create_adapter()
             .expect("Failed to create surfman adapter");
@@ -191,7 +193,7 @@ impl WindowMethods for WebView {
         let pos = Point2D::new(0, 0);
         let viewport = Size2D::new(size.width as i32, size.height as i32);
 
-        let size = self.window.current_monitor().unwrap().size();
+        let size = self.window.available_monitors().nth(0).unwrap().size();
         let screen = Size2D::new(size.width as i32, size.height as i32);
         EmbedderCoordinates {
             hidpi_factor: Scale::new(self.window.scale_factor() as f32),

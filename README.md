@@ -1,6 +1,6 @@
 # Yippee
 
-A web browser.
+A web browser that plays old world blues to build new world hope.
 
 https://github.com/wusyong/Yippee/assets/8409985/a7a92fa4-5980-44d1-a9b5-81ff23c01ba6
 
@@ -10,14 +10,11 @@ The current demo works best on macOS at the moment, since it tries to customize 
 
 However, We plan to focus on Windows as main target support.
 
-Linux with X11 should work, but You may encounter problems running the demo on Linux with Wayland or Xwayland.
-
 ## Prerequisites
 
 ### Windows
 
-- Install [Rust](https://www.rust-lang.org/)
-- Install [scoop](https://scoop.sh/) and then install other tools from it. You can install them manually but this is easier and recommended:
+- Install [scoop](https://scoop.sh/) and then install other tools:
 
 ```sh
 scoop install git python llvm cmake curl
@@ -26,19 +23,33 @@ scoop install git python llvm cmake curl
 ### MacOS
 
 - Install [Xcode](https://developer.apple.com/xcode/)
-- Install [Homebrew](https://brew.sh/) and install
+- Install [Homebrew](https://brew.sh/) and then install other tools:
 
 ```sh
 brew install cmake pkg-config
 ```
 
-### Others(WIP)
+### Linux
 
-For now, please follow the instructions in [Servo - Build Setup](https://github.com/servo/servo) to bootstrap first.
+#### Debian-based Distributions
+
+```sh
+sudo apt install build-essential python3-pip ccache clang cmake curl \
+g++ git gperf libdbus-1-dev libfreetype6-dev libgl1-mesa-dri \
+libgles2-mesa-dev libglib2.0-dev libgstreamer-plugins-base1.0-dev \
+gstreamer1.0-plugins-good libgstreamer-plugins-good1.0-dev \
+gstreamer1.0-plugins-bad libgstreamer-plugins-bad1.0-dev \
+gstreamer1.0-plugins-ugly gstreamer1.0-plugins-base \
+libgstreamer-plugins-base1.0-dev gstreamer1.0-libav \
+libgstrtspserver-1.0-dev gstreamer1.0-tools libges-1.0-dev \
+libharfbuzz-dev liblzma-dev libunwind-dev libunwind-dev libvulkan1 \
+libx11-dev libxcb-render0-dev libxcb-shape0-dev libxcb-xfixes0-dev \
+libxmu-dev libxmu6 libegl1-mesa-dev llvm-dev m4 xorg-dev
+```
+
+For others, please follow the instructions in [Servo's wiki](https://github.com/servo/servo/wiki/Building) to bootstrap first.
 
 ## Build
-
-- **NixOS only:** add `wayland` and `libGL` to `LD_LIBRARY_PATH` in `../servo/etc/shell.nix`
 
 - Run demo
 
@@ -46,11 +57,11 @@ For now, please follow the instructions in [Servo - Build Setup](https://github.
 cargo run
 ```
 
-  - Or if you are using Nix or NixOS:
+- Or if you are using Nix or NixOS, add `wayland` and `libGL` to `LD_LIBRARY_PATH` in `../servo/etc/shell.nix`
 
-  ```
-  nix-shell ../servo/etc/shell.nix --run 'cargo run --example servo'
-  ```
+```
+nix-shell ../servo/etc/shell.nix --run 'cargo run'
+```
 
 ## Future Work
 
