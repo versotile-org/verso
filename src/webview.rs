@@ -1,4 +1,4 @@
-use std::cell::Cell;
+use std::{cell::Cell, rc::Rc};
 
 use raw_window_handle::{HasRawDisplayHandle, HasRawWindowHandle};
 use servo::{
@@ -7,6 +7,7 @@ use servo::{
     },
     config::pref,
     euclid::{Point2D, Scale, Size2D, UnknownUnit},
+    gl,
     media::{GlApi, GlContext, NativeDisplay},
     rendering_context::RenderingContext,
     script_traits::{TouchEventType, WheelDelta, WheelMode},
@@ -31,6 +32,8 @@ pub struct WebView {
     /// Access to winit winodw
     pub window: Window,
     mouse_position: Cell<PhysicalPosition<f64>>,
+    /// Access to webrender gl
+    pub webrender_gl: Rc<dyn gl::Gl>,
 }
 
 impl WebView {
@@ -49,12 +52,20 @@ impl WebView {
         let rendering_context = RenderingContext::create(&connection, &adapter, surface_type)
             .expect("Failed to create rendering context");
         log::trace!("Created rendering context for window {:?}", window);
+        let webrender_gl = match rendering_context.connection().gl_api() {
+            GLApi::GL => unsafe { gl::GlFns::load_with(|s| rendering_context.get_proc_address(s)) },
+            GLApi::GLES => unsafe {
+                gl::GlesFns::load_with(|s| rendering_context.get_proc_address(s))
+            },
+        };
+        debug_assert_eq!(webrender_gl.get_error(), gl::NO_ERROR);
 
         Self {
             rendering_context,
             animation_state: Cell::new(AnimationState::Idle),
             window,
             mouse_position: Cell::new(PhysicalPosition::default()),
+            webrender_gl,
         }
     }
 
