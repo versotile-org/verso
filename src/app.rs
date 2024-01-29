@@ -195,7 +195,8 @@ impl Yippee {
         log::trace!("Yippee is handling embedder events: {:?}", self.events);
         if servo.handle_events(self.events.drain(..)) {
             servo.repaint_synchronously();
-            servo.present();
+            self.webview.paint(servo);
+            // servo.present();
         } else if need_present {
             self.webview.request_redraw();
         }

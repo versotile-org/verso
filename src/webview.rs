@@ -84,6 +84,56 @@ impl WebView {
         self.window.request_redraw();
     }
 
+    /// Paint offscreen framebuffer to winit window.
+    pub fn paint(&self, servo: &mut Servo<WebView>) {
+        if let Some(fbo) = servo.offscreen_framebuffer_id() {
+            let viewport = self.get_coordinates().get_flipped_viewport();
+            let webrender_gl = self.webrender_gl.clone();
+
+            let target_fbo = self
+                .rendering_context
+                .context_surface_info()
+                .unwrap()
+                .unwrap()
+                .framebuffer_object;
+
+            webrender_gl.bind_framebuffer(gl::READ_FRAMEBUFFER, fbo);
+            webrender_gl.bind_framebuffer(gl::DRAW_FRAMEBUFFER, target_fbo);
+
+            // webrender_gl.scissor(
+            //     viewport.origin.x,
+            //     viewport.origin.y,
+            //     viewport.size.width,
+            //     viewport.size.height,
+            // );
+            // webrender_gl.clear_color(0.0, 0.0, 0.0, 0.0);
+            // webrender_gl.enable(gl::SCISSOR_TEST);
+            // webrender_gl.clear(gl::COLOR_BUFFER_BIT);
+            // webrender_gl.disable(gl::SCISSOR_TEST);
+
+            webrender_gl.blit_framebuffer(
+                viewport.origin.x,
+                viewport.origin.y,
+                viewport.origin.x + viewport.size.width,
+                viewport.origin.y + viewport.size.height,
+                viewport.origin.x,
+                viewport.origin.y,
+                viewport.origin.x + viewport.size.width,
+                viewport.origin.y + viewport.size.height,
+                gl::COLOR_BUFFER_BIT,
+                gl::NEAREST,
+            );
+
+            webrender_gl.bind_framebuffer(gl::FRAMEBUFFER, target_fbo);
+
+            if webrender_gl.check_frame_buffer_status(gl::FRAMEBUFFER) == gl::FRAMEBUFFER_COMPLETE {
+                servo.present();
+            } else {
+                dbg!("Framebuffer not ready.");
+            }
+        }
+    }
+
     /// Handle winit window event.
     pub fn handle_winit_window_event(
         &self,
@@ -97,7 +147,9 @@ impl WebView {
                     return;
                 };
                 servo.recomposite();
-                servo.present();
+
+                self.paint(servo);
+                // servo.present();
                 events.push(EmbedderEvent::Idle);
             }
             WindowEvent::Resized(size) => {
