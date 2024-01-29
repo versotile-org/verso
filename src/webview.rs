@@ -8,12 +8,12 @@ use servo::{
     config::pref,
     euclid::{Point2D, Scale, Size2D, UnknownUnit},
     media::{GlApi, GlContext, NativeDisplay},
+    rendering_context::RenderingContext,
     script_traits::{TouchEventType, WheelDelta, WheelMode},
     webrender_api::{
         units::{DeviceIntPoint, DeviceIntRect, DevicePoint, LayoutVector2D},
         ScrollLocation,
     },
-    webrender_surfman::WebrenderSurfman,
     Servo,
 };
 use surfman::{Connection, GLApi, GLVersion, SurfaceType};
@@ -26,7 +26,7 @@ use winit::{
 /// A web view is an area to display web browsing context. It's what user will treat as a "web page".
 pub struct WebView {
     /// Access to webrender surfman
-    pub webrender_surfman: WebrenderSurfman,
+    pub rendering_context: RenderingContext,
     animation_state: Cell<AnimationState>,
     /// Access to winit winodw
     pub window: Window,
@@ -41,17 +41,17 @@ impl WebView {
             .expect("Failed to create connection");
         let adapter = connection
             .create_adapter()
-            .expect("Failed to create surfman adapter");
+            .expect("Failed to create adapter");
         let native_widget = connection
             .create_native_widget_from_rwh(window.raw_window_handle())
-            .expect("Failed to create surfman native widget");
+            .expect("Failed to create native widget");
         let surface_type = SurfaceType::Widget { native_widget };
-        let webrender_surfman = WebrenderSurfman::create(&connection, &adapter, surface_type)
-            .expect("Failed to create webrender surfman");
-        log::trace!("Created webrender surfman for window {:?}", window);
+        let rendering_context = RenderingContext::create(&connection, &adapter, surface_type)
+            .expect("Failed to create rendering context");
+        log::trace!("Created rendering context for window {:?}", window);
 
         Self {
-            webrender_surfman,
+            rendering_context,
             animation_state: Cell::new(AnimationState::Idle),
             window,
             mouse_position: Cell::new(PhysicalPosition::default()),
@@ -65,7 +65,7 @@ impl WebView {
 
     /// Resize the web view.
     pub fn resize(&self, size: Size2D<i32, UnknownUnit>) {
-        let _ = self.webrender_surfman.resize(size);
+        let _ = self.rendering_context.resize(size);
     }
 
     /// Request winit window to emit redraw event.
@@ -215,7 +215,7 @@ impl WindowMethods for WebView {
         }
 
         #[allow(unused_variables)]
-        let native_context = self.webrender_surfman.native_context();
+        let native_context = self.rendering_context.native_context();
 
         #[cfg(target_os = "windows")]
         return GlContext::Egl(native_context.egl_context as usize);
@@ -249,9 +249,9 @@ impl WindowMethods for WebView {
         }
 
         #[allow(unused_variables)]
-        let native_connection = self.webrender_surfman.connection().native_connection();
+        let native_connection = self.rendering_context.connection().native_connection();
         #[allow(unused_variables)]
-        let native_device = self.webrender_surfman.native_device();
+        let native_device = self.rendering_context.native_device();
 
         #[cfg(target_os = "windows")]
         return NativeDisplay::Egl(native_device.egl_display as usize);
@@ -280,8 +280,8 @@ impl WindowMethods for WebView {
     }
 
     fn get_gl_api(&self) -> GlApi {
-        let api = self.webrender_surfman.connection().gl_api();
-        let attributes = self.webrender_surfman.context_attributes();
+        let api = self.rendering_context.connection().gl_api();
+        let attributes = self.rendering_context.context_attributes();
         let GLVersion { major, minor } = attributes.version;
         match api {
             GLApi::GL if major >= 3 && minor >= 2 => GlApi::OpenGL3,
@@ -291,7 +291,7 @@ impl WindowMethods for WebView {
         }
     }
 
-    fn webrender_surfman(&self) -> WebrenderSurfman {
-        self.webrender_surfman.clone()
+    fn rendering_context(&self) -> RenderingContext {
+        self.rendering_context.clone()
     }
 }
