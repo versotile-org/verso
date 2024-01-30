@@ -113,7 +113,6 @@ impl WebView {
                 gl::NEAREST,
             );
 
-            servo.present();
             debug_assert_eq!(
                 (
                     self.webrender_gl.get_error(),
@@ -121,6 +120,8 @@ impl WebView {
                 ),
                 (gl::NO_ERROR, gl::FRAMEBUFFER_COMPLETE)
             );
+
+            servo.present();
         }
     }
 
