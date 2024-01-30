@@ -1,4 +1,4 @@
-use std::cell::Cell;
+use std::{cell::Cell, rc::Rc};
 
 use raw_window_handle::{HasRawDisplayHandle, HasRawWindowHandle};
 use servo::{
@@ -7,6 +7,7 @@ use servo::{
     },
     config::pref,
     euclid::{Point2D, Scale, Size2D, UnknownUnit},
+    gl,
     media::{GlApi, GlContext, NativeDisplay},
     rendering_context::RenderingContext,
     script_traits::{TouchEventType, WheelDelta, WheelMode},
@@ -31,6 +32,8 @@ pub struct WebView {
     /// Access to winit winodw
     pub window: Window,
     mouse_position: Cell<PhysicalPosition<f64>>,
+    /// Access to webrender gl
+    pub webrender_gl: Rc<dyn gl::Gl>,
 }
 
 impl WebView {
@@ -49,12 +52,20 @@ impl WebView {
         let rendering_context = RenderingContext::create(&connection, &adapter, surface_type)
             .expect("Failed to create rendering context");
         log::trace!("Created rendering context for window {:?}", window);
+        let webrender_gl = match rendering_context.connection().gl_api() {
+            GLApi::GL => unsafe { gl::GlFns::load_with(|s| rendering_context.get_proc_address(s)) },
+            GLApi::GLES => unsafe {
+                gl::GlesFns::load_with(|s| rendering_context.get_proc_address(s))
+            },
+        };
+        debug_assert_eq!(webrender_gl.get_error(), gl::NO_ERROR);
 
         Self {
             rendering_context,
             animation_state: Cell::new(AnimationState::Idle),
             window,
             mouse_position: Cell::new(PhysicalPosition::default()),
+            webrender_gl,
         }
     }
 
@@ -73,6 +84,56 @@ impl WebView {
         self.window.request_redraw();
     }
 
+    /// Paint offscreen framebuffer to winit window.
+    pub fn paint(&self, servo: &mut Servo<WebView>) {
+        if let Some(fbo) = servo.offscreen_framebuffer_id() {
+            let viewport = self.get_coordinates().get_flipped_viewport();
+            let webrender_gl = self.webrender_gl.clone();
+
+            let target_fbo = self
+                .rendering_context
+                .context_surface_info()
+                .unwrap()
+                .unwrap()
+                .framebuffer_object;
+
+            webrender_gl.bind_framebuffer(gl::READ_FRAMEBUFFER, fbo);
+            webrender_gl.bind_framebuffer(gl::DRAW_FRAMEBUFFER, target_fbo);
+
+            // webrender_gl.scissor(
+            //     viewport.origin.x,
+            //     viewport.origin.y,
+            //     viewport.size.width,
+            //     viewport.size.height,
+            // );
+            // webrender_gl.clear_color(0.0, 0.0, 0.0, 0.0);
+            // webrender_gl.enable(gl::SCISSOR_TEST);
+            // webrender_gl.clear(gl::COLOR_BUFFER_BIT);
+            // webrender_gl.disable(gl::SCISSOR_TEST);
+
+            webrender_gl.blit_framebuffer(
+                viewport.origin.x,
+                viewport.origin.y,
+                viewport.origin.x + viewport.size.width,
+                viewport.origin.y + viewport.size.height,
+                viewport.origin.x,
+                viewport.origin.y,
+                viewport.origin.x + viewport.size.width,
+                viewport.origin.y + viewport.size.height,
+                gl::COLOR_BUFFER_BIT,
+                gl::NEAREST,
+            );
+
+            webrender_gl.bind_framebuffer(gl::FRAMEBUFFER, target_fbo);
+
+            if webrender_gl.check_frame_buffer_status(gl::FRAMEBUFFER) == gl::FRAMEBUFFER_COMPLETE {
+                servo.present();
+            } else {
+                dbg!("Framebuffer not ready.");
+            }
+        }
+    }
+
     /// Handle winit window event.
     pub fn handle_winit_window_event(
         &self,
@@ -86,7 +147,9 @@ impl WebView {
                     return;
                 };
                 servo.recomposite();
-                servo.present();
+
+                self.paint(servo);
+                // servo.present();
                 events.push(EmbedderEvent::Idle);
             }
             WindowEvent::Resized(size) => {

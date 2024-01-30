@@ -55,7 +55,7 @@ impl Yippee {
             Some(String::from(
                 "Mozilla/5.0 (X11; Linux x86_64; rv:109.0) Gecko/20100101 Firefox/119.0",
             )),
-            CompositeTarget::Window,
+            CompositeTarget::Fbo,
         );
 
         let demo_path = std::env::current_dir().unwrap().join("demo.html");
@@ -195,7 +195,8 @@ impl Yippee {
         log::trace!("Yippee is handling embedder events: {:?}", self.events);
         if servo.handle_events(self.events.drain(..)) {
             servo.repaint_synchronously();
-            servo.present();
+            self.webview.paint(servo);
+            // servo.present();
         } else if need_present {
             self.webview.request_redraw();
         }
