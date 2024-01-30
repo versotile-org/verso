@@ -196,7 +196,6 @@ impl Yippee {
         if servo.handle_events(self.events.drain(..)) {
             servo.repaint_synchronously();
             self.webview.paint(servo);
-            // servo.present();
         } else if need_present {
             self.webview.request_redraw();
         }
