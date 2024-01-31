@@ -39,6 +39,8 @@ pub struct WebView {
 impl WebView {
     /// Create a web view from winit window.
     pub fn new(window: Window) -> Self {
+        let window_size = window.inner_size();
+        let window_size = Size2D::new(window_size.width as i32, window_size.height as i32);
         let display_handle = window.raw_display_handle();
         let connection = Connection::from_raw_display_handle(display_handle)
             .expect("Failed to create connection");
@@ -46,7 +48,7 @@ impl WebView {
             .create_adapter()
             .expect("Failed to create adapter");
         let native_widget = connection
-            .create_native_widget_from_rwh(window.raw_window_handle())
+            .create_native_widget_from_raw_window_handle(window.raw_window_handle(), window_size)
             .expect("Failed to create native widget");
         let surface_type = SurfaceType::Widget { native_widget };
         let rendering_context = RenderingContext::create(&connection, &adapter, surface_type)
