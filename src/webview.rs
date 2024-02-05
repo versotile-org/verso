@@ -5,10 +5,8 @@ use servo::{
     compositing::windowing::{
         AnimationState, EmbedderCoordinates, EmbedderEvent, MouseWindowEvent, WindowMethods,
     },
-    config::pref,
     euclid::{Point2D, Scale, Size2D, UnknownUnit},
     gl,
-    media::{GlApi, GlContext, NativeDisplay},
     rendering_context::RenderingContext,
     script_traits::{TouchEventType, WheelDelta, WheelMode},
     webrender_api::{
@@ -17,7 +15,7 @@ use servo::{
     },
     Servo,
 };
-use surfman::{Connection, GLApi, GLVersion, SurfaceType};
+use surfman::{Connection, GLApi, SurfaceType};
 use winit::{
     dpi::PhysicalPosition,
     event::{ElementState, TouchPhase, WindowEvent},
@@ -262,88 +260,6 @@ impl WindowMethods for WebView {
 
     fn set_animation_state(&self, state: AnimationState) {
         self.animation_state.set(state);
-    }
-
-    fn get_gl_context(&self) -> GlContext {
-        if !pref!(media.glvideo.enabled) {
-            return GlContext::Unknown;
-        }
-
-        #[allow(unused_variables)]
-        let native_context = self.rendering_context.native_context();
-
-        #[cfg(target_os = "windows")]
-        return GlContext::Egl(native_context.egl_context as usize);
-
-        #[cfg(target_os = "linux")]
-        return {
-            use surfman::platform::generic::multi::context::NativeContext;
-            match native_context {
-                NativeContext::Default(NativeContext::Default(native_context)) => {
-                    GlContext::Egl(native_context.egl_context as usize)
-                }
-                NativeContext::Default(NativeContext::Alternate(native_context)) => {
-                    GlContext::Egl(native_context.egl_context as usize)
-                }
-                NativeContext::Alternate(_) => unimplemented!(),
-            }
-        };
-
-        // @TODO(victor): https://github.com/servo/media/pull/315
-        #[cfg(target_os = "macos")]
-        #[allow(unreachable_code)]
-        return unimplemented!();
-
-        #[cfg(not(any(target_os = "linux", target_os = "windows", target_os = "macos")))]
-        return unimplemented!();
-    }
-
-    fn get_native_display(&self) -> NativeDisplay {
-        if !pref!(media.glvideo.enabled) {
-            return NativeDisplay::Unknown;
-        }
-
-        #[allow(unused_variables)]
-        let native_connection = self.rendering_context.connection().native_connection();
-        #[allow(unused_variables)]
-        let native_device = self.rendering_context.native_device();
-
-        #[cfg(target_os = "windows")]
-        return NativeDisplay::Egl(native_device.egl_display as usize);
-
-        #[cfg(target_os = "linux")]
-        return {
-            use surfman::platform::generic::multi::connection::NativeConnection;
-            match native_connection {
-                NativeConnection::Default(NativeConnection::Default(conn)) => {
-                    NativeDisplay::Egl(conn.0 as usize)
-                }
-                NativeConnection::Default(NativeConnection::Alternate(conn)) => {
-                    NativeDisplay::X11(conn.x11_display as usize)
-                }
-                NativeConnection::Alternate(_) => unimplemented!(),
-            }
-        };
-
-        // @TODO(victor): https://github.com/servo/media/pull/315
-        #[cfg(target_os = "macos")]
-        #[allow(unreachable_code)]
-        return unimplemented!();
-
-        #[cfg(not(any(target_os = "linux", target_os = "windows", target_os = "macos")))]
-        return unimplemented!();
-    }
-
-    fn get_gl_api(&self) -> GlApi {
-        let api = self.rendering_context.connection().gl_api();
-        let attributes = self.rendering_context.context_attributes();
-        let GLVersion { major, minor } = attributes.version;
-        match api {
-            GLApi::GL if major >= 3 && minor >= 2 => GlApi::OpenGL3,
-            GLApi::GL => GlApi::OpenGL,
-            GLApi::GLES if major > 1 => GlApi::Gles2,
-            GLApi::GLES => GlApi::Gles1,
-        }
     }
 
     fn rendering_context(&self) -> RenderingContext {
