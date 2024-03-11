@@ -1,15 +1,15 @@
 workspace = {}
 
 [package]
-name = "yippee"
+name = "verso"
 version = "0.0.1"
 authors = ["Wu Yu Wei"]
 edition = "2021"
 license = "Apache-2.0 OR MIT"
 description = "A web browser"
 readme = "README.md"
-repository = "https://github.com/wusyong/yippee"
-documentation = "https://docs.rs/yippee"
+repository = "https://github.com/wusyong/verso"
+documentation = "https://docs.rs/verso"
 categories = ["Web programming"]
 
 [package.metadata.docs.rs]

@@ -158,7 +158,7 @@ impl WebView {
                     winit::event::MouseButton::Right => servo::script_traits::MouseButton::Right,
                     winit::event::MouseButton::Middle => servo::script_traits::MouseButton::Middle,
                     _ => {
-                        log::warn!("Yippee hasn't supported this mouse button yet: {button:?}");
+                        log::warn!("Verso hasn't supported this mouse button yet: {button:?}");
                         return;
                     }
                 };
@@ -232,7 +232,7 @@ impl WebView {
             WindowEvent::CloseRequested => {
                 events.push(EmbedderEvent::Quit);
             }
-            e => log::warn!("Yippee hasn't supported this window event yet: {e:?}"),
+            e => log::warn!("Verso hasn't supported this window event yet: {e:?}"),
         }
     }
 }

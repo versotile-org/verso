@@ -1,4 +1,4 @@
-# Yippee
+# Verso
 
 A web browser that plays old world blues to build new world hope.
 

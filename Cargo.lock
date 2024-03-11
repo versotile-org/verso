@@ -5517,6 +5517,27 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "49874b5167b65d7193b8aba1567f5c7d93d001cafc34600cee003eda787e483f"
 
 [[package]]
+name = "verso"
+version = "0.0.1"
+dependencies = [
+ "block",
+ "cfg_aliases",
+ "cocoa 0.25.0",
+ "core-graphics 0.23.1",
+ "crossbeam-channel",
+ "getopts",
+ "libservo",
+ "log",
+ "objc",
+ "objc_id",
+ "owo-colors",
+ "raw-window-handle 0.5.2",
+ "surfman",
+ "thiserror",
+ "winit",
+]
+
+[[package]]
 name = "void"
 version = "1.0.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -6500,27 +6521,6 @@ dependencies = [
  "dlib",
  "once_cell",
  "pkg-config",
-]
-
-[[package]]
-name = "yippee"
-version = "0.0.1"
-dependencies = [
- "block",
- "cfg_aliases",
- "cocoa 0.25.0",
- "core-graphics 0.23.1",
- "crossbeam-channel",
- "getopts",
- "libservo",
- "log",
- "objc",
- "objc_id",
- "owo-colors",
- "raw-window-handle 0.5.2",
- "surfman",
- "thiserror",
- "winit",
 ]
 
 [[package]]

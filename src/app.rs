@@ -27,12 +27,12 @@ pub enum Status {
     LoadStart,
     /// Loading of webivew has completed.
     LoadComplete,
-    /// Yippee has shut down.
+    /// Verso has shut down.
     Shutdown,
 }
 
-/// Main entry point of Yippee browser.
-pub struct Yippee {
+/// Main entry point of Verso browser.
+pub struct Verso {
     servo: Option<Servo<WebView>>,
     webview_id: Option<TopLevelBrowsingContextId>,
     webview: Rc<WebView>,
@@ -41,8 +41,8 @@ pub struct Yippee {
     status: Status,
 }
 
-impl Yippee {
-    /// Create an Yippee instance from winit's window and event loop proxy.
+impl Verso {
+    /// Create an Verso instance from winit's window and event loop proxy.
     pub fn new(window: Window, proxy: EventLoopProxy<()>) -> Self {
         resources::init();
         prefs::init();
@@ -64,7 +64,7 @@ impl Yippee {
             .servo
             .handle_events(vec![EmbedderEvent::NewWebView(url, init_servo.browser_id)]);
         init_servo.servo.setup_logging();
-        Yippee {
+        Verso {
             servo: Some(init_servo.servo),
             webview,
             events: vec![],
@@ -78,7 +78,7 @@ impl Yippee {
     /// - Set the control flow of winit event loop
     /// - Hnadle Winit's event, create Servo's embedder event and push to Yipppee's event queue.
     /// - Consume Servo's messages and then send all embedder events to Servo.
-    /// - And the last step is returning the status of Yippee.
+    /// - And the last step is returning the status of Verso.
     pub fn run(&mut self, event: Event<()>, evl: &EventLoopWindowTarget<()>) -> Status {
         self.set_control_flow(&event, evl);
         self.handle_winit_event(event);
@@ -93,11 +93,11 @@ impl Yippee {
             ControlFlow::Poll
         };
         evl.set_control_flow(control_flow);
-        log::trace!("Yippee sets control flow to: {control_flow:?}");
+        log::trace!("Verso sets control flow to: {control_flow:?}");
     }
 
     fn handle_winit_event(&mut self, event: Event<()>) {
-        log::trace!("Yippee is creating ebedder event from: {event:?}");
+        log::trace!("Verso is creating ebedder event from: {event:?}");
         match event {
             Event::Suspended => {}
             Event::Resumed | Event::UserEvent(()) => {
@@ -109,7 +109,7 @@ impl Yippee {
             } => self
                 .webview
                 .handle_winit_window_event(&mut self.servo, &mut self.events, &event),
-            e => log::warn!("Yippee hasn't supported this event yet: {e:?}"),
+            e => log::warn!("Verso hasn't supported this event yet: {e:?}"),
         }
     }
 
@@ -121,7 +121,7 @@ impl Yippee {
         let mut need_present = false;
 
         servo.get_events().into_iter().for_each(|(w, m)| {
-            log::trace!("Yippee is handling servo message: {m:?} with browser id: {w:?}");
+            log::trace!("Verso is handling servo message: {m:?} with browser id: {w:?}");
             match m {
                 EmbedderMsg::WebViewOpened(w) => {
                     if self.webview_id.is_none() {
@@ -187,12 +187,12 @@ impl Yippee {
                     self.status = Status::Shutdown;
                 }
                 e => {
-                    log::warn!("Yippee hasn't supported handling this message yet: {e:?}")
+                    log::warn!("Verso hasn't supported handling this message yet: {e:?}")
                 }
             }
         });
 
-        log::trace!("Yippee is handling embedder events: {:?}", self.events);
+        log::trace!("Verso is handling embedder events: {:?}", self.events);
         if servo.handle_events(self.events.drain(..)) {
             servo.repaint_synchronously();
             self.webview.paint(servo);
@@ -201,7 +201,7 @@ impl Yippee {
         }
 
         if let Status::Shutdown = self.status {
-            log::trace!("Yippee is shutting down Servo");
+            log::trace!("Verso is shutting down Servo");
             self.servo.take().map(Servo::deinit);
         }
     }
@@ -211,7 +211,7 @@ impl Yippee {
         &mut self.servo
     }
 
-    /// Tell Yippee to shutdown Servo safely.
+    /// Tell Verso to shutdown Servo safely.
     pub fn shutdown(&mut self) {
         self.events.push(EmbedderEvent::Quit);
     }
@@ -235,7 +235,7 @@ impl EventLoopWaker for Embedder {
     fn wake(&self) {
         if let Err(e) = self.0.send_event(()) {
             log::error!(
-                "Servo embedder failed to send wake up event to Yippee: {}",
+                "Servo embedder failed to send wake up event to Verso: {}",
                 e
             );
         }

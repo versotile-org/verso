@@ -1,4 +1,4 @@
-/// Simple test harness for testing `yippee`.
+/// Simple test harness for testing `verso`.
 ///
 /// Add your test to `Cargo.toml` with the `harness = false` option. This will prevent Rust's default test harness from running your test.
 ///
@@ -8,10 +8,10 @@
 /// harness = false
 /// ```
 ///
-/// Then, in your test, use the `yippee_test!` macro to run your tests. The tests must be functions that take an `EventLoopWindowTarget`.
+/// Then, in your test, use the `verso_test!` macro to run your tests. The tests must be functions that take an `EventLoopWindowTarget`.
 ///
 /// ```rust
-/// use yippee::winit::event_loop::EventLoopWindowTarget;
+/// use verso::winit::event_loop::EventLoopWindowTarget;
 ///
 /// fn my_test(elwt: &EventLoopWindowTarget<()>) {
 ///     // ...
@@ -21,14 +21,14 @@
 ///     // ...
 /// }
 ///
-/// yippee_test!(my_test, other_test);
+/// verso_test!(my_test, other_test);
 /// ```
 #[macro_export]
-macro_rules! yippee_test {
+macro_rules! verso_test {
     ($($test:expr),*) => {
         fn main() -> Result<(), Box<dyn std::error::Error>> {
-            const TESTS: &[$crate::test::__private::YippeeBasedTest] = &[$(
-                $crate::__yippee_test_internal_collect_test!($test)
+            const TESTS: &[$crate::test::__private::VersoBasedTest] = &[$(
+                $crate::__verso_test_internal_collect_test!($test)
             ),*];
 
             $crate::test::__private::run(TESTS, ());
@@ -39,9 +39,9 @@ macro_rules! yippee_test {
 
 #[doc(hidden)]
 #[macro_export]
-macro_rules! __yippee_test_internal_collect_test {
+macro_rules! __verso_test_internal_collect_test {
     ($name:expr) => {
-        $crate::test::__private::YippeeBasedTest {
+        $crate::test::__private::VersoBasedTest {
             name: stringify!($name),
             function: $crate::test::__private::TestFunction::Oneoff($name),
         }
@@ -60,7 +60,7 @@ pub mod __private {
     use std::time::Instant;
     use winit::window::WindowBuilder;
 
-    use crate::{Status, Yippee};
+    use crate::{Status, Verso};
 
     pub type Context = ();
 
@@ -73,14 +73,14 @@ pub mod __private {
     }
 
     /// Run a set of tests using a `winit` context.
-    pub fn run(tests: &'static [YippeeBasedTest], _ctx: Context) {
+    pub fn run(tests: &'static [VersoBasedTest], _ctx: Context) {
         // Create a new event loop and obtain a window target.
         let event_loop = EventLoop::new().expect("Failed to build event loop");
         let window = WindowBuilder::new()
             .with_visible(false)
             .build(&event_loop)
             .expect("Failed to create winit window");
-        let mut yippee = Yippee::new(window, event_loop.create_proxy());
+        let mut verso = Verso::new(window, event_loop.create_proxy());
 
         println!("\nRunning {} tests...", tests.len());
         let mut state = State {
@@ -93,10 +93,10 @@ pub mod __private {
 
         // Run the tests.
         event_loop
-            .run(move |event, elwt| match yippee.run(event, elwt) {
+            .run(move |event, elwt| match verso.run(event, elwt) {
                 Status::LoadComplete => {
                     run_internal(tests, &mut state, elwt);
-                    yippee.shutdown();
+                    verso.shutdown();
                 }
                 Status::Shutdown => elwt.exit(),
                 _ => (),
@@ -106,7 +106,7 @@ pub mod __private {
 
     /// Run a set of tests using a `winit` context.
     fn run_internal(
-        tests: &'static [YippeeBasedTest],
+        tests: &'static [VersoBasedTest],
         state: &mut State,
         elwt: &EventLoopWindowTarget<()>,
     ) {
@@ -165,7 +165,7 @@ pub mod __private {
         state.code = if failures == 0 { 0 } else { 1 };
     }
 
-    pub struct YippeeBasedTest {
+    pub struct VersoBasedTest {
         pub name: &'static str,
         pub function: TestFunction,
     }
