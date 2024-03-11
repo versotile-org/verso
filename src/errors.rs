@@ -1,7 +1,7 @@
-/// Convenient type alias of Result type for Yippee.
+/// Convenient type alias of Result type for Verso.
 pub type Result<T> = std::result::Result<T, Error>;
 
-/// Errors returned by Yippee.
+/// Errors returned by Verso.
 #[non_exhaustive]
 #[derive(thiserror::Error, Debug)]
 pub enum Error {

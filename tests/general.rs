@@ -1,7 +1,7 @@
 use winit::event_loop::EventLoopWindowTarget;
-use yippee::yippee_test;
+use verso::verso_test;
 
 fn smoke(_elwt: &EventLoopWindowTarget<()>) {}
 fn other_smoke(_elwt: &EventLoopWindowTarget<()>) {}
 
-yippee_test!(smoke, other_smoke);
+verso_test!(smoke, other_smoke);

@@ -1,6 +1,6 @@
-//! Yippee Web Browser
+//! Verso Web Browser
 //!
-//! This is the documentation of Yippee's types and items. See [Github page](https://github.com/wusyong/Yippee) for more general introduction.
+//! This is the documentation of Verso's types and items. See [Github page](https://github.com/wusyong/Verso) for more general introduction.
 
 #![deny(missing_docs)]
 
@@ -17,7 +17,7 @@ pub mod test;
 /// Web view types to handle web browsing contexts and window.
 pub mod webview;
 
-pub use app::{Status, Yippee};
+pub use app::{Status, Verso};
 pub use errors::{Error, Result};
 /// Re-exporting `winit` for the sake of convenience.
 pub use winit;

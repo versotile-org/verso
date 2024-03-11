@@ -1,5 +1,5 @@
 use winit::{dpi::PhysicalSize, event_loop::EventLoop, window::WindowBuilder};
-use yippee::{Result, Status, Yippee};
+use verso::{Result, Status, Verso};
 
 /* window decoration */
 #[cfg(target_os = "macos")]
@@ -18,7 +18,7 @@ use winit::platform::macos::WindowBuilderExtMacOS;
 fn main() -> Result<()> {
     let event_loop = EventLoop::new()?;
     let window = WindowBuilder::new()
-        .with_title("(*ﾟ▽ﾟ)ﾉ Yippee")
+        .with_title("(*ﾟ▽ﾟ)ﾉ Verso")
         .with_inner_size(PhysicalSize::new(1000, 500))
         .build(&event_loop)?;
 
@@ -30,8 +30,8 @@ fn main() -> Result<()> {
         }
     }
 
-    let mut yippee = Yippee::new(window, event_loop.create_proxy());
-    event_loop.run(move |event, evl| match yippee.run(event, evl) {
+    let mut verso = Verso::new(window, event_loop.create_proxy());
+    event_loop.run(move |event, evl| match verso.run(event, evl) {
         Status::Shutdown => evl.exit(),
         _ => (),
     })?;
