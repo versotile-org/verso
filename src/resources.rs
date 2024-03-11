@@ -2,6 +2,9 @@ use std::{env, fs, path::PathBuf};
 
 use servo::embedder_traits::resources::{self, Resource, ResourceReaderMethods};
 
+/// Environment variable for setting the resources path.
+pub const RESOURCES_ENV: &str = "VERSO_RESOURCES";
+
 struct ResourceReader(PathBuf);
 
 /// Initialize resource files. We currently read from `resources` directory only.
@@ -26,6 +29,10 @@ impl ResourceReaderMethods for ResourceReader {
 }
 
 fn resources_dir_path() -> PathBuf {
+    if let Ok(path) = env::var(RESOURCES_ENV) {
+        return path.into();
+    }
+
     // Try ./resources relative to the directory containing the
     // canonicalised executable path, then each of its ancestors.
     let mut path = env::current_exe().unwrap().canonicalize().unwrap();
