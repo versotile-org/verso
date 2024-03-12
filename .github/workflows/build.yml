@@ -13,7 +13,14 @@ on:
 jobs:
   build:
     name: Build
-    runs-on: ubuntu-latest
+    runs-on: ${{ matrix.config.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        config:
+          - { os: ubuntu-latest }
+          - { os: macos-latest }
+          - { os: windows-latest }
     steps:
       - name: Checkout the repository
         uses: actions/checkout@v4
@@ -22,6 +29,15 @@ jobs:
         uses: dsherret/rust-toolchain-file@v1
 
       - name: Install dependencies
+        if: matrix.config.os == 'macos-latest'
+        run: brew install cmake pkg-config
+
+      - name: Install dependencies
+        if: matrix.config.os == 'windows-latest'
+        run: scoop install git python llvm cmake curl
+
+      - name: Install dependencies
+        if: matrix.config.os == 'ubuntu-latest'
         run: |
           sudo apt-get update
           sudo apt install build-essential python3-pip ccache clang cmake curl \
