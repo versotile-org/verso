@@ -19,6 +19,21 @@ targets = [
   "x86_64-apple-darwin",
 ]
 
+[package.metadata.packager]
+name = "verso"
+product-name = "verso"
+identifier = "com.crabnebula.verso"
+version = "0.0.1"
+before-each-package-command = "cargo build --release"
+resources = [
+  "resources",
+  "demo.html"
+]
+icons=[
+  "resources/icons/icon256x256.png",
+  "resources/icons/icon.ico"
+]
+
 [features]
 default = []
 
@@ -37,6 +52,8 @@ crossbeam-channel = "0.5"
 getopts = "0.2.17"
 surfman = { version = "0.9", features = ["chains", "sm-angle", "sm-angle-default", "sm-x11", "sm-raw-window-handle"] }
 winit = { version = "0.29", features = ["rwh_05"] }
+# Cargo Packager
+cargo-packager-resource-resolver = { version = "0.1", features = ["auto-detect-format"] }
 
 [target."cfg(any(target_os = \"ios\", target_os = \"macos\"))".dependencies]
 block = "0.1"
