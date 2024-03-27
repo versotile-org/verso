@@ -22,7 +22,7 @@ targets = [
 [package.metadata.packager]
 name = "verso"
 product-name = "verso"
-identifier = "com.crabnebula.verso"
+identifier = "com.eu-browser.verso"
 version = "0.0.1"
 before-each-package-command = "cargo build --release"
 resources = [
