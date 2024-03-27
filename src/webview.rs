@@ -32,6 +32,7 @@ pub struct WebView {
     mouse_position: Cell<PhysicalPosition<f64>>,
     /// Access to webrender gl
     pub webrender_gl: Rc<dyn gl::Gl>,
+    painter: crate::painter::Painter,
 }
 
 impl WebView {
@@ -58,6 +59,9 @@ impl WebView {
                 gl::GlesFns::load_with(|s| rendering_context.get_proc_address(s))
             },
         };
+        let painter = crate::painter::Painter::new(
+            webrender_gl.to_owned(),
+        );
         debug_assert_eq!(webrender_gl.get_error(), gl::NO_ERROR);
 
         Self {
@@ -66,6 +70,7 @@ impl WebView {
             window,
             mouse_position: Cell::new(PhysicalPosition::default()),
             webrender_gl,
+            painter
         }
     }
 
@@ -97,9 +102,10 @@ impl WebView {
                 .map(|info| info.framebuffer_object)
                 .unwrap_or(0);
 
+            webrender_gl.bind_framebuffer(gl::FRAMEBUFFER, fbo);
+            self.painter.draw();
             webrender_gl.bind_framebuffer(gl::READ_FRAMEBUFFER, fbo);
             webrender_gl.bind_framebuffer(gl::DRAW_FRAMEBUFFER, target_fbo);
-
             webrender_gl.blit_framebuffer(
                 viewport.origin.x,
                 viewport.origin.y,
