@@ -133,7 +133,7 @@ impl WebView {
 
     /// Handle winit window event.
     pub fn handle_winit_window_event(
-        &self,
+        &mut self,
         servo: &mut Option<Servo<WebView>>,
         events: &mut Vec<EmbedderEvent>,
         event: &winit::event::WindowEvent,
@@ -236,6 +236,7 @@ impl WebView {
                 ));
             }
             WindowEvent::CloseRequested => {
+                self.painter.destroy();
                 events.push(EmbedderEvent::Quit);
             }
             e => log::warn!("Verso hasn't supported this window event yet: {e:?}"),
