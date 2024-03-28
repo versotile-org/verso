@@ -136,7 +136,7 @@ impl WebView {
 
     /// Handle winit window event.
     pub fn handle_winit_window_event(
-        &mut self,
+        &self,
         servo: &mut Option<Servo<WebView>>,
         events: &mut Vec<EmbedderEvent>,
         event: &winit::event::WindowEvent,

@@ -1,4 +1,4 @@
-use std::mem::{size_of, size_of_val};
+use std::{mem::{size_of, size_of_val}, sync::atomic::{Ordering, AtomicBool}};
 
 use servo::gl;
 
@@ -28,7 +28,7 @@ pub struct Painter {
     gl: GlPtr,
     program: gl::GLuint,
     buffer: gl::GLuint,
-    destroyed: bool,
+    destroyed: AtomicBool,
 }
 
 fn load_shader(gl: &GlPtr, shader_type: gl::GLenum, source: &[&[u8]]) -> Option<gl::GLuint> {
@@ -92,7 +92,7 @@ impl Painter {
             gl: gl,
             program: program,
             buffer: buffer,
-            destroyed: false,
+            destroyed: AtomicBool::new(false),
         }
     }
     /// Execute full screen drawing.
@@ -111,22 +111,22 @@ impl Painter {
 
     /// This function must be called before [`Painter`] is dropped, as [`Painter`] has some OpenGL objects
     /// that should be deleted.
-    pub fn destroy(&mut self) {
-        if !self.destroyed {
+    pub fn destroy(&self) {
+        if self.destroyed.load(Ordering::Relaxed) == false {
             unsafe {
                 self.destroy_gl();
             }
-            self.destroyed = true;
+            self.destroyed.store(true, Ordering::Relaxed);
         }
     }
     fn assert_not_destroyed(&self) {
-        assert!(!self.destroyed, "the painter has already been destroyed!");
+        assert!(self.destroyed.load(Ordering::Relaxed) == false, "the painter has already been destroyed!");
     }
 }
 
 impl Drop for Painter {
     fn drop(&mut self) {
-        if !self.destroyed {
+        if !self.destroyed.load(Ordering::Relaxed) == false {
             log::warn!("You forgot to call destroy() on the painter. Resources will leak!");
         }
     }
