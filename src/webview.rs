@@ -104,15 +104,20 @@ impl WebView {
 
             webrender_gl.bind_framebuffer(gl::READ_FRAMEBUFFER, fbo);
             webrender_gl.bind_framebuffer(gl::DRAW_FRAMEBUFFER, target_fbo);
+
+            let x = viewport.min.x;
+            let y = viewport.min.y;
+            let width = viewport.size().width;
+            let height = viewport.size().height;
             webrender_gl.blit_framebuffer(
-                viewport.origin.x,
-                viewport.origin.y,
-                viewport.origin.x + viewport.size.width,
-                viewport.origin.y + viewport.size.height,
-                viewport.origin.x,
-                viewport.origin.y,
-                viewport.origin.x + viewport.size.width,
-                viewport.origin.y + viewport.size.height,
+                x,
+                y,
+                x + width,
+                y + height,
+                x,
+                y,
+                x + width,
+                y + height,
                 gl::COLOR_BUFFER_BIT,
                 gl::NEAREST,
             );
@@ -259,7 +264,7 @@ impl WindowMethods for WebView {
             screen_avail: screen,
             window: (viewport, pos),
             framebuffer: viewport,
-            viewport: DeviceIntRect::new(pos, viewport),
+            viewport: DeviceIntRect::from_origin_and_size(pos, viewport),
         }
     }
 
