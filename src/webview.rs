@@ -59,9 +59,7 @@ impl WebView {
                 gl::GlesFns::load_with(|s| rendering_context.get_proc_address(s))
             },
         };
-        let painter = crate::painter::Painter::new(
-            webrender_gl.to_owned(),
-        );
+        let painter = crate::painter::Painter::new(webrender_gl.to_owned());
         debug_assert_eq!(webrender_gl.get_error(), gl::NO_ERROR);
 
         Self {
@@ -70,7 +68,7 @@ impl WebView {
             window,
             mouse_position: Cell::new(PhysicalPosition::default()),
             webrender_gl,
-            painter
+            painter,
         }
     }
 
@@ -94,6 +92,8 @@ impl WebView {
         if let Some(fbo) = servo.offscreen_framebuffer_id() {
             let viewport = self.get_coordinates().get_flipped_viewport();
             let webrender_gl = &self.webrender_gl;
+            webrender_gl.bind_framebuffer(gl::FRAMEBUFFER, fbo);
+            self.painter.draw();
 
             let target_fbo = self
                 .rendering_context
@@ -102,8 +102,6 @@ impl WebView {
                 .map(|info| info.framebuffer_object)
                 .unwrap_or(0);
 
-            webrender_gl.bind_framebuffer(gl::FRAMEBUFFER, fbo);
-            self.painter.draw();
             webrender_gl.bind_framebuffer(gl::READ_FRAMEBUFFER, fbo);
             webrender_gl.bind_framebuffer(gl::DRAW_FRAMEBUFFER, target_fbo);
             webrender_gl.blit_framebuffer(
