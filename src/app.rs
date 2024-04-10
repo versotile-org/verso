@@ -138,7 +138,7 @@ impl Verso {
                     }
                     self.events.push(EmbedderEvent::FocusWebView(w));
                 }
-                EmbedderMsg::ReadyToPresent => {
+                EmbedderMsg::ReadyToPresent(_w) => {
                     need_present = true;
                 }
                 EmbedderMsg::LoadStart => self.status = Status::LoadStart,

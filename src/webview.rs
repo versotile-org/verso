@@ -100,15 +100,19 @@ impl WebView {
             webrender_gl.bind_framebuffer(gl::READ_FRAMEBUFFER, fbo);
             webrender_gl.bind_framebuffer(gl::DRAW_FRAMEBUFFER, target_fbo);
 
+            let x = viewport.min.x;
+            let y = viewport.min.y;
+            let width = viewport.size().width;
+            let height = viewport.size().height;
             webrender_gl.blit_framebuffer(
-                viewport.origin.x,
-                viewport.origin.y,
-                viewport.origin.x + viewport.size.width,
-                viewport.origin.y + viewport.size.height,
-                viewport.origin.x,
-                viewport.origin.y,
-                viewport.origin.x + viewport.size.width,
-                viewport.origin.y + viewport.size.height,
+                x,
+                y,
+                x + width,
+                y + height,
+                x,
+                y,
+                x + width,
+                y + height,
                 gl::COLOR_BUFFER_BIT,
                 gl::NEAREST,
             );
@@ -137,7 +141,6 @@ impl WebView {
                 let Some(servo) = servo.as_mut() else {
                     return;
                 };
-                servo.recomposite();
 
                 self.paint(servo);
                 events.push(EmbedderEvent::Idle);
@@ -145,7 +148,7 @@ impl WebView {
             WindowEvent::Resized(size) => {
                 let size = Size2D::new(size.width, size.height);
                 let _ = self.resize(size.to_i32());
-                events.push(EmbedderEvent::Resize);
+                events.push(EmbedderEvent::WindowResize);
             }
             WindowEvent::CursorMoved { position, .. } => {
                 let event: DevicePoint = DevicePoint::new(position.x as f32, position.y as f32);
@@ -254,7 +257,7 @@ impl WindowMethods for WebView {
             screen_avail: screen,
             window: (viewport, pos),
             framebuffer: viewport,
-            viewport: DeviceIntRect::new(pos, viewport),
+            viewport: DeviceIntRect::from_origin_and_size(pos, viewport),
         }
     }
 
