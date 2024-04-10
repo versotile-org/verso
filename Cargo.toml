@@ -8,7 +8,7 @@ edition = "2021"
 license = "Apache-2.0 OR MIT"
 description = "A web browser"
 readme = "README.md"
-repository = "https://github.com/wusyong/verso"
+repository = "https://github.com/european-browser/verso"
 documentation = "https://docs.rs/verso"
 categories = ["Web programming"]
 
