@@ -141,7 +141,6 @@ impl WebView {
                 let Some(servo) = servo.as_mut() else {
                     return;
                 };
-                servo.recomposite();
 
                 self.paint(servo);
                 events.push(EmbedderEvent::Idle);
@@ -149,7 +148,7 @@ impl WebView {
             WindowEvent::Resized(size) => {
                 let size = Size2D::new(size.width, size.height);
                 let _ = self.resize(size.to_i32());
-                events.push(EmbedderEvent::Resize);
+                events.push(EmbedderEvent::WindowResize);
             }
             WindowEvent::CursorMoved { position, .. } => {
                 let event: DevicePoint = DevicePoint::new(position.x as f32, position.y as f32);
