@@ -4,7 +4,7 @@ use servo::embedder_traits::resources::{self, Resource, ResourceReaderMethods};
 
 struct ResourceReader(PathBuf);
 
-#[cfg(not(debug_assertions))]
+#[cfg(feature = "packager")]
 use cargo_packager_resource_resolver::{current_format, resources_dir};
 
 /// Initialize resource files. We currently read from `resources` directory only.
@@ -28,13 +28,16 @@ impl ResourceReaderMethods for ResourceReader {
     }
 }
 
+#[cfg(feature = "packager")]
 fn resources_dir_path() -> PathBuf {
-    // For production builds, use Resourse Resolver
-    #[cfg(not(debug_assertions))]
+    // For Cargo Packager builds, use Resourse Resolver
     return resources_dir(current_format().unwrap())
         .unwrap()
         .join("resources");
+}
 
+#[cfg(not(feature = "packager"))]
+fn resources_dir_path() -> PathBuf {
     // Try ./resources relative to the directory containing the
     // canonicalised executable path, then each of its ancestors.
     let mut path = env::current_exe().unwrap().canonicalize().unwrap();

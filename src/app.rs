@@ -17,7 +17,7 @@ use winit::{
 
 use crate::{prefs, resources, webview::WebView};
 
-#[cfg(not(debug_assertions))]
+#[cfg(feature = "packager")]
 use cargo_packager_resource_resolver::{current_format, resources_dir};
 
 /// Status of webview.
@@ -63,7 +63,7 @@ impl Verso {
 
         let demo_path = std::env::current_dir().unwrap().join("demo.html");
         // For production builds, use Resourse Resolver for demo file
-        #[cfg(not(debug_assertions))]
+        #[cfg(feature = "packager")]
         let demo_path = resources_dir(current_format().unwrap())
             .unwrap()
             .join("demo.html");

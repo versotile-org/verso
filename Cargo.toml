@@ -24,7 +24,7 @@ name = "verso"
 product-name = "verso"
 identifier = "com.eu-browser.verso"
 version = "0.0.1"
-before-each-package-command = "cargo build --release"
+before-each-package-command = "cargo build --release --features \"packager\""
 resources = [
   "resources",
   "demo.html"
@@ -36,7 +36,8 @@ icons=[
 
 [features]
 default = []
-
+# Exclusively for cargo packager command.
+packager = ["dep:cargo-packager-resource-resolver"]
 
 [build-dependencies]
 cfg_aliases = "0.1"
@@ -53,7 +54,7 @@ getopts = "0.2.17"
 surfman = { version = "0.9", features = ["chains", "sm-angle", "sm-angle-default", "sm-x11", "sm-raw-window-handle"] }
 winit = { version = "0.29", features = ["rwh_05"] }
 # Cargo Packager
-cargo-packager-resource-resolver = { version = "0.1", features = ["auto-detect-format"] }
+cargo-packager-resource-resolver = { version = "0.1", features = ["auto-detect-format"], optional = true }
 
 [target."cfg(any(target_os = \"ios\", target_os = \"macos\"))".dependencies]
 block = "0.1"
