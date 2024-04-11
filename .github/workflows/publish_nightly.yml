@@ -18,7 +18,7 @@ jobs:
       - name: create draft release
         uses: crabnebula-dev/cloud-release@v0.1.0
         with:
-          command: release draft ${{ env.CN_APP_SLUG }} 0.0.1 --framework packager
+          command: release draft test-verso 0.0.1 --framework packager
           api-key: ${{ secrets.CN_API_KEY }}
 
   build-linux:
@@ -67,7 +67,7 @@ jobs:
       - name: upload assets
         uses: crabnebula-dev/cloud-release@v0.1.0
         with:
-          command: release upload ${{ env.CN_APP_SLUG }} 0.0.1 --framework packager
+          command: release upload test-verso 0.0.1 --framework packager
           api-key: ${{ secrets.CN_API_KEY }}
 
 
@@ -105,7 +105,7 @@ jobs:
       - name: upload assets
         uses: crabnebula-dev/cloud-release@v0.1.0
         with:
-          command: release upload ${{ env.CN_APP_SLUG }} 0.0.1 --framework packager
+          command: release upload test-verso 0.0.1 --framework packager
           api-key: ${{ secrets.CN_API_KEY }}
 
   build-macos:
@@ -139,7 +139,7 @@ jobs:
       - name: upload assets
         uses: crabnebula-dev/cloud-release@v0.1.0
         with:
-          command: release upload ${{ env.CN_APP_SLUG }} 0.0.1 --framework packager
+          command: release upload test-verso 0.0.1 --framework packager
           api-key: ${{ secrets.CN_API_KEY }}
 
   publish:
@@ -153,5 +153,5 @@ jobs:
       - name: publish release
         uses: crabnebula-dev/cloud-release@v0.1.0
         with:
-          command: release publish ${{ env.CN_APP_SLUG }} 0.0.1 --framework packager
+          command: release publish test-verso 0.0.1 --framework packager
           api-key: ${{ secrets.CN_API_KEY }}
