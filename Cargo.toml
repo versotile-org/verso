@@ -25,6 +25,7 @@ product-name = "verso"
 identifier = "com.eu-browser.verso"
 version = "0.0.1"
 before-each-package-command = "cargo build --release --features \"packager\""
+out-dir = "target/release"
 resources = [
   "resources",
   "demo.html"

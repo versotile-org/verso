@@ -57,8 +57,8 @@ jobs:
       - name: Install Cargo Packager
         run: cargo install cargo-packager --locked
 
-      - name: Build packager app
-        run: cargo packager --release
+      - name: Package the App
+        run: cargo packager --release --verbose
 
       - name: Move assets to workdir
         run: |
@@ -95,8 +95,8 @@ jobs:
       - name: Install Cargo Packager
         run: cargo install cargo-packager --locked
 
-      - name: Build packager app
-        run: cargo packager --release
+      - name: Package the App
+        run: cargo packager --release --verbose
 
       - name: Move assets to workdir
         run: |
@@ -129,8 +129,8 @@ jobs:
       - name: Install Cargo Packager
         run: cargo install cargo-packager --locked
 
-      - name: Build packager app
-        run: cargo packager --release
+      - name: Package the App
+        run: cargo packager --release --verbose
 
       - name: Move assets to workdir
         run: |
