@@ -11,7 +11,7 @@ jobs:
 
   draft:
     runs-on: ubuntu-latest
-
+    environment: "Init Workflow"
     steps:
       - uses: actions/checkout@v4
 
@@ -25,6 +25,7 @@ jobs:
     name: Build [linux]
     needs: draft
     runs-on: ubuntu-latest # We may want this to be older for wider libc compatibility
+    environment: "Init Workflow"
     steps:
       - name: Checkout the repository
         uses: actions/checkout@v4
@@ -74,6 +75,7 @@ jobs:
     name: Build [windows]
     needs: draft
     runs-on: windows-latest
+    environment: "Init Workflow"
     steps:
       - name: Checkout the repository
         uses: actions/checkout@v4
@@ -110,6 +112,7 @@ jobs:
     name: Build [macos]
     needs: draft
     runs-on: macos-latest
+    environment: "Init Workflow"
     steps:
       - name: Checkout the repository
         uses: actions/checkout@v4
@@ -143,7 +146,7 @@ jobs:
     needs: [build-linux, build-windows, build-macos]
 
     runs-on: ubuntu-latest
-
+    environment: "Init Workflow"
     steps:
       - uses: actions/checkout@v4
 
