@@ -61,6 +61,7 @@ impl Verso {
             CompositeTarget::Fbo,
         );
 
+        #[cfg(not(feature = "packager"))]
         let demo_path = std::env::current_dir().unwrap().join("demo.html");
         // For production builds, use Resourse Resolver for demo file
         #[cfg(feature = "packager")]

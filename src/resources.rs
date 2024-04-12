@@ -1,4 +1,7 @@
-use std::{env, fs, path::PathBuf};
+use std::{fs, path::PathBuf};
+
+#[cfg(not(feature = "packager"))]
+use std::env;
 
 use servo::embedder_traits::resources::{self, Resource, ResourceReaderMethods};
 
