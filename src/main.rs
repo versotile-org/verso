@@ -1,5 +1,5 @@
-use winit::{dpi::PhysicalSize, event_loop::EventLoop, window::WindowBuilder};
 use verso::{Result, Status, Verso};
+use winit::{dpi::PhysicalSize, event_loop::EventLoop, window::WindowBuilder};
 
 /* window decoration */
 #[cfg(target_os = "macos")]

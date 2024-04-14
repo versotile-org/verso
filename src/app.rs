@@ -58,8 +58,7 @@ impl Verso {
             CompositeTarget::Fbo,
         );
 
-        let demo_path = std::env::current_dir().unwrap().join("demo.html");
-        let url = ServoUrl::from_file_path(demo_path.to_str().unwrap()).unwrap();
+        let url = ServoUrl::parse("https://servo.org/").unwrap();
         init_servo
             .servo
             .handle_events(vec![EmbedderEvent::NewWebView(url, init_servo.browser_id)]);
