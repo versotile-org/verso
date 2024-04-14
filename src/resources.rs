@@ -1,4 +1,4 @@
-use std::{env, fs, path::PathBuf};
+use std::{env, path::PathBuf};
 
 use servo::embedder_traits::resources::{self, Resource, ResourceReaderMethods};
 
@@ -10,10 +10,26 @@ pub fn init() {
 }
 
 impl ResourceReaderMethods for ResourceReader {
-    fn read(&self, res: Resource) -> Vec<u8> {
-        let mut path = self.0.clone();
-        path.push(res.filename());
-        fs::read(path).expect("Can't read file")
+    fn read(&self, file: Resource) -> Vec<u8> {
+        match file {
+            Resource::Preferences => &include_bytes!("../resources/prefs.json")[..],
+            Resource::BluetoothBlocklist => &include_bytes!("../resources/gatt_blocklist.txt")[..],
+            Resource::DomainList => &include_bytes!("../resources/public_domains.txt")[..],
+            Resource::HstsPreloadList => &include_bytes!("../resources/hsts_preload.json")[..],
+            Resource::BadCertHTML => &include_bytes!("../resources/badcert.html")[..],
+            Resource::NetErrorHTML => &include_bytes!("../resources/neterror.html")[..],
+            Resource::UserAgentCSS => &include_bytes!("../resources/user-agent.css")[..],
+            Resource::ServoCSS => &include_bytes!("../resources/servo.css")[..],
+            Resource::PresentationalHintsCSS => {
+                &include_bytes!("../resources/presentational-hints.css")[..]
+            }
+            Resource::QuirksModeCSS => &include_bytes!("../resources/quirks-mode.css")[..],
+            Resource::RippyPNG => &include_bytes!("../resources/rippy.png")[..],
+            Resource::MediaControlsCSS => &include_bytes!("../resources/media-controls.css")[..],
+            Resource::MediaControlsJS => &include_bytes!("../resources/media-controls.js")[..],
+            Resource::CrashHTML => &include_bytes!("../resources/crash.html")[..],
+        }
+        .to_owned()
     }
 
     fn sandbox_access_files(&self) -> Vec<PathBuf> {
