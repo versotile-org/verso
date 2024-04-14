@@ -1,12 +1,12 @@
-use std::{env, path::PathBuf};
+use std::path::PathBuf;
 
 use servo::embedder_traits::resources::{self, Resource, ResourceReaderMethods};
 
-struct ResourceReader(PathBuf);
+struct ResourceReader;
 
 /// Initialize resource files. We currently read from `resources` directory only.
 pub fn init() {
-    resources::set(Box::new(ResourceReader(resources_dir_path())));
+    resources::set(Box::new(ResourceReader));
 }
 
 impl ResourceReaderMethods for ResourceReader {
@@ -33,24 +33,10 @@ impl ResourceReaderMethods for ResourceReader {
     }
 
     fn sandbox_access_files(&self) -> Vec<PathBuf> {
-        vec![self.0.clone()]
+        vec![]
     }
 
     fn sandbox_access_files_dirs(&self) -> Vec<PathBuf> {
         vec![]
     }
-}
-
-fn resources_dir_path() -> PathBuf {
-    // Try ./resources relative to the directory containing the
-    // canonicalised executable path, then each of its ancestors.
-    let mut path = env::current_exe().unwrap().canonicalize().unwrap();
-    while path.pop() {
-        path.push("resources");
-        if path.is_dir() {
-            return path;
-        }
-        path.pop();
-    }
-    panic!("Can not find the resources directory. Please specify it in WebContext instead.");
 }
