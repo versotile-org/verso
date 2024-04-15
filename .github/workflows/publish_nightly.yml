@@ -58,7 +58,7 @@ jobs:
         run: cargo install cargo-packager --locked
 
       - name: Package the App
-        run: cargo packager --release --verbose
+        run: NO_STRIP=true cargo packager --release --verbose
 
       - name: Move assets to workdir
         run: |
