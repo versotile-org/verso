@@ -9,11 +9,11 @@ on:
 
 jobs:
 
-  # draft:
-  #   runs-on: ubuntu-latest
-  #   environment: "Init Workflow"
-  #   steps:
-  #     - uses: actions/checkout@v4
+  draft:
+    runs-on: ubuntu-latest
+    environment: "Init Workflow"
+    steps:
+      - uses: actions/checkout@v4
 
   #     - name: create draft release
   #       uses: crabnebula-dev/cloud-release@v0.1.0
@@ -151,16 +151,16 @@ jobs:
       #     command: release upload test-verso 0.0.1 --framework packager
       #     api-key: ${{ secrets.CN_API_KEY }}
 
-  # publish:
-  #   needs: build-linux
+  publish:
+    needs: [build-linux, build-windows, build-macos] 
 
-  #   runs-on: ubuntu-latest
-  #   environment: "Init Workflow"
-  #   steps:
-  #     - uses: actions/checkout@v4
+    runs-on: ubuntu-latest
+    environment: "Init Workflow"
+    steps:
+      - uses: actions/checkout@v4
 
-  #     - name: publish release
-  #       uses: crabnebula-dev/cloud-release@v0.1.0
-  #       with:
-  #         command: release publish test-verso 0.0.1 --framework packager
-  #         api-key: ${{ secrets.CN_API_KEY }}
+      # - name: publish release
+      #   uses: crabnebula-dev/cloud-release@v0.1.0
+      #   with:
+      #     command: release publish test-verso 0.0.1 --framework packager
+      #     api-key: ${{ secrets.CN_API_KEY }}
