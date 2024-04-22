@@ -1,14 +1,11 @@
 name: Continuous Integration
 
 on:
-  # push:
-  #   branches:
-  #     - main
   pull_request:
     branches:
       - main
-  # schedule:
-  #   - cron: '0 0 * * 0'
+  schedule:
+    - cron: '0 0 * * *'
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
@@ -50,9 +47,11 @@ jobs:
         run: cargo build --release
 
       - name: Tar Binary
+        if: ${{ github.event_name == 'schedule' }}
         run: tar -czvf verso-x86_64-unknown-linux-gnu.tar.gz -C ./target/release/ verso
 
       - name: Upload artifact
+        if: ${{ github.event_name == 'schedule' }}
         uses: actions/upload-artifact@v4
         with:
           name: verso-x86_64-unknown-linux-gnu
@@ -78,9 +77,11 @@ jobs:
         run: cargo build --release
 
       - name: Tar Binary
+        if: ${{ github.event_name == 'schedule' }}
         run: tar -czvf verso-x86_64-pc-windows-msvc.tar.gz -C ./target/release/ verso.exe
 
       - name: Upload artifact
+        if: ${{ github.event_name == 'schedule' }}
         uses: actions/upload-artifact@v4
         with:
           name: verso-x86_64-pc-windows-msvc
@@ -109,15 +110,18 @@ jobs:
         run: cargo build --release
 
       - name: Tar Binary
+        if: ${{ github.event_name == 'schedule' }}
         run: tar -czvf verso-${{ matrix.platform.target }}.tar.gz -C ./target/release/ verso
 
       - name: Upload artifact
+        if: ${{ github.event_name == 'schedule' }}
         uses: actions/upload-artifact@v4
         with:
           name: verso-${{ matrix.platform.target }}
           path: verso-${{ matrix.platform.target }}.tar.gz
 
   release-nightly:
+    if: ${{ github.event_name == 'schedule' }}
     runs-on: ubuntu-latest
     needs: ['build-macos', 'build-windows', 'build-linux']
     steps:
@@ -126,7 +130,7 @@ jobs:
 
       - name: Fetch Verso version
         run: |
-          echo "VERSO_VERSION=$(cargo metadata --format-version=1 --no-deps | jq -r '.packages[] | select(.name == "verso") | .version')-$(git rev-parse --short HEAD)-nightly" >> $GITHUB_ENV
+          echo "VERSO_VERSION=$(cargo metadata --format-version=1 --no-deps | jq -r '.packages[] | select(.name == "verso") | .version')-$(date '+%Y%m%d')-nightly" >> $GITHUB_ENV
 
       - name: Draft release
         uses: crabnebula-dev/cloud-release@v0.1.0
