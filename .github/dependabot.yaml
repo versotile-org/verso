@@ -1,0 +1,33 @@
+version: 2
+updates:
+  # Cargo
+  - package-ecosystem: "cargo"
+    directory: "/"
+    schedule:
+      interval: "daily"
+    open-pull-requests-limit: 0
+    groups:
+       security-updates:
+          applies-to: "security-updates"
+    ignore:
+      - dependency-name: "libservo"
+    allow:
+      - dependency-type: "direct"
+    reviewers:
+      - "mikopet"
+    commit-message:
+      prefix: ":arrow_up: [dependabot] "
+  # GHA
+  - package-ecosystem: "github-actions"
+    schedule:
+      interval: "weekly"
+      day: "sunday"
+      time: "10:00"
+    open-pull-requests-limit: 0
+    groups:
+      all-actions:
+        patterns: [ "*" ]
+    reviewers:
+      - "mikopet"
+    commit-message:
+      prefix: ":arrow_up: [dependabot] "
