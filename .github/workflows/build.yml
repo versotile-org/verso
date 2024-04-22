@@ -15,118 +15,118 @@ concurrency:
   cancel-in-progress: true
 
 env:
-  CN_APP_SLUG: verso
+  CN_APP_SLUG: verso-nightly
 
 jobs:
-  build-linux:
-    name: Build [Linux]
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout the repository
-        uses: actions/checkout@v4
+  # build-linux:
+  #   name: Build [Linux]
+  #   runs-on: ubuntu-latest
+  #   steps:
+  #     - name: Checkout the repository
+  #       uses: actions/checkout@v4
 
-      - name: Install Rust
-        uses: dsherret/rust-toolchain-file@v1
+  #     - name: Install Rust
+  #       uses: dsherret/rust-toolchain-file@v1
 
-      - name: Set env
-        run: echo "LIBCLANG_PATH=/usr/lib/llvm-14/lib" >> $GITHUB_ENV
+  #     - name: Set env
+  #       run: echo "LIBCLANG_PATH=/usr/lib/llvm-14/lib" >> $GITHUB_ENV
 
-      - name: Install dependencies
-        run: |
-          sudo apt-get update
-          sudo apt install build-essential python3-pip ccache clang cmake curl \
-            g++ git gperf libdbus-1-dev libfreetype6-dev libgl1-mesa-dri \
-            libgles2-mesa-dev libglib2.0-dev libgstreamer-plugins-base1.0-dev \
-            gstreamer1.0-plugins-good libgstreamer-plugins-good1.0-dev \
-            gstreamer1.0-plugins-bad libgstreamer-plugins-bad1.0-dev \
-            gstreamer1.0-plugins-ugly gstreamer1.0-plugins-base \
-            libgstreamer-plugins-base1.0-dev gstreamer1.0-libav \
-            libgstrtspserver-1.0-dev gstreamer1.0-tools libges-1.0-dev \
-            libharfbuzz-dev liblzma-dev libunwind-dev libunwind-dev libvulkan1 \
-            libx11-dev libxcb-render0-dev libxcb-shape0-dev libxcb-xfixes0-dev \
-            libxmu-dev libxmu6 libegl1-mesa-dev llvm-dev m4 xorg-dev
+  #     - name: Install dependencies
+  #       run: |
+  #         sudo apt-get update
+  #         sudo apt install build-essential python3-pip ccache clang cmake curl \
+  #           g++ git gperf libdbus-1-dev libfreetype6-dev libgl1-mesa-dri \
+  #           libgles2-mesa-dev libglib2.0-dev libgstreamer-plugins-base1.0-dev \
+  #           gstreamer1.0-plugins-good libgstreamer-plugins-good1.0-dev \
+  #           gstreamer1.0-plugins-bad libgstreamer-plugins-bad1.0-dev \
+  #           gstreamer1.0-plugins-ugly gstreamer1.0-plugins-base \
+  #           libgstreamer-plugins-base1.0-dev gstreamer1.0-libav \
+  #           libgstrtspserver-1.0-dev gstreamer1.0-tools libges-1.0-dev \
+  #           libharfbuzz-dev liblzma-dev libunwind-dev libunwind-dev libvulkan1 \
+  #           libx11-dev libxcb-render0-dev libxcb-shape0-dev libxcb-xfixes0-dev \
+  #           libxmu-dev libxmu6 libegl1-mesa-dev llvm-dev m4 xorg-dev
 
-      - name: Build
-        run: cargo build --release
+  #     - name: Build
+  #       run: cargo build --release
 
-      - name: Tar Binary
-        run: tar -czvf verso-x86_64-unknown-linux-gnu.tar.gz -C ./target/release/ verso
+  #     - name: Tar Binary
+  #       run: tar -czvf verso-x86_64-unknown-linux-gnu.tar.gz -C ./target/release/ verso
 
-      - name: Upload artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: verso-x86_64-unknown-linux-gnu
-          path: verso-x86_64-unknown-linux-gnu.tar.gz
+  #     - name: Upload artifact
+  #       uses: actions/upload-artifact@v4
+  #       with:
+  #         name: verso-x86_64-unknown-linux-gnu
+  #         path: verso-x86_64-unknown-linux-gnu.tar.gz
 
-  build-windows:
-    name: Build [Windows]
-    runs-on: windows-latest
-    steps:
-      - name: Checkout the repository
-        uses: actions/checkout@v4
+  # build-windows:
+  #   name: Build [Windows]
+  #   runs-on: windows-latest
+  #   steps:
+  #     - name: Checkout the repository
+  #       uses: actions/checkout@v4
 
-      - name: Install Rust
-        uses: dsherret/rust-toolchain-file@v1
+  #     - name: Install Rust
+  #       uses: dsherret/rust-toolchain-file@v1
 
-      - name: Install scroop
-        uses: MinoruSekine/setup-scoop@v3
+  #     - name: Install scroop
+  #       uses: MinoruSekine/setup-scoop@v3
 
-      - name: Install dependencies
-        run: scoop install git python llvm cmake curl
+  #     - name: Install dependencies
+  #       run: scoop install git python llvm cmake curl
 
-      - name: Build
-        run: cargo build --release
+  #     - name: Build
+  #       run: cargo build --release
 
-      - name: Tar Binary
-        run: tar -czvf verso-x86_64-pc-windows-msvc.tar.gz -C ./target/release/ verso.exe
+  #     - name: Tar Binary
+  #       run: tar -czvf verso-x86_64-pc-windows-msvc.tar.gz -C ./target/release/ verso.exe
 
-      - name: Upload artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: verso-x86_64-pc-windows-msvc
-          path: verso-x86_64-pc-windows-msvc.tar.gz
+  #     - name: Upload artifact
+  #       uses: actions/upload-artifact@v4
+  #       with:
+  #         name: verso-x86_64-pc-windows-msvc
+  #         path: verso-x86_64-pc-windows-msvc.tar.gz
 
-  build-macos:
-    name: Build [macOS]
-    strategy:
-      fail-fast: false
-      matrix:
-        platform:
-          - { target: aarch64-apple-darwin, os: macos-14 }
-          - { target: x86_64-apple-darwin, os: macos-13 }
-    runs-on: ${{ matrix.platform.os }}
-    steps:
-      - name: Checkout the repository
-        uses: actions/checkout@v4
+  # build-macos:
+  #   name: Build [macOS]
+  #   strategy:
+  #     fail-fast: false
+  #     matrix:
+  #       platform:
+  #         - { target: aarch64-apple-darwin, os: macos-14 }
+  #         - { target: x86_64-apple-darwin, os: macos-13 }
+  #   runs-on: ${{ matrix.platform.os }}
+  #   steps:
+  #     - name: Checkout the repository
+  #       uses: actions/checkout@v4
 
-      - name: Install Rust
-        uses: dsherret/rust-toolchain-file@v1
+  #     - name: Install Rust
+  #       uses: dsherret/rust-toolchain-file@v1
 
-      - name: Install dependencies
-        run: brew install cmake pkg-config
+  #     - name: Install dependencies
+  #       run: brew install cmake pkg-config
 
-      - name: Build
-        run: cargo build --release
+  #     - name: Build
+  #       run: cargo build --release
 
-      - name: Tar Binary
-        run: tar -czvf verso-${{ matrix.platform.target }}.tar.gz -C ./target/release/ verso
+  #     - name: Tar Binary
+  #       run: tar -czvf verso-${{ matrix.platform.target }}.tar.gz -C ./target/release/ verso
 
-      - name: Upload artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: verso-${{ matrix.platform.target }}
-          path: verso-${{ matrix.platform.target }}.tar.gz
+  #     - name: Upload artifact
+  #       uses: actions/upload-artifact@v4
+  #       with:
+  #         name: verso-${{ matrix.platform.target }}
+  #         path: verso-${{ matrix.platform.target }}.tar.gz
 
   release:
     runs-on: ubuntu-latest
-    needs: ['build-macos', 'build-windows', 'build-linux']
+    # needs: ['build-macos', 'build-windows', 'build-linux']
     steps:
       - uses: actions/checkout@v4
       - uses: actions/download-artifact@v4
 
       - name: Fetch Verso version
         run: |
-          echo "VERSO_VERSION=$(cargo metadata --format-version=1 --no-deps | jq -r '.packages[] | select(.name == "verso") | .version')" >> $GITHUB_ENV
+          echo "VERSO_VERSION=$(cargo metadata --format-version=1 --no-deps | jq -r '.packages[] | select(.name == "verso") | .version')-$(git rev-parse --short HEAD)-nightly" >> $GITHUB_ENV
 
       - name: Draft release
         uses: crabnebula-dev/cloud-release@v0.1.0
@@ -135,32 +135,32 @@ jobs:
           command: release draft ${{ env.CN_APP_SLUG }} $VERSO_VERSION
           api-key: ${{ secrets.CN_API_KEY }}
 
-      - name: Upload macOS binary (ARM)
-        uses: crabnebula-dev/cloud-release@v0.1.0
-        with:
-          command: release upload --file "verso-aarch64-apple-darwin/verso-aarch64-apple-darwin.tar.gz" ${{ env.CN_APP_SLUG }} $VERSO_VERSION
-          api-key: ${{ secrets.CN_API_KEY }}
+      # - name: Upload macOS binary (ARM)
+      #   uses: crabnebula-dev/cloud-release@v0.1.0
+      #   with:
+      #     command: release upload --file "verso-aarch64-apple-darwin/verso-aarch64-apple-darwin.tar.gz" ${{ env.CN_APP_SLUG }} $VERSO_VERSION
+      #     api-key: ${{ secrets.CN_API_KEY }}
 
-      - name: Upload macOS binary (Intel)
-        uses: crabnebula-dev/cloud-release@v0.1.0
-        with:
-          command: release upload --file "verso-x86_64-apple-darwin/verso-x86_64-apple-darwin.tar.gz" ${{ env.CN_APP_SLUG }} $VERSO_VERSION
-          api-key: ${{ secrets.CN_API_KEY }}
+      # - name: Upload macOS binary (Intel)
+      #   uses: crabnebula-dev/cloud-release@v0.1.0
+      #   with:
+      #     command: release upload --file "verso-x86_64-apple-darwin/verso-x86_64-apple-darwin.tar.gz" ${{ env.CN_APP_SLUG }} $VERSO_VERSION
+      #     api-key: ${{ secrets.CN_API_KEY }}
 
-      - name: Upload Windows binary
-        uses: crabnebula-dev/cloud-release@v0.1.0
-        with:
-          command: release upload --file "verso-x86_64-pc-windows-msvc/verso-x86_64-pc-windows-msvc.tar.gz" ${{ env.CN_APP_SLUG }} $VERSO_VERSION
-          api-key: ${{ secrets.CN_API_KEY }}
+      # - name: Upload Windows binary
+      #   uses: crabnebula-dev/cloud-release@v0.1.0
+      #   with:
+      #     command: release upload --file "verso-x86_64-pc-windows-msvc/verso-x86_64-pc-windows-msvc.tar.gz" ${{ env.CN_APP_SLUG }} $VERSO_VERSION
+      #     api-key: ${{ secrets.CN_API_KEY }}
 
-      - name: Upload Linux binary
-        uses: crabnebula-dev/cloud-release@v0.1.0
-        with:
-          command: release upload --file "verso-x86_64-unknown-linux-gnu/verso-x86_64-unknown-linux-gnu.tar.gz" ${{ env.CN_APP_SLUG }} $VERSO_VERSION
-          api-key: ${{ secrets.CN_API_KEY }}
+      # - name: Upload Linux binary
+      #   uses: crabnebula-dev/cloud-release@v0.1.0
+      #   with:
+      #     command: release upload --file "verso-x86_64-unknown-linux-gnu/verso-x86_64-unknown-linux-gnu.tar.gz" ${{ env.CN_APP_SLUG }} $VERSO_VERSION
+      #     api-key: ${{ secrets.CN_API_KEY }}
 
-      - name: Publish release
-        uses: crabnebula-dev/cloud-release@v0.1.0
-        with:
-          command: release publish ${{ env.CN_APP_SLUG }} $VERSO_VERSION
-          api-key: ${{ secrets.CN_API_KEY }}
+      # - name: Publish release
+      #   uses: crabnebula-dev/cloud-release@v0.1.0
+      #   with:
+      #     command: release publish ${{ env.CN_APP_SLUG }} $VERSO_VERSION
+      #     api-key: ${{ secrets.CN_API_KEY }}
