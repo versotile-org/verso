@@ -15,7 +15,7 @@ concurrency:
   cancel-in-progress: true
 
 env:
-  CN_APP_SLUG: verso
+  CN_APP_SLUG: verso-nightly
 
 jobs:
   build-linux:
@@ -117,7 +117,7 @@ jobs:
           name: verso-${{ matrix.platform.target }}
           path: verso-${{ matrix.platform.target }}.tar.gz
 
-  release:
+  release-nightly:
     runs-on: ubuntu-latest
     needs: ['build-macos', 'build-windows', 'build-linux']
     steps:
@@ -126,7 +126,7 @@ jobs:
 
       - name: Fetch Verso version
         run: |
-          echo "VERSO_VERSION=$(cargo metadata --format-version=1 --no-deps | jq -r '.packages[] | select(.name == "verso") | .version')" >> $GITHUB_ENV
+          echo "VERSO_VERSION=$(cargo metadata --format-version=1 --no-deps | jq -r '.packages[] | select(.name == "verso") | .version')-$(git rev-parse --short HEAD)-nightly" >> $GITHUB_ENV
 
       - name: Draft release
         uses: crabnebula-dev/cloud-release@v0.1.0
