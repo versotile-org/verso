@@ -15,7 +15,7 @@ concurrency:
   cancel-in-progress: true
 
 env:
-  CN_APP_SLUG: github-action-test-jason
+  CN_APP_SLUG: verso
 
 jobs:
   build-linux:
