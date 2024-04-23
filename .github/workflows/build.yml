@@ -18,6 +18,10 @@ jobs:
   build-linux:
     name: Build [Linux]
     runs-on: ubuntu-latest
+    env:
+      RUSTC_WRAPPER: sccache
+      CCACHE: sccache
+      SCCACHE_GHA_ENABLED: 'true'
     steps:
       - name: Checkout the repository
         uses: actions/checkout@v4
@@ -43,8 +47,12 @@ jobs:
             libx11-dev libxcb-render0-dev libxcb-shape0-dev libxcb-xfixes0-dev \
             libxmu-dev libxmu6 libegl1-mesa-dev llvm-dev m4 xorg-dev
 
+      - name: Run sccache-cache
+        uses: mozilla-actions/sccache-action@v0.0.3
+
       - name: Build
-        run: cargo build --release
+        run: |
+          cargo build --release
 
       - name: Tar Binary
         if: ${{ github.event_name == 'schedule' }}
@@ -60,6 +68,9 @@ jobs:
   build-windows:
     name: Build [Windows]
     runs-on: windows-latest
+    env:
+      CCACHE: sccache
+      SCCACHE_GHA_ENABLED: 'true'
     steps:
       - name: Checkout the repository
         uses: actions/checkout@v4
@@ -73,8 +84,13 @@ jobs:
       - name: Install dependencies
         run: scoop install git python llvm cmake curl
 
+      - name: Run sccache-cache
+        uses: mozilla-actions/sccache-action@v0.0.3
+
       - name: Build
-        run: cargo build --release
+        run: |
+          cargo build --release
+          cargo test --release
 
       - name: Tar Binary
         if: ${{ github.event_name == 'schedule' }}
@@ -96,6 +112,10 @@ jobs:
           - { target: aarch64-apple-darwin, os: macos-14 }
           - { target: x86_64-apple-darwin, os: macos-13 }
     runs-on: ${{ matrix.platform.os }}
+    env:
+      RUSTC_WRAPPER: sccache
+      CCACHE: sccache
+      SCCACHE_GHA_ENABLED: 'true'
     steps:
       - name: Checkout the repository
         uses: actions/checkout@v4
@@ -106,8 +126,13 @@ jobs:
       - name: Install dependencies
         run: brew install cmake pkg-config
 
+      - name: Run sccache-cache
+        uses: mozilla-actions/sccache-action@v0.0.3
+
       - name: Build
-        run: cargo build --release
+        run: |
+          cargo build --release
+          cargo test --release
 
       - name: Tar Binary
         if: ${{ github.event_name == 'schedule' }}
