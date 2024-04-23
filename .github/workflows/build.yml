@@ -1,18 +1,22 @@
 name: Continuous Integration
 
 on:
-  push:
-    branches:
-      - main
   pull_request:
     branches:
       - main
   schedule:
-    - cron: "0 0 * * 0"
+    - cron: '0 0 * * *'
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  CN_APP_SLUG: verso-nightly
 
 jobs:
   build-linux:
-    name: Build [linux]
+    name: Build [Linux]
     runs-on: ubuntu-latest
     steps:
       - name: Checkout the repository
@@ -40,10 +44,21 @@ jobs:
             libxmu-dev libxmu6 libegl1-mesa-dev llvm-dev m4 xorg-dev
 
       - name: Build
-        run: cargo build
+        run: cargo build --release
+
+      - name: Tar Binary
+        if: ${{ github.event_name == 'schedule' }}
+        run: tar -czvf verso-x86_64-unknown-linux-gnu.tar.gz -C ./target/release/ verso
+
+      - name: Upload artifact
+        if: ${{ github.event_name == 'schedule' }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: verso-x86_64-unknown-linux-gnu
+          path: verso-x86_64-unknown-linux-gnu.tar.gz
 
   build-windows:
-    name: Build [windows]
+    name: Build [Windows]
     runs-on: windows-latest
     steps:
       - name: Checkout the repository
@@ -59,11 +74,28 @@ jobs:
         run: scoop install git python llvm cmake curl
 
       - name: Build
-        run: cargo build
+        run: cargo build --release
+
+      - name: Tar Binary
+        if: ${{ github.event_name == 'schedule' }}
+        run: tar -czvf verso-x86_64-pc-windows-msvc.tar.gz -C ./target/release/ verso.exe
+
+      - name: Upload artifact
+        if: ${{ github.event_name == 'schedule' }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: verso-x86_64-pc-windows-msvc
+          path: verso-x86_64-pc-windows-msvc.tar.gz
 
   build-macos:
-    name: Build [macos]
-    runs-on: macos-latest
+    name: Build [macOS]
+    strategy:
+      fail-fast: false
+      matrix:
+        platform:
+          - { target: aarch64-apple-darwin, os: macos-14 }
+          - { target: x86_64-apple-darwin, os: macos-13 }
+    runs-on: ${{ matrix.platform.os }}
     steps:
       - name: Checkout the repository
         uses: actions/checkout@v4
@@ -75,4 +107,64 @@ jobs:
         run: brew install cmake pkg-config
 
       - name: Build
-        run: cargo build
+        run: cargo build --release
+
+      - name: Tar Binary
+        if: ${{ github.event_name == 'schedule' }}
+        run: tar -czvf verso-${{ matrix.platform.target }}.tar.gz -C ./target/release/ verso
+
+      - name: Upload artifact
+        if: ${{ github.event_name == 'schedule' }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: verso-${{ matrix.platform.target }}
+          path: verso-${{ matrix.platform.target }}.tar.gz
+
+  release-nightly:
+    if: ${{ github.event_name == 'schedule' }}
+    runs-on: ubuntu-latest
+    needs: ['build-macos', 'build-windows', 'build-linux']
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+
+      - name: Fetch Verso version
+        run: |
+          echo "VERSO_VERSION=$(cargo metadata --format-version=1 --no-deps | jq -r '.packages[] | select(.name == "verso") | .version')-$(date '+%Y%m%d')-nightly" >> $GITHUB_ENV
+
+      - name: Draft release
+        uses: crabnebula-dev/cloud-release@v0.1.0
+        id: draft
+        with:
+          command: release draft ${{ env.CN_APP_SLUG }} $VERSO_VERSION
+          api-key: ${{ secrets.CN_API_KEY }}
+
+      - name: Upload macOS binary (ARM)
+        uses: crabnebula-dev/cloud-release@v0.1.0
+        with:
+          command: release upload --file "verso-aarch64-apple-darwin/verso-aarch64-apple-darwin.tar.gz" ${{ env.CN_APP_SLUG }} $VERSO_VERSION
+          api-key: ${{ secrets.CN_API_KEY }}
+
+      - name: Upload macOS binary (Intel)
+        uses: crabnebula-dev/cloud-release@v0.1.0
+        with:
+          command: release upload --file "verso-x86_64-apple-darwin/verso-x86_64-apple-darwin.tar.gz" ${{ env.CN_APP_SLUG }} $VERSO_VERSION
+          api-key: ${{ secrets.CN_API_KEY }}
+
+      - name: Upload Windows binary
+        uses: crabnebula-dev/cloud-release@v0.1.0
+        with:
+          command: release upload --file "verso-x86_64-pc-windows-msvc/verso-x86_64-pc-windows-msvc.tar.gz" ${{ env.CN_APP_SLUG }} $VERSO_VERSION
+          api-key: ${{ secrets.CN_API_KEY }}
+
+      - name: Upload Linux binary
+        uses: crabnebula-dev/cloud-release@v0.1.0
+        with:
+          command: release upload --file "verso-x86_64-unknown-linux-gnu/verso-x86_64-unknown-linux-gnu.tar.gz" ${{ env.CN_APP_SLUG }} $VERSO_VERSION
+          api-key: ${{ secrets.CN_API_KEY }}
+
+      - name: Publish release
+        uses: crabnebula-dev/cloud-release@v0.1.0
+        with:
+          command: release publish ${{ env.CN_APP_SLUG }} $VERSO_VERSION
+          api-key: ${{ secrets.CN_API_KEY }}
