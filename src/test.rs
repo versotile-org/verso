@@ -11,6 +11,7 @@
 /// Then, in your test, use the `verso_test!` macro to run your tests. The tests must be functions that take an `EventLoopWindowTarget`.
 ///
 /// ```rust
+/// use verso::verso_test;
 /// use verso::winit::event_loop::EventLoopWindowTarget;
 ///
 /// fn my_test(elwt: &EventLoopWindowTarget<()>) {
