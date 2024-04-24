@@ -35,7 +35,7 @@ raw-window-handle = { version = "0.5", features = ["std"] }
 libservo = { git = "https://github.com/servo/servo.git", rev = "025a987", features = ["max_log_level", "native-bluetooth", "webdriver"] }
 crossbeam-channel = "0.5"
 getopts = "0.2.17"
-surfman = { version = "0.9", features = ["chains", "sm-angle", "sm-angle-default", "sm-x11", "sm-raw-window-handle"] }
+surfman = { version = "0.9", features = ["chains", "sm-angle-default", "sm-raw-window-handle"] }
 winit = { version = "0.29", features = ["rwh_05"] }
 
 [target."cfg(any(target_os = \"ios\", target_os = \"macos\"))".dependencies]

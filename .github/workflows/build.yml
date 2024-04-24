@@ -54,6 +54,17 @@ jobs:
         run: |
           cargo build --release
 
+      - name: Test
+        run: |
+          export WAYLAND_DISPLAY=wayland-1
+          export WLR_BACKENDS=headless
+          export WLR_LIBINPUT_NO_DEVICES=1
+          export XDG_RUNTIME_DIR=/tmp
+          export XDG_SESSION_TYPE=wayland
+          sudo apt-get install sway
+          sway > /dev/null 2>&1 &
+          cargo test --release
+
       - name: Tar Binary
         if: ${{ github.event_name == 'schedule' }}
         run: tar -czvf verso-x86_64-unknown-linux-gnu.tar.gz -C ./target/release/ verso
