@@ -22,6 +22,11 @@ jobs:
       RUSTC_WRAPPER: sccache
       CCACHE: sccache
       SCCACHE_GHA_ENABLED: 'true'
+      WAYLAND_DISPLAY: wayland-1
+      WLR_BACKENDS: headless
+      WLR_LIBINPUT_NO_DEVICES: 1
+      XDG_RUNTIME_DIR: /tmp
+      XDG_SESSION_TYPE: wayland
     steps:
       - name: Checkout the repository
         uses: actions/checkout@v4
@@ -45,7 +50,7 @@ jobs:
             libgstrtspserver-1.0-dev gstreamer1.0-tools libges-1.0-dev \
             libharfbuzz-dev liblzma-dev libunwind-dev libunwind-dev libvulkan1 \
             libx11-dev libxcb-render0-dev libxcb-shape0-dev libxcb-xfixes0-dev \
-            libxmu-dev libxmu6 libegl1-mesa-dev llvm-dev m4 xorg-dev
+            libxmu-dev libxmu6 libegl1-mesa-dev llvm-dev m4 xorg-dev sway
 
       - name: Run sccache-cache
         uses: mozilla-actions/sccache-action@v0.0.3
@@ -55,13 +60,8 @@ jobs:
           cargo build --release
 
       - name: Test
+        # Run sway(wayland compositor) in the background, winit will use it
         run: |
-          export WAYLAND_DISPLAY=wayland-1
-          export WLR_BACKENDS=headless
-          export WLR_LIBINPUT_NO_DEVICES=1
-          export XDG_RUNTIME_DIR=/tmp
-          export XDG_SESSION_TYPE=wayland
-          sudo apt-get install sway
           sway > /dev/null 2>&1 &
           cargo test --release
 
