@@ -1,21 +1,15 @@
-use std::rc::Rc;
-
 use servo::{
     compositing::{
         windowing::{EmbedderEvent, EmbedderMethods},
         CompositeTarget,
     },
-    embedder_traits::{Cursor, EmbedderMsg, EventLoopWaker},
+    embedder_traits::EventLoopWaker,
     servo_url::ServoUrl,
     Servo,
 };
-use winit::{
-    event::Event,
-    event_loop::EventLoopProxy,
-    window::{CursorIcon, Window},
-};
+use winit::{event::Event, event_loop::EventLoopProxy, window::Window as WinitWindow};
 
-use crate::{prefs, resources, webview::WebView};
+use crate::{prefs, resources, webview::WebView, window::Window};
 
 /// Status of Verso instance.
 #[derive(Clone, Copy, Debug, Default)]
@@ -33,7 +27,7 @@ pub enum Status {
 pub struct Verso {
     // TODO Verso should have servo, (Verso) windows as fields.
     servo: Option<Servo<WebView>>,
-    webview: Rc<WebView>,
+    window: Window,
     events: Vec<EmbedderEvent>,
     // TODO following fields should move to webvew
     status: Status,
@@ -41,15 +35,15 @@ pub struct Verso {
 
 impl Verso {
     /// Create an Verso instance from winit's window and event loop proxy.
-    pub fn new(window: Window, proxy: EventLoopProxy<()>) -> Self {
+    pub fn new(window: WinitWindow, proxy: EventLoopProxy<()>) -> Self {
         resources::init();
         prefs::init();
 
-        let webview = Rc::new(WebView::new(window));
+        let window = Window::new(window);
         let callback = Box::new(Embedder(proxy));
         let mut init_servo = Servo::new(
             callback,
-            webview.clone(),
+            window.webview(),
             Some(String::from(
                 "Mozilla/5.0 (X11; Linux x86_64; rv:109.0) Gecko/20100101 Firefox/119.0",
             )),
@@ -65,7 +59,7 @@ impl Verso {
         init_servo.servo.setup_logging();
         Verso {
             servo: Some(init_servo.servo),
-            webview,
+            window,
             events: vec![],
             status: Status::None,
         }
@@ -96,7 +90,7 @@ impl Verso {
                 window_id: _,
                 event,
             } => self
-                .webview
+                .window
                 .handle_winit_window_event(&mut self.servo, &mut self.events, &event),
             e => log::warn!("Verso hasn't supported this event yet: {e:?}"),
         }
@@ -107,87 +101,22 @@ impl Verso {
             return;
         };
 
-        let mut need_present = false;
-
-        servo.get_events().into_iter().for_each(|(w, m)| {
-            log::trace!("Verso is handling servo message: {m:?} with browser id: {w:?}");
-            match m {
-                EmbedderMsg::WebViewOpened(w) => {
-                    self.events.push(EmbedderEvent::FocusWebView(w));
-                }
-                EmbedderMsg::ReadyToPresent(_w) => {
-                    need_present = true;
-                }
-                EmbedderMsg::SetCursor(cursor) => {
-                    let winit_cursor = match cursor {
-                        Cursor::Default => CursorIcon::Default,
-                        Cursor::Pointer => CursorIcon::Pointer,
-                        Cursor::ContextMenu => CursorIcon::ContextMenu,
-                        Cursor::Help => CursorIcon::Help,
-                        Cursor::Progress => CursorIcon::Progress,
-                        Cursor::Wait => CursorIcon::Wait,
-                        Cursor::Cell => CursorIcon::Cell,
-                        Cursor::Crosshair => CursorIcon::Crosshair,
-                        Cursor::Text => CursorIcon::Text,
-                        Cursor::VerticalText => CursorIcon::VerticalText,
-                        Cursor::Alias => CursorIcon::Alias,
-                        Cursor::Copy => CursorIcon::Copy,
-                        Cursor::Move => CursorIcon::Move,
-                        Cursor::NoDrop => CursorIcon::NoDrop,
-                        Cursor::NotAllowed => CursorIcon::NotAllowed,
-                        Cursor::Grab => CursorIcon::Grab,
-                        Cursor::Grabbing => CursorIcon::Grabbing,
-                        Cursor::EResize => CursorIcon::EResize,
-                        Cursor::NResize => CursorIcon::NResize,
-                        Cursor::NeResize => CursorIcon::NeResize,
-                        Cursor::NwResize => CursorIcon::NwResize,
-                        Cursor::SResize => CursorIcon::SResize,
-                        Cursor::SeResize => CursorIcon::SeResize,
-                        Cursor::SwResize => CursorIcon::SwResize,
-                        Cursor::WResize => CursorIcon::WResize,
-                        Cursor::EwResize => CursorIcon::EwResize,
-                        Cursor::NsResize => CursorIcon::NsResize,
-                        Cursor::NeswResize => CursorIcon::NeswResize,
-                        Cursor::NwseResize => CursorIcon::NwseResize,
-                        Cursor::ColResize => CursorIcon::ColResize,
-                        Cursor::RowResize => CursorIcon::RowResize,
-                        Cursor::AllScroll => CursorIcon::AllScroll,
-                        Cursor::ZoomIn => CursorIcon::ZoomIn,
-                        Cursor::ZoomOut => CursorIcon::ZoomOut,
-                        _ => CursorIcon::Default,
-                    };
-                    self.webview.window.set_cursor_icon(winit_cursor);
-                }
-                EmbedderMsg::AllowNavigationRequest(pipeline_id, _url) => {
-                    if w.is_some() {
-                        self.events
-                            .push(EmbedderEvent::AllowNavigationResponse(pipeline_id, true));
-                    }
-                }
-                EmbedderMsg::WebViewClosed(_w) => {
-                    self.events.push(EmbedderEvent::Quit);
-                }
-                EmbedderMsg::Shutdown => {
-                    self.status = Status::Shutdown;
-                }
-                e => {
-                    log::warn!("Verso hasn't supported handling this message yet: {e:?}")
-                }
-            }
-        });
+        let need_present =
+            self.window
+                .handle_servo_messages(servo, &mut self.events, &mut self.status);
 
         log::trace!("Verso is handling embedder events: {:?}", self.events);
         if servo.handle_events(self.events.drain(..)) {
             servo.repaint_synchronously();
-            self.webview.paint(servo);
+            self.window.paint(servo);
         } else if need_present {
-            self.webview.request_redraw();
+            self.window.request_redraw();
         }
 
         if let Status::Shutdown = self.status {
             log::trace!("Verso is shutting down Servo");
             self.servo.take().map(Servo::deinit);
-        } else if !self.webview.is_animating() {
+        } else if !self.window.is_animating() {
             self.status = Status::None;
         }
     }

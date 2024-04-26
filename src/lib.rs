@@ -14,8 +14,10 @@ pub mod prefs;
 pub mod resources;
 /// Utilities to write tests.
 // pub mod test;
-/// Web view types to handle web browsing contexts and window.
+/// Web view types to handle web browsing contexts.
 pub mod webview;
+/// Verso's window types to handle Winit's window.
+pub mod window;
 
 pub use app::{Status, Verso};
 pub use errors::{Error, Result};

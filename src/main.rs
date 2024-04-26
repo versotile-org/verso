@@ -21,7 +21,7 @@ fn main() -> Result<()> {
     event_loop.listen_device_events(DeviceEvents::Never);
     let window = WindowBuilder::new()
         .with_title("(*ﾟ▽ﾟ)ﾉ Verso")
-        .with_maximized(true)
+        // .with_maximized(true)
         .build(&event_loop)?;
 
     #[cfg(target_os = "macos")]
