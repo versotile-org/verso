@@ -1,16 +1,18 @@
-use std::{cell::Cell, rc::Rc};
+use std::{cell::Cell, ops::Deref, rc::Rc};
 
 use raw_window_handle::{HasRawDisplayHandle, HasRawWindowHandle};
 use servo::{
-    compositing::windowing::{EmbedderEvent, MouseWindowEvent, WindowMethods},
+    compositing::windowing::{
+        AnimationState, EmbedderCoordinates, EmbedderEvent, MouseWindowEvent, WindowMethods,
+    },
     embedder_traits::{Cursor, EmbedderMsg},
-    euclid::{Point2D, Size2D, UnknownUnit},
+    euclid::{Point2D, Scale, Size2D, UnknownUnit},
     gl,
     msg::constellation_msg::WebViewId,
     rendering_context::RenderingContext,
     script_traits::{TouchEventType, WheelDelta, WheelMode},
     webrender_api::{
-        units::{DeviceIntPoint, DevicePoint, LayoutVector2D},
+        units::{DeviceIntPoint, DeviceIntRect, DevicePoint, LayoutVector2D},
         ScrollLocation,
     },
     Servo,
@@ -26,14 +28,10 @@ use crate::{webview::WebView, Status};
 
 /// A Verso window is a Winit window containing several web views.
 pub struct Window {
-    /// Access to winit window
-    window: Rc<WinitWindow>,
-    /// The web view ID obtained from initialized servo
-    webview_id: Option<WebViewId>,
+    /// Access to winit window with webrender context.
+    gl_window: Rc<GLWindow>,
     /// The web view this window owns.
-    webview: Rc<WebView>,
-    /// Access to webrender rendering context
-    rendering_context: RenderingContext,
+    webview: WebView,
     /// Access to webrender gl
     webrender_gl: Rc<dyn gl::Gl>,
     /// The mouse physical position in the web view.
@@ -66,12 +64,11 @@ impl Window {
         };
         debug_assert_eq!(webrender_gl.get_error(), gl::NO_ERROR);
 
-        let window = Rc::new(window);
-        let webview = Rc::new(WebView::new(window.clone(), rendering_context.clone()));
+        let gl_window = Rc::new(GLWindow::new(window, rendering_context));
+        let webview = WebView::new();
+
         Self {
-            rendering_context,
-            window,
-            webview_id: None,
+            gl_window,
             webview,
             webrender_gl,
             mouse_position: Cell::new(PhysicalPosition::default()),
@@ -80,18 +77,18 @@ impl Window {
 
     /// Set web view ID of this window.
     pub fn set_webview_id(&mut self, id: WebViewId) {
-        self.webview_id = Some(id);
+        self.webview.set_id(id);
     }
 
-    /// Return the window's web view.
-    pub fn webview(&self) -> Rc<WebView> {
-        return self.webview.clone();
+    /// Return the reference counted GLWindow.
+    pub fn gl_window(&self) -> Rc<GLWindow> {
+        return self.gl_window.clone();
     }
 
     /// Handle winit window event.
     pub fn handle_winit_window_event(
         &self,
-        servo: &mut Option<Servo<WebView>>,
+        servo: &mut Option<Servo<GLWindow>>,
         events: &mut Vec<EmbedderEvent>,
         event: &winit::event::WindowEvent,
     ) {
@@ -203,33 +200,14 @@ impl Window {
     /// Handle servo messages and return a boolean to indicate servo needs to present or not.
     pub fn handle_servo_messages(
         &self,
-        servo: &mut Servo<WebView>,
+        servo: &mut Servo<GLWindow>,
         events: &mut Vec<EmbedderEvent>,
         status: &mut Status,
     ) -> bool {
         let mut need_present = false;
         servo.get_events().into_iter().for_each(|(w, m)| {
-            if w == self.webview_id {
-                // TODO Move this to webview
-                log::trace!("Verso WebView {w:?} is handling servo message: {m:?}");
-                match m {
-                    EmbedderMsg::WebViewOpened(w) => {
-                        events.push(EmbedderEvent::FocusWebView(w));
-                    }
-                    EmbedderMsg::AllowNavigationRequest(pipeline_id, _url) => {
-                        if w.is_some() {
-                            events.push(EmbedderEvent::AllowNavigationResponse(pipeline_id, true));
-                        }
-                    }
-                    EmbedderMsg::WebViewClosed(_w) => {
-                        events.push(EmbedderEvent::Quit);
-                    }
-                    e => {
-                        log::warn!(
-                            "Verso WebView hasn't supported handling this message yet: {e:?}"
-                        )
-                    }
-                }
+            if &w == self.webview.id() {
+                self.webview.handle_servo_messages(events, m);
             } else {
                 log::trace!("Verso Window is handling servo message: {m:?}");
                 match m {
@@ -253,12 +231,13 @@ impl Window {
     }
 
     /// Paint offscreen framebuffer to winit window.
-    pub fn paint(&self, servo: &mut Servo<WebView>) {
+    pub fn paint(&self, servo: &mut Servo<GLWindow>) {
         if let Some(fbo) = servo.offscreen_framebuffer_id() {
-            let viewport = self.webview.get_coordinates().get_flipped_viewport();
+            let viewport = self.gl_window.get_coordinates().get_flipped_viewport();
             let webrender_gl = &self.webrender_gl;
 
             let target_fbo = self
+                .gl_window
                 .rendering_context
                 .context_surface_info()
                 .unwrap_or(None)
@@ -303,12 +282,12 @@ impl Window {
     }
     /// Check if window's web view is animating.
     pub fn is_animating(&self) -> bool {
-        self.webview.is_animating()
+        self.gl_window.is_animating()
     }
 
     /// Resize the rendering context.
     pub fn resize(&self, size: Size2D<i32, UnknownUnit>) {
-        let _ = self.rendering_context.resize(size);
+        let _ = self.gl_window.rendering_context.resize(size);
     }
 
     /// Set cursor icon of the window.
@@ -351,5 +330,66 @@ impl Window {
             _ => CursorIcon::Default,
         };
         self.window.set_cursor_icon(winit_cursor);
+    }
+}
+
+/// A winit window with webrender rendering context.
+pub struct GLWindow {
+    /// Access to webrender rendering context
+    rendering_context: RenderingContext,
+    /// Animation state set by Servo to indicate if the webview is still rendering.
+    animation_state: Cell<AnimationState>,
+    /// Access to winit window
+    window: WinitWindow,
+}
+
+impl GLWindow {
+    /// Create a web view from winit window.
+    pub fn new(window: WinitWindow, rendering_context: RenderingContext) -> Self {
+        Self {
+            rendering_context,
+            animation_state: Cell::new(AnimationState::Idle),
+            window,
+        }
+    }
+
+    /// Check if web view is animating.
+    pub fn is_animating(&self) -> bool {
+        self.animation_state.get() == AnimationState::Animating
+    }
+}
+
+impl WindowMethods for GLWindow {
+    fn get_coordinates(&self) -> EmbedderCoordinates {
+        let size = self.window.inner_size();
+        let pos = Point2D::new(0, 0);
+        let viewport = Size2D::new(size.width as i32, size.height as i32);
+
+        let size = self.window.available_monitors().nth(0).unwrap().size();
+        let screen = Size2D::new(size.width as i32, size.height as i32);
+        EmbedderCoordinates {
+            hidpi_factor: Scale::new(self.window.scale_factor() as f32),
+            screen,
+            screen_avail: screen,
+            window: (viewport, pos),
+            framebuffer: viewport,
+            viewport: DeviceIntRect::from_origin_and_size(pos, viewport),
+        }
+    }
+
+    fn set_animation_state(&self, state: AnimationState) {
+        self.animation_state.set(state);
+    }
+
+    fn rendering_context(&self) -> RenderingContext {
+        self.rendering_context.clone()
+    }
+}
+
+impl Deref for Window {
+    type Target = GLWindow;
+
+    fn deref(&self) -> &Self::Target {
+        &self.gl_window
     }
 }

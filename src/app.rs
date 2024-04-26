@@ -9,7 +9,10 @@ use servo::{
 };
 use winit::{event::Event, event_loop::EventLoopProxy, window::Window as WinitWindow};
 
-use crate::{prefs, resources, webview::WebView, window::Window};
+use crate::{
+    prefs, resources,
+    window::{GLWindow, Window},
+};
 
 /// Status of Verso instance.
 #[derive(Clone, Copy, Debug, Default)]
@@ -25,8 +28,7 @@ pub enum Status {
 
 /// Main entry point of Verso browser.
 pub struct Verso {
-    // TODO Verso should have servo, (Verso) windows as fields.
-    servo: Option<Servo<WebView>>,
+    servo: Option<Servo<GLWindow>>,
     window: Window,
     events: Vec<EmbedderEvent>,
     // TODO following fields should move to webvew
@@ -43,7 +45,7 @@ impl Verso {
         let callback = Box::new(Embedder(proxy));
         let mut init_servo = Servo::new(
             callback,
-            window.webview(),
+            window.gl_window(),
             Some(String::from(
                 "Mozilla/5.0 (X11; Linux x86_64; rv:109.0) Gecko/20100101 Firefox/119.0",
             )),
@@ -123,7 +125,7 @@ impl Verso {
     }
 
     /// Helper method to access Servo instance. This can be used to check if Servo is shut down as well.
-    pub fn servo(&mut self) -> &mut Option<Servo<WebView>> {
+    pub fn servo(&mut self) -> &mut Option<Servo<GLWindow>> {
         &mut self.servo
     }
 
