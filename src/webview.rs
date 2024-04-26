@@ -9,6 +9,8 @@ use servo::{
 use winit::window::Window as WinitWindow;
 
 /// A web view is an area to display web browsing context. It's what user will treat as a "web page".
+/// This will also carry a few contexts from Verso window to help Servo compositor to understand
+/// its states.
 pub struct WebView {
     /// Access to webrender rendering context
     rendering_context: RenderingContext,

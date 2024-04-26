@@ -39,7 +39,7 @@ impl Verso {
         resources::init();
         prefs::init();
 
-        let window = Window::new(window);
+        let mut window = Window::new(window);
         let callback = Box::new(Embedder(proxy));
         let mut init_servo = Servo::new(
             callback,
@@ -49,6 +49,7 @@ impl Verso {
             )),
             CompositeTarget::Fbo,
         );
+        window.set_webview_id(init_servo.browser_id);
 
         // let demo_path = std::env::current_dir().unwrap().join("demo.html");
         // let url = ServoUrl::from_file_path(demo_path.to_str().unwrap()).unwrap();

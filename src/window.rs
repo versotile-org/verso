@@ -6,6 +6,7 @@ use servo::{
     embedder_traits::{Cursor, EmbedderMsg},
     euclid::{Point2D, Size2D, UnknownUnit},
     gl,
+    msg::constellation_msg::WebViewId,
     rendering_context::RenderingContext,
     script_traits::{TouchEventType, WheelDelta, WheelMode},
     webrender_api::{
@@ -27,6 +28,8 @@ use crate::{webview::WebView, Status};
 pub struct Window {
     /// Access to winit window
     window: Rc<WinitWindow>,
+    /// The web view ID obtained from initialized servo
+    webview_id: Option<WebViewId>,
     /// The web view this window owns.
     webview: Rc<WebView>,
     /// Access to webrender rendering context
@@ -68,10 +71,16 @@ impl Window {
         Self {
             rendering_context,
             window,
+            webview_id: None,
             webview,
             webrender_gl,
             mouse_position: Cell::new(PhysicalPosition::default()),
         }
+    }
+
+    /// Set web view ID of this window.
+    pub fn set_webview_id(&mut self, id: WebViewId) {
+        self.webview_id = Some(id);
     }
 
     /// Return the window's web view.
@@ -111,7 +120,9 @@ impl Window {
                     winit::event::MouseButton::Right => servo::script_traits::MouseButton::Right,
                     winit::event::MouseButton::Middle => servo::script_traits::MouseButton::Middle,
                     _ => {
-                        log::warn!("Verso hasn't supported this mouse button yet: {button:?}");
+                        log::warn!(
+                            "Verso Window hasn't supported this mouse button yet: {button:?}"
+                        );
                         return;
                     }
                 };
@@ -185,7 +196,7 @@ impl Window {
             WindowEvent::CloseRequested => {
                 events.push(EmbedderEvent::Quit);
             }
-            e => log::warn!("Verso hasn't supported this window event yet: {e:?}"),
+            e => log::warn!("Verso Window hasn't supported this window event yet: {e:?}"),
         }
     }
 
@@ -198,67 +209,42 @@ impl Window {
     ) -> bool {
         let mut need_present = false;
         servo.get_events().into_iter().for_each(|(w, m)| {
-            log::trace!("Verso is handling servo message: {m:?} with browser id: {w:?}");
-            match m {
-                EmbedderMsg::WebViewOpened(w) => {
-                    events.push(EmbedderEvent::FocusWebView(w));
-                }
-                EmbedderMsg::ReadyToPresent(_w) => {
-                    need_present = true;
-                }
-                EmbedderMsg::SetCursor(cursor) => {
-                    let winit_cursor = match cursor {
-                        Cursor::Default => CursorIcon::Default,
-                        Cursor::Pointer => CursorIcon::Pointer,
-                        Cursor::ContextMenu => CursorIcon::ContextMenu,
-                        Cursor::Help => CursorIcon::Help,
-                        Cursor::Progress => CursorIcon::Progress,
-                        Cursor::Wait => CursorIcon::Wait,
-                        Cursor::Cell => CursorIcon::Cell,
-                        Cursor::Crosshair => CursorIcon::Crosshair,
-                        Cursor::Text => CursorIcon::Text,
-                        Cursor::VerticalText => CursorIcon::VerticalText,
-                        Cursor::Alias => CursorIcon::Alias,
-                        Cursor::Copy => CursorIcon::Copy,
-                        Cursor::Move => CursorIcon::Move,
-                        Cursor::NoDrop => CursorIcon::NoDrop,
-                        Cursor::NotAllowed => CursorIcon::NotAllowed,
-                        Cursor::Grab => CursorIcon::Grab,
-                        Cursor::Grabbing => CursorIcon::Grabbing,
-                        Cursor::EResize => CursorIcon::EResize,
-                        Cursor::NResize => CursorIcon::NResize,
-                        Cursor::NeResize => CursorIcon::NeResize,
-                        Cursor::NwResize => CursorIcon::NwResize,
-                        Cursor::SResize => CursorIcon::SResize,
-                        Cursor::SeResize => CursorIcon::SeResize,
-                        Cursor::SwResize => CursorIcon::SwResize,
-                        Cursor::WResize => CursorIcon::WResize,
-                        Cursor::EwResize => CursorIcon::EwResize,
-                        Cursor::NsResize => CursorIcon::NsResize,
-                        Cursor::NeswResize => CursorIcon::NeswResize,
-                        Cursor::NwseResize => CursorIcon::NwseResize,
-                        Cursor::ColResize => CursorIcon::ColResize,
-                        Cursor::RowResize => CursorIcon::RowResize,
-                        Cursor::AllScroll => CursorIcon::AllScroll,
-                        Cursor::ZoomIn => CursorIcon::ZoomIn,
-                        Cursor::ZoomOut => CursorIcon::ZoomOut,
-                        _ => CursorIcon::Default,
-                    };
-                    self.window.set_cursor_icon(winit_cursor);
-                }
-                EmbedderMsg::AllowNavigationRequest(pipeline_id, _url) => {
-                    if w.is_some() {
-                        events.push(EmbedderEvent::AllowNavigationResponse(pipeline_id, true));
+            if w == self.webview_id {
+                // TODO Move this to webview
+                log::trace!("Verso WebView {w:?} is handling servo message: {m:?}");
+                match m {
+                    EmbedderMsg::WebViewOpened(w) => {
+                        events.push(EmbedderEvent::FocusWebView(w));
+                    }
+                    EmbedderMsg::AllowNavigationRequest(pipeline_id, _url) => {
+                        if w.is_some() {
+                            events.push(EmbedderEvent::AllowNavigationResponse(pipeline_id, true));
+                        }
+                    }
+                    EmbedderMsg::WebViewClosed(_w) => {
+                        events.push(EmbedderEvent::Quit);
+                    }
+                    e => {
+                        log::warn!(
+                            "Verso WebView hasn't supported handling this message yet: {e:?}"
+                        )
                     }
                 }
-                EmbedderMsg::WebViewClosed(_w) => {
-                    events.push(EmbedderEvent::Quit);
-                }
-                EmbedderMsg::Shutdown => {
-                    *status = Status::Shutdown;
-                }
-                e => {
-                    log::warn!("Verso hasn't supported handling this message yet: {e:?}")
+            } else {
+                log::trace!("Verso Window is handling servo message: {m:?}");
+                match m {
+                    EmbedderMsg::ReadyToPresent(_w) => {
+                        need_present = true;
+                    }
+                    EmbedderMsg::SetCursor(cursor) => {
+                        self.set_cursor_icon(cursor);
+                    }
+                    EmbedderMsg::Shutdown => {
+                        *status = Status::Shutdown;
+                    }
+                    e => {
+                        log::warn!("Verso Window hasn't supported handling this message yet: {e:?}")
+                    }
                 }
             }
         });
@@ -323,5 +309,47 @@ impl Window {
     /// Resize the rendering context.
     pub fn resize(&self, size: Size2D<i32, UnknownUnit>) {
         let _ = self.rendering_context.resize(size);
+    }
+
+    /// Set cursor icon of the window.
+    pub fn set_cursor_icon(&self, cursor: Cursor) {
+        let winit_cursor = match cursor {
+            Cursor::Default => CursorIcon::Default,
+            Cursor::Pointer => CursorIcon::Pointer,
+            Cursor::ContextMenu => CursorIcon::ContextMenu,
+            Cursor::Help => CursorIcon::Help,
+            Cursor::Progress => CursorIcon::Progress,
+            Cursor::Wait => CursorIcon::Wait,
+            Cursor::Cell => CursorIcon::Cell,
+            Cursor::Crosshair => CursorIcon::Crosshair,
+            Cursor::Text => CursorIcon::Text,
+            Cursor::VerticalText => CursorIcon::VerticalText,
+            Cursor::Alias => CursorIcon::Alias,
+            Cursor::Copy => CursorIcon::Copy,
+            Cursor::Move => CursorIcon::Move,
+            Cursor::NoDrop => CursorIcon::NoDrop,
+            Cursor::NotAllowed => CursorIcon::NotAllowed,
+            Cursor::Grab => CursorIcon::Grab,
+            Cursor::Grabbing => CursorIcon::Grabbing,
+            Cursor::EResize => CursorIcon::EResize,
+            Cursor::NResize => CursorIcon::NResize,
+            Cursor::NeResize => CursorIcon::NeResize,
+            Cursor::NwResize => CursorIcon::NwResize,
+            Cursor::SResize => CursorIcon::SResize,
+            Cursor::SeResize => CursorIcon::SeResize,
+            Cursor::SwResize => CursorIcon::SwResize,
+            Cursor::WResize => CursorIcon::WResize,
+            Cursor::EwResize => CursorIcon::EwResize,
+            Cursor::NsResize => CursorIcon::NsResize,
+            Cursor::NeswResize => CursorIcon::NeswResize,
+            Cursor::NwseResize => CursorIcon::NwseResize,
+            Cursor::ColResize => CursorIcon::ColResize,
+            Cursor::RowResize => CursorIcon::RowResize,
+            Cursor::AllScroll => CursorIcon::AllScroll,
+            Cursor::ZoomIn => CursorIcon::ZoomIn,
+            Cursor::ZoomOut => CursorIcon::ZoomOut,
+            _ => CursorIcon::Default,
+        };
+        self.window.set_cursor_icon(winit_cursor);
     }
 }
