@@ -24,10 +24,11 @@ use winit::{
 
 /// A web view is an area to display web browsing context. It's what user will treat as a "web page".
 pub struct WebView {
+    // TODO This should rename to Verso Window and include new WebView structs and a Winit Window.
     /// Access to webrender surfman
     pub rendering_context: RenderingContext,
     animation_state: Cell<AnimationState>,
-    /// Access to winit winodw
+    /// Access to winit window
     pub window: Window,
     mouse_position: Cell<PhysicalPosition<f64>>,
     /// Access to webrender gl

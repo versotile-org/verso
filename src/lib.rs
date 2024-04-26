@@ -13,7 +13,7 @@ pub mod prefs;
 /// Utilities to access resource files
 pub mod resources;
 /// Utilities to write tests.
-pub mod test;
+// pub mod test;
 /// Web view types to handle web browsing contexts and window.
 pub mod webview;
 

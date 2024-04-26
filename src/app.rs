@@ -7,34 +7,32 @@ use servo::{
     },
     embedder_traits::{Cursor, EmbedderMsg, EventLoopWaker},
     servo_url::ServoUrl,
-    Servo, TopLevelBrowsingContextId,
+    Servo,
 };
 use winit::{
     event::Event,
-    event_loop::{ControlFlow, EventLoopProxy, EventLoopWindowTarget},
+    event_loop::EventLoopProxy,
     window::{CursorIcon, Window},
 };
 
 use crate::{prefs, resources, webview::WebView};
 
-/// Status of webview.
+/// Status of Verso instance.
 #[derive(Clone, Copy, Debug, Default)]
 pub enum Status {
-    /// Nothing happed to this webview yet
+    /// Nothing happed to Verso at the moment.
     #[default]
     None,
-    /// Loading of webview has started.
-    LoadStart,
-    /// Loading of webivew has completed.
-    LoadComplete,
+    /// One of webviews is animating.
+    Animating,
     /// Verso has shut down.
     Shutdown,
 }
 
 /// Main entry point of Verso browser.
 pub struct Verso {
+    // TODO Verso should have servo, (Verso) windows as fields.
     servo: Option<Servo<WebView>>,
-    webview_id: Option<TopLevelBrowsingContextId>,
     webview: Rc<WebView>,
     events: Vec<EmbedderEvent>,
     // TODO following fields should move to webvew
@@ -58,7 +56,9 @@ impl Verso {
             CompositeTarget::Fbo,
         );
 
-        let url = ServoUrl::parse("https://servo.org/").unwrap();
+        // let demo_path = std::env::current_dir().unwrap().join("demo.html");
+        // let url = ServoUrl::from_file_path(demo_path.to_str().unwrap()).unwrap();
+        let url = ServoUrl::parse("https://wusyong.github.io/").unwrap();
         init_servo
             .servo
             .handle_events(vec![EmbedderEvent::NewWebView(url, init_servo.browser_id)]);
@@ -67,38 +67,28 @@ impl Verso {
             servo: Some(init_servo.servo),
             webview,
             events: vec![],
-            webview_id: None,
             status: Status::None,
         }
     }
 
-    /// Run an iteration of Servo handling cycle. An iteration will perform following actions:
+    /// Run an iteration of Verso handling cycle. An iteration will perform following actions:
     ///
-    /// - Set the control flow of winit event loop
-    /// - Hnadle Winit's event, create Servo's embedder event and push to Yipppee's event queue.
+    /// - Hnadle Winit's event, create Servo's embedder event and push to Verso's event queue.
     /// - Consume Servo's messages and then send all embedder events to Servo.
     /// - And the last step is returning the status of Verso.
-    pub fn run(&mut self, event: Event<()>, evl: &EventLoopWindowTarget<()>) -> Status {
-        self.set_control_flow(&event, evl);
+    pub fn run(&mut self, event: Event<()>) -> Status {
         self.handle_winit_event(event);
         self.handle_servo_messages();
+        log::trace!("Verso sets status to: {:?}", self.status);
         self.status
-    }
-
-    fn set_control_flow(&self, event: &Event<()>, evl: &EventLoopWindowTarget<()>) {
-        let control_flow = if !self.webview.is_animating() || *event == Event::Suspended {
-            ControlFlow::Wait
-        } else {
-            ControlFlow::Poll
-        };
-        evl.set_control_flow(control_flow);
-        log::trace!("Verso sets control flow to: {control_flow:?}");
     }
 
     fn handle_winit_event(&mut self, event: Event<()>) {
         log::trace!("Verso is creating ebedder event from: {event:?}");
         match event {
-            Event::Suspended => {}
+            Event::Suspended => {
+                self.status = Status::None;
+            }
             Event::Resumed | Event::UserEvent(()) => {
                 self.events.push(EmbedderEvent::Idle);
             }
@@ -123,16 +113,11 @@ impl Verso {
             log::trace!("Verso is handling servo message: {m:?} with browser id: {w:?}");
             match m {
                 EmbedderMsg::WebViewOpened(w) => {
-                    if self.webview_id.is_none() {
-                        self.webview_id = Some(w);
-                    }
                     self.events.push(EmbedderEvent::FocusWebView(w));
                 }
                 EmbedderMsg::ReadyToPresent(_w) => {
                     need_present = true;
                 }
-                EmbedderMsg::LoadStart => self.status = Status::LoadStart,
-                EmbedderMsg::LoadComplete => self.status = Status::LoadComplete,
                 EmbedderMsg::SetCursor(cursor) => {
                     let winit_cursor = match cursor {
                         Cursor::Default => CursorIcon::Default,
@@ -202,6 +187,8 @@ impl Verso {
         if let Status::Shutdown = self.status {
             log::trace!("Verso is shutting down Servo");
             self.servo.take().map(Servo::deinit);
+        } else if !self.webview.is_animating() {
+            self.status = Status::None;
         }
     }
 
