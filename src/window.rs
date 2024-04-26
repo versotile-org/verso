@@ -207,7 +207,40 @@ impl Window {
         let mut need_present = false;
         servo.get_events().into_iter().for_each(|(w, m)| {
             if &w == self.webview.id() {
-                self.webview.handle_servo_messages(events, m);
+                log::trace!("Verso WebView {w:?} is handling servo message: {m:?}",);
+                match m {
+                    EmbedderMsg::LoadStart | EmbedderMsg::HeadParsed => {
+                        need_present = false;
+                    }
+                    EmbedderMsg::LoadComplete => {
+                        need_present = true;
+                    }
+                    EmbedderMsg::HistoryChanged(history, current) => {
+                        self.webview.set_history(history, current);
+                    }
+                    EmbedderMsg::ChangePageTitle(Some(title)) => {
+                        if !title.is_empty() {
+                            self.window.set_title(&title);
+                        }
+                    }
+                    EmbedderMsg::AllowNavigationRequest(pipeline_id, _url) => {
+                        events.push(EmbedderEvent::AllowNavigationResponse(pipeline_id, true));
+                    }
+                    EmbedderMsg::WebViewOpened(w) => {
+                        events.push(EmbedderEvent::FocusWebView(w));
+                    }
+                    EmbedderMsg::WebViewClosed(_w) => {
+                        events.push(EmbedderEvent::Quit);
+                    }
+                    // EmbedderMsg::EventDelivered(k) => {
+                    //     dbg!(k);
+                    // }
+                    e => {
+                        log::warn!(
+                            "Verso WebView hasn't supported handling this message yet: {e:?}"
+                        )
+                    }
+                }
             } else {
                 log::trace!("Verso Window is handling servo message: {m:?}");
                 match m {

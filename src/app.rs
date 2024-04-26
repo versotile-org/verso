@@ -17,7 +17,7 @@ use crate::{
 /// Status of Verso instance.
 #[derive(Clone, Copy, Debug, Default)]
 pub enum Status {
-    /// Nothing happed to Verso at the moment.
+    /// Nothing important to Verso at the moment.
     #[default]
     None,
     /// One of webviews is animating.
@@ -31,7 +31,6 @@ pub struct Verso {
     servo: Option<Servo<GLWindow>>,
     window: Window,
     events: Vec<EmbedderEvent>,
-    // TODO following fields should move to webvew
     status: Status,
 }
 
@@ -119,7 +118,9 @@ impl Verso {
         if let Status::Shutdown = self.status {
             log::trace!("Verso is shutting down Servo");
             self.servo.take().map(Servo::deinit);
-        } else if !self.window.is_animating() {
+        } else if self.window.is_animating() {
+            self.status = Status::Animating;
+        } else {
             self.status = Status::None;
         }
     }
