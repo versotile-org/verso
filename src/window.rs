@@ -24,14 +24,17 @@ use winit::{
     window::{CursorIcon, Window as WinitWindow},
 };
 
-use crate::{webview::WebView, Status};
+use crate::{
+    webview::{Panel, WebView},
+    Status,
+};
 
 /// A Verso window is a Winit window containing several web views.
 pub struct Window {
     /// Access to winit window with webrender context.
     gl_window: Rc<GLWindow>,
-    /// The web view this window owns.
-    webview: WebView,
+    /// The main control panel of this window.
+    panel: Panel,
     /// Access to webrender gl
     webrender_gl: Rc<dyn gl::Gl>,
     /// The mouse physical position in the web view.
@@ -64,12 +67,9 @@ impl Window {
         };
         debug_assert_eq!(webrender_gl.get_error(), gl::NO_ERROR);
 
-        let gl_window = Rc::new(GLWindow::new(window, rendering_context));
-        let webview = WebView::new();
-
         Self {
-            gl_window,
-            webview,
+            gl_window: Rc::new(GLWindow::new(window, rendering_context)),
+            panel: Panel::new(),
             webrender_gl,
             mouse_position: Cell::new(PhysicalPosition::default()),
         }
@@ -77,7 +77,7 @@ impl Window {
 
     /// Set web view ID of this window.
     pub fn set_webview_id(&mut self, id: WebViewId) {
-        self.webview.set_id(id);
+        self.panel.set_id(id);
     }
 
     /// Return the reference counted GLWindow.
@@ -206,55 +206,89 @@ impl Window {
     ) -> bool {
         let mut need_present = false;
         servo.get_events().into_iter().for_each(|(w, m)| {
-            if &w == self.webview.id() {
-                log::trace!("Verso WebView {w:?} is handling servo message: {m:?}",);
-                match m {
-                    EmbedderMsg::LoadStart | EmbedderMsg::HeadParsed => {
-                        need_present = false;
-                    }
-                    EmbedderMsg::LoadComplete => {
-                        need_present = true;
-                    }
-                    EmbedderMsg::HistoryChanged(history, current) => {
-                        self.webview.set_history(history, current);
-                    }
-                    EmbedderMsg::ChangePageTitle(Some(title)) => {
-                        if !title.is_empty() {
-                            self.window.set_title(&title);
+            // TODO Move each arm into their own methods.
+            match w {
+                // Handle message in Verso Panel
+                Some(p) if p == self.panel.id() => {
+                    log::trace!("Verso Panel {p:?} is handling servo message: {m:?}",);
+                    match m {
+                        EmbedderMsg::LoadStart => {
+                            let mut rect = self.get_coordinates().get_viewport().to_f32();
+                            rect.max.y /= 10.;
+                            events.push(EmbedderEvent::FocusWebView(p));
+                            events.push(EmbedderEvent::MoveResizeWebView(p, rect));
+                            need_present = false;
+                        }
+                        EmbedderMsg::HeadParsed => {
+                            need_present = false;
+                        }
+                        EmbedderMsg::LoadComplete => {
+                            need_present = true;
+                        }
+                        EmbedderMsg::WebViewClosed(_w) => {
+                            events.push(EmbedderEvent::Quit);
+                        }
+                        EmbedderMsg::WebViewFocused(w) => {
+                            events.push(EmbedderEvent::ShowWebView(w, false));
+                        }
+                        EmbedderMsg::HistoryChanged(..)
+                        | EmbedderMsg::ChangePageTitle(..)
+                        | EmbedderMsg::AllowNavigationRequest(..) => {
+                            log::trace!("Verso Panel ignores this message: {m:?}")
+                        }
+                        e => {
+                            log::warn!(
+                                "Verso Panel hasn't supported handling this message yet: {e:?}"
+                            )
                         }
                     }
-                    EmbedderMsg::AllowNavigationRequest(pipeline_id, _url) => {
-                        events.push(EmbedderEvent::AllowNavigationResponse(pipeline_id, true));
-                    }
-                    EmbedderMsg::WebViewOpened(w) => {
-                        events.push(EmbedderEvent::FocusWebView(w));
-                    }
-                    EmbedderMsg::WebViewClosed(_w) => {
-                        events.push(EmbedderEvent::Quit);
-                    }
-                    // EmbedderMsg::EventDelivered(k) => {
-                    //     dbg!(k);
-                    // }
-                    e => {
-                        log::warn!(
-                            "Verso WebView hasn't supported handling this message yet: {e:?}"
-                        )
+                }
+                // Handle message in Verso WebView
+                // TODO Finish this part
+                Some(w) => {
+                    log::trace!("Verso WebView {w:?} is handling servo message: {m:?}",);
+                    match m {
+                        EmbedderMsg::LoadStart | EmbedderMsg::HeadParsed => {
+                            need_present = false;
+                        }
+                        EmbedderMsg::LoadComplete => {
+                            need_present = true;
+                        }
+                        EmbedderMsg::WebViewOpened(w) => {
+                            let mut rect = self.get_coordinates().get_viewport().to_f32();
+                            rect.min.y = 400.;
+                            events.push(EmbedderEvent::FocusWebView(w));
+                            events.push(EmbedderEvent::MoveResizeWebView(w, rect));
+                        }
+                        EmbedderMsg::WebViewClosed(_w) => {}
+                        EmbedderMsg::WebViewFocused(w) => {
+                            events.push(EmbedderEvent::ShowWebView(w, false));
+                        }
+                        e => {
+                            log::warn!(
+                                "Verso WebView hasn't supported handling this message yet: {e:?}"
+                            )
+                        }
                     }
                 }
-            } else {
-                log::trace!("Verso Window is handling servo message: {m:?}");
-                match m {
-                    EmbedderMsg::ReadyToPresent(_w) => {
-                        need_present = true;
-                    }
-                    EmbedderMsg::SetCursor(cursor) => {
-                        self.set_cursor_icon(cursor);
-                    }
-                    EmbedderMsg::Shutdown => {
-                        *status = Status::Shutdown;
-                    }
-                    e => {
-                        log::warn!("Verso Window hasn't supported handling this message yet: {e:?}")
+                // Handle message in Verso Window
+                None => {
+                    log::trace!("Verso Window is handling servo message: {m:?}");
+                    match m {
+                        EmbedderMsg::ReadyToPresent(_w) => {
+                            need_present = true;
+                        }
+                        EmbedderMsg::SetCursor(cursor) => {
+                            self.set_cursor_icon(cursor);
+                        }
+                        EmbedderMsg::Shutdown => {
+                            *status = Status::Shutdown;
+                        }
+                        e => {
+                            log::warn!(
+                                "Verso Window hasn't supported handling this message yet: {e:?}"
+                            )
+                        }
                     }
                 }
             }
