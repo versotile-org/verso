@@ -2,7 +2,7 @@
 
 A web browser that plays old world blues to build new world hope.
 
-https://github.com/wusyong/Yippee/assets/8409985/a7a92fa4-5980-44d1-a9b5-81ff23c01ba6
+https://github.com/european-browser/verso/assets/8409985/a7a92fa4-5980-44d1-a9b5-81ff23c01ba6
 
 # Usage
 
