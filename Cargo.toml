@@ -6,10 +6,10 @@ version = "0.0.1"
 authors = ["Wu Yu Wei"]
 edition = "2021"
 license = "Apache-2.0 OR MIT"
-description = "A web browser"
+description = "An innovative web browser"
 readme = "README.md"
-repository = "https://github.com/wusyong/verso"
-documentation = "https://docs.rs/verso"
+repository = "https://github.com/european-browser/verso"
+#documentation = "https://docs.rs/"
 categories = ["Web programming"]
 
 [package.metadata.docs.rs]
