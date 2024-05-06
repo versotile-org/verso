@@ -192,6 +192,26 @@ jobs:
           name: verso-${{ matrix.platform.target }}
           path: verso-${{ matrix.platform.target }}.tar.gz
 
+  build-result:
+    name: Build Result
+    runs-on: ubuntu-latest
+    if: always()
+    # needs all build to detect cancellation
+    needs: ['build-macos', 'build-windows', 'build-linux']
+    steps:
+      - name: Merge build timings
+        uses: actions/upload-artifact/merge@v4
+        with:
+          name: cargo-timings
+          pattern: cargo-timings-*
+          delete-merged: true
+      - name: Success
+        if: ${{ !contains(needs.*.result, 'failure') && !contains(needs.*.result, 'cancelled') }}
+        run: exit 0
+      - name: Failure
+        if: contains(needs.*.result, 'failure') || contains(needs.*.result, 'cancelled')
+        run: exit 1
+
   release-nightly:
     if: ${{ github.event_name == 'schedule' }}
     runs-on: ubuntu-latest
