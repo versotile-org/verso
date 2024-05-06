@@ -1,4 +1,5 @@
 name: Merge Queue CI
+
 on:
   merge_group:
   # schedule:
@@ -152,6 +153,10 @@ jobs:
         with:
           name: verso-${{ matrix.platform.target }}
           path: verso-${{ matrix.platform.target }}.tar.gz
+
+  pr-check:
+    needs: ['build-macos', 'build-windows', 'build-linux']
+    runs-on: ubuntu-latest
 
   release-nightly:
     if: ${{ github.event_name == 'schedule' }}

@@ -6,7 +6,7 @@ on:
       - mq-test
 
 jobs:
-  check-linux:
+  pr-check:
     name: Check [Linux]
     runs-on: ubuntu-latest
     steps:
