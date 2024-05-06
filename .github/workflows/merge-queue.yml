@@ -1,5 +1,4 @@
 name: Merge Queue CI
-
 on:
   merge_group:
   # schedule:
