@@ -161,7 +161,7 @@ jobs:
           path: verso-${{ matrix.platform.target }}.tar.gz
 
   pr-fast-check:
-    if: ${{ github.event_name != 'merge_group' }}
+    if: ${{ github.event_name == 'pull_request' }}
     name: Pull Request Fast Check
     runs-on: ubuntu-latest
     steps:
