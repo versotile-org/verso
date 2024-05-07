@@ -87,7 +87,7 @@ jobs:
             libxmu-dev libxmu6 libegl1-mesa-dev llvm-dev m4 xorg-dev sway
 
       - name: Run sccache-cache
-        uses: mozilla-actions/sccache-action@v0.0.3
+        uses: Mozilla-Actions/sccache-action@v0.0.4
 
       - name: Build
         run: |
@@ -131,7 +131,7 @@ jobs:
         run: scoop install git python llvm cmake curl
 
       - name: Run sccache-cache
-        uses: mozilla-actions/sccache-action@v0.0.3
+        uses: Mozilla-Actions/sccache-action@v0.0.4
 
       - name: Build
         run: |
@@ -177,7 +177,7 @@ jobs:
         run: brew install cmake pkg-config
 
       - name: Run sccache-cache
-        uses: mozilla-actions/sccache-action@v0.0.3
+        uses: Mozilla-Actions/sccache-action@v0.0.4
 
       - name: Build
         run: |
