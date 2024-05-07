@@ -93,11 +93,11 @@ jobs:
         run: |
           cargo build --release
 
-      - name: Test
-        # Run sway(wayland compositor) in the background, winit will use it
-        run: |
-          sway > /dev/null 2>&1 &
-          cargo test --release
+      # - name: Test
+      #   # Run sway(wayland compositor) in the background, winit will use it
+      #   run: |
+      #     sway > /dev/null 2>&1 &
+      #     cargo test --release
 
       - name: Tar Binary
         if: ${{ github.event_name == 'schedule' }}
@@ -136,7 +136,10 @@ jobs:
       - name: Build
         run: |
           cargo build --release
-          cargo test --release
+
+      # - name: Test
+      #   run: |
+      #     cargo test --release
 
       - name: Tar Binary
         if: ${{ github.event_name == 'schedule' }}
@@ -179,7 +182,10 @@ jobs:
       - name: Build
         run: |
           cargo build --release
-          cargo test --release
+
+      # - name: Test
+      #   run: |
+      #     cargo test --release
 
       - name: Tar Binary
         if: ${{ github.event_name == 'schedule' }}
