@@ -8,6 +8,8 @@
 pub mod app;
 /// Error and result types.
 pub mod errors;
+/// Utilities to handle keyboard inputs and states.
+pub mod keyboard;
 /// Utilities to read options and preferences.
 pub mod prefs;
 /// Utilities to access resource files

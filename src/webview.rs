@@ -235,6 +235,11 @@ impl WebView {
             WindowEvent::CloseRequested => {
                 events.push(EmbedderEvent::Quit);
             }
+            WindowEvent::KeyboardInput {
+                device_id,
+                event,
+                is_synthetic,
+            } => {}
             e => log::warn!("Verso hasn't supported this window event yet: {e:?}"),
         }
     }

@@ -1,4 +1,5 @@
 use verso::{Result, Status, Verso};
+use winit::window::Fullscreen;
 use winit::{dpi::PhysicalSize, event_loop::EventLoop, window::WindowBuilder};
 
 /* window decoration */
@@ -19,6 +20,7 @@ fn main() -> Result<()> {
     let event_loop = EventLoop::new()?;
     let window = WindowBuilder::new()
         .with_title("(*ﾟ▽ﾟ)ﾉ Verso")
+        .with_fullscreen(Some(Fullscreen::Borderless(None)))
         .with_inner_size(PhysicalSize::new(1000, 500))
         .build(&event_loop)?;
 
