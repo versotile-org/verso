@@ -19,17 +19,21 @@ use surfman::{Connection, GLApi, SurfaceType};
 use winit::{
     dpi::PhysicalPosition,
     event::{ElementState, TouchPhase, WindowEvent},
+    keyboard::ModifiersState,
     window::Window,
 };
+
+use crate::keyboard::keyboard_event_from_winit;
 
 /// A web view is an area to display web browsing context. It's what user will treat as a "web page".
 pub struct WebView {
     /// Access to webrender surfman
     pub rendering_context: RenderingContext,
     animation_state: Cell<AnimationState>,
-    /// Access to winit winodw
+    /// Access to winit window
     pub window: Window,
     mouse_position: Cell<PhysicalPosition<f64>>,
+    modifiers_state: Cell<ModifiersState>,
     /// Access to webrender gl
     pub webrender_gl: Rc<dyn gl::Gl>,
 }
@@ -65,6 +69,7 @@ impl WebView {
             animation_state: Cell::new(AnimationState::Idle),
             window,
             mouse_position: Cell::new(PhysicalPosition::default()),
+            modifiers_state: Cell::new(ModifiersState::default()),
             webrender_gl,
         }
     }
@@ -235,11 +240,14 @@ impl WebView {
             WindowEvent::CloseRequested => {
                 events.push(EmbedderEvent::Quit);
             }
-            WindowEvent::KeyboardInput {
-                device_id,
-                event,
-                is_synthetic,
-            } => {}
+            // TODO ModifiersChanged and KeyboardInput handling is temporary here. This will be
+            // refactored after multiview.
+            WindowEvent::ModifiersChanged(modifier) => self.modifiers_state.set(modifier.state()),
+            WindowEvent::KeyboardInput { event, .. } => {
+                let event = keyboard_event_from_winit(&event, self.modifiers_state.get());
+                log::trace!("Verso is handling {:?}", event);
+                events.push(EmbedderEvent::Keyboard(event));
+            }
             e => log::warn!("Verso hasn't supported this window event yet: {e:?}"),
         }
     }
