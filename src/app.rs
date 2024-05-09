@@ -58,7 +58,7 @@ impl Verso {
             CompositeTarget::Fbo,
         );
 
-        let url = ServoUrl::parse("https://wusyong.github.io/COSCUP2023/").unwrap();
+        let url = ServoUrl::parse("https://european-browser.github.io/slides/").unwrap();
         init_servo
             .servo
             .handle_events(vec![EmbedderEvent::NewWebView(url, init_servo.browser_id)]);
