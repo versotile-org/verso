@@ -19,7 +19,7 @@ jobs:
   pr-fast-check:
     if: ${{ github.event_name == 'pull_request' }}
     name: Pull Request Fast Check
-    runs-on: self-hosted
+    runs-on: ubuntu-latest
     steps:
       - name: Checkout the repository
         uses: actions/checkout@v4
