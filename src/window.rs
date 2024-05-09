@@ -35,6 +35,8 @@ pub struct Window {
     gl_window: Rc<GLWindow>,
     /// The main control panel of this window.
     panel: Panel,
+    /// The web view of this window.
+    webview: Option<WebView>,
     /// Access to webrender gl
     webrender_gl: Rc<dyn gl::Gl>,
     /// The mouse physical position in the web view.
@@ -70,6 +72,7 @@ impl Window {
         Self {
             gl_window: Rc::new(GLWindow::new(window, rendering_context)),
             panel: Panel::new(),
+            webview: None,
             webrender_gl,
             mouse_position: Cell::new(PhysicalPosition::default()),
         }
@@ -199,7 +202,7 @@ impl Window {
 
     /// Handle servo messages and return a boolean to indicate servo needs to present or not.
     pub fn handle_servo_messages(
-        &self,
+        &mut self,
         servo: &mut Servo<GLWindow>,
         events: &mut Vec<EmbedderEvent>,
         status: &mut Status,
@@ -244,7 +247,6 @@ impl Window {
                     }
                 }
                 // Handle message in Verso WebView
-                // TODO Finish this part
                 Some(w) => {
                     log::trace!("Verso WebView {w:?} is handling servo message: {m:?}",);
                     match m {
@@ -255,12 +257,17 @@ impl Window {
                             need_present = true;
                         }
                         EmbedderMsg::WebViewOpened(w) => {
+                            let webview = WebView::new(w);
+                            self.webview = Some(webview);
+
                             let mut rect = self.get_coordinates().get_viewport().to_f32();
-                            rect.min.y = 400.;
+                            rect.min.y = rect.max.y / 10.;
                             events.push(EmbedderEvent::FocusWebView(w));
                             events.push(EmbedderEvent::MoveResizeWebView(w, rect));
                         }
-                        EmbedderMsg::WebViewClosed(_w) => {}
+                        EmbedderMsg::WebViewClosed(_w) => {
+                            self.webview = None;
+                        }
                         EmbedderMsg::WebViewFocused(w) => {
                             events.push(EmbedderEvent::ShowWebView(w, false));
                         }

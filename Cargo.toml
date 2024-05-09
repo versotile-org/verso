@@ -6,10 +6,10 @@ version = "0.0.1"
 authors = ["Wu Yu Wei"]
 edition = "2021"
 license = "Apache-2.0 OR MIT"
-description = "A web browser"
+description = "An innovative web browser"
 readme = "README.md"
-repository = "https://github.com/wusyong/verso"
-documentation = "https://docs.rs/verso"
+repository = "https://github.com/european-browser/verso"
+#documentation = "https://docs.rs/"
 categories = ["Web programming"]
 
 [package.metadata.docs.rs]
@@ -32,7 +32,7 @@ log = "0.4"
 thiserror = "1.0"
 raw-window-handle = { version = "0.5", features = ["std"] }
 # Servo
-libservo = { git = "https://github.com/servo/servo.git", rev = "1440406", features = ["max_log_level", "native-bluetooth", "webdriver"] }
+libservo = { git = "https://github.com/servo/servo.git", rev = "ff3cd14", features = ["max_log_level", "native-bluetooth", "webdriver"] }
 crossbeam-channel = "0.5"
 getopts = "0.2.17"
 surfman = { version = "0.9", features = ["chains", "sm-angle-default", "sm-raw-window-handle"] }

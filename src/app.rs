@@ -4,8 +4,9 @@ use servo::{
         CompositeTarget,
     },
     embedder_traits::EventLoopWaker,
+    msg::constellation_msg::BrowsingContextId,
     servo_url::ServoUrl,
-    Servo,
+    Servo, TopLevelBrowsingContextId,
 };
 use winit::{event::Event, event_loop::EventLoopProxy, window::Window as WinitWindow};
 
@@ -52,12 +53,14 @@ impl Verso {
         );
         window.set_webview_id(init_servo.browser_id);
 
-        // let demo_path = std::env::current_dir().unwrap().join("demo.html");
-        // let url = ServoUrl::from_file_path(demo_path.to_str().unwrap()).unwrap();
+        let demo_path = std::env::current_dir().unwrap().join("demo.html");
+        let demo_url = ServoUrl::from_file_path(demo_path.to_str().unwrap()).unwrap();
+        let demo_id = TopLevelBrowsingContextId::new();
         let url = ServoUrl::parse("https://wusyong.github.io/").unwrap();
-        init_servo
-            .servo
-            .handle_events(vec![EmbedderEvent::NewWebView(url, init_servo.browser_id)]);
+        init_servo.servo.handle_events(vec![
+            EmbedderEvent::NewWebView(url, init_servo.browser_id),
+            EmbedderEvent::NewWebView(demo_url, demo_id),
+        ]);
         init_servo.servo.setup_logging();
         Verso {
             servo: Some(init_servo.servo),
