@@ -1,27 +1,24 @@
 use verso::{Result, Status, Verso};
 use winit::window::Fullscreen;
-use winit::{dpi::PhysicalSize, event_loop::EventLoop, window::WindowBuilder};
+use winit::{event_loop::EventLoop, window::WindowBuilder};
 
 /* window decoration */
 #[cfg(target_os = "macos")]
-use cocoa::appkit::{NSView, NSWindow};
+use cocoa::appkit::NSWindow;
 #[cfg(target_os = "macos")]
 use cocoa::appkit::{NSWindowStyleMask, NSWindowTitleVisibility};
 #[cfg(target_os = "macos")]
-use objc::{msg_send, runtime::Object, sel, sel_impl};
+use objc::runtime::Object;
 #[cfg(target_os = "macos")]
 use raw_window_handle::{AppKitWindowHandle, HasRawWindowHandle, RawWindowHandle};
 #[cfg(target_os = "macos")]
 use winit::dpi::LogicalPosition;
-#[cfg(target_os = "macos")]
-use winit::platform::macos::WindowBuilderExtMacOS;
 
 fn main() -> Result<()> {
     let event_loop = EventLoop::new()?;
     let window = WindowBuilder::new()
         .with_title("(*ﾟ▽ﾟ)ﾉ Verso")
         .with_fullscreen(Some(Fullscreen::Borderless(None)))
-        .with_inner_size(PhysicalSize::new(1000, 500))
         .build(&event_loop)?;
 
     #[cfg(target_os = "macos")]

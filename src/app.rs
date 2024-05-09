@@ -10,7 +10,7 @@ use servo::{
     Servo, TopLevelBrowsingContextId,
 };
 use winit::{
-    event::Event,
+    event::{Event, WindowEvent},
     event_loop::{ControlFlow, EventLoopProxy, EventLoopWindowTarget},
     window::{CursorIcon, Window},
 };
@@ -105,9 +105,21 @@ impl Verso {
             Event::WindowEvent {
                 window_id: _,
                 event,
-            } => self
-                .webview
-                .handle_winit_window_event(&mut self.servo, &mut self.events, &event),
+            } => {
+                // TODO This is temporary workaround before multiview
+                if let WindowEvent::Resized(size) = event {
+                    let rect = servo::euclid::Box2D::from_origin_and_size(
+                        servo::euclid::Point2D::new(0, 0),
+                        servo::euclid::Size2D::new(size.width, size.height),
+                    );
+                    self.events.push(EmbedderEvent::MoveResizeWebView(
+                        self.webview_id.unwrap(),
+                        rect.to_f32(),
+                    ));
+                }
+                self.webview
+                    .handle_winit_window_event(&mut self.servo, &mut self.events, &event);
+            }
             e => log::warn!("Verso hasn't supported this event yet: {e:?}"),
         }
     }
