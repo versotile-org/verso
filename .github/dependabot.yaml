@@ -7,8 +7,13 @@ updates:
       interval: "daily"
     open-pull-requests-limit: 0
     groups:
-       security-updates:
-          applies-to: "security-updates"
+      security-updates:
+        applies-to: security-updates
+        patterns:
+        - "*"
+        update-types:
+        - "patch"
+        - "minor"
     ignore:
       - dependency-name: "libservo"
     allow:
@@ -19,15 +24,12 @@ updates:
       prefix: ":arrow_up: [dependabot] "
   # GHA
   - package-ecosystem: "github-actions"
+    directory: "/"
     schedule:
       interval: "weekly"
-      day: "sunday"
-      time: "10:00"
     open-pull-requests-limit: 0
-    groups:
-      all-actions:
-        patterns: [ "*" ]
     reviewers:
       - "mikopet"
     commit-message:
       prefix: ":arrow_up: [dependabot] "
+

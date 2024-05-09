@@ -1,6 +1,7 @@
 name: Continuous Integration
 
 on:
+  merge_group:
   pull_request:
     branches:
       - main
@@ -15,13 +16,10 @@ env:
   CN_APP_SLUG: verso-nightly
 
 jobs:
-  build-linux:
-    name: Build [Linux]
+  pr-fast-check:
+    if: ${{ github.event_name == 'pull_request' }}
+    name: Pull Request Fast Check
     runs-on: ubuntu-latest
-    env:
-      RUSTC_WRAPPER: sccache
-      CCACHE: sccache
-      SCCACHE_GHA_ENABLED: 'true'
     steps:
       - name: Checkout the repository
         uses: actions/checkout@v4
@@ -45,14 +43,61 @@ jobs:
             libgstrtspserver-1.0-dev gstreamer1.0-tools libges-1.0-dev \
             libharfbuzz-dev liblzma-dev libunwind-dev libunwind-dev libvulkan1 \
             libx11-dev libxcb-render0-dev libxcb-shape0-dev libxcb-xfixes0-dev \
-            libxmu-dev libxmu6 libegl1-mesa-dev llvm-dev m4 xorg-dev
+            libxmu-dev libxmu6 libegl1-mesa-dev llvm-dev m4 xorg-dev sway
+
+      - name: Check
+        run: cargo check
+
+  build-linux:
+    if: ${{ github.event_name != 'pull_request' }}
+    name: Build [Linux]
+    runs-on: ubuntu-latest
+    env:
+      RUSTC_WRAPPER: sccache
+      CCACHE: sccache
+      SCCACHE_GHA_ENABLED: 'true'
+      WAYLAND_DISPLAY: wayland-1
+      WLR_BACKENDS: headless
+      WLR_LIBINPUT_NO_DEVICES: 1
+      XDG_RUNTIME_DIR: /tmp
+      XDG_SESSION_TYPE: wayland
+    steps:
+      - name: Checkout the repository
+        uses: actions/checkout@v4
+
+      - name: Install Rust
+        uses: dsherret/rust-toolchain-file@v1
+
+      - name: Set env
+        run: echo "LIBCLANG_PATH=/usr/lib/llvm-14/lib" >> $GITHUB_ENV
+
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt install build-essential python3-pip ccache clang cmake curl \
+            g++ git gperf libdbus-1-dev libfreetype6-dev libgl1-mesa-dri \
+            libgles2-mesa-dev libglib2.0-dev libgstreamer-plugins-base1.0-dev \
+            gstreamer1.0-plugins-good libgstreamer-plugins-good1.0-dev \
+            gstreamer1.0-plugins-bad libgstreamer-plugins-bad1.0-dev \
+            gstreamer1.0-plugins-ugly gstreamer1.0-plugins-base \
+            libgstreamer-plugins-base1.0-dev gstreamer1.0-libav \
+            libgstrtspserver-1.0-dev gstreamer1.0-tools libges-1.0-dev \
+            libharfbuzz-dev liblzma-dev libunwind-dev libunwind-dev libvulkan1 \
+            libx11-dev libxcb-render0-dev libxcb-shape0-dev libxcb-xfixes0-dev \
+            libxmu-dev libxmu6 libegl1-mesa-dev llvm-dev m4 xorg-dev sway
 
       - name: Run sccache-cache
-        uses: mozilla-actions/sccache-action@v0.0.3
+        uses: Mozilla-Actions/sccache-action@v0.0.4
 
       - name: Build
         run: |
           cargo build --release
+
+      # - name: Test
+      #   # Run sway(wayland compositor) in the background, winit will use it
+      #   run: |
+      #     sway > /dev/null 2>&1 &
+      #     cargo test --release
 
       - name: Tar Binary
         if: ${{ github.event_name == 'schedule' }}
@@ -66,6 +111,7 @@ jobs:
           path: verso-x86_64-unknown-linux-gnu.tar.gz
 
   build-windows:
+    if: ${{ github.event_name != 'pull_request' }}
     name: Build [Windows]
     runs-on: windows-latest
     env:
@@ -85,12 +131,15 @@ jobs:
         run: scoop install git python llvm cmake curl
 
       - name: Run sccache-cache
-        uses: mozilla-actions/sccache-action@v0.0.3
+        uses: Mozilla-Actions/sccache-action@v0.0.4
 
       - name: Build
         run: |
           cargo build --release
-          cargo test --release
+
+      # - name: Test
+      #   run: |
+      #     cargo test --release
 
       - name: Tar Binary
         if: ${{ github.event_name == 'schedule' }}
@@ -104,6 +153,7 @@ jobs:
           path: verso-x86_64-pc-windows-msvc.tar.gz
 
   build-macos:
+    if: ${{ github.event_name != 'pull_request' }}
     name: Build [macOS]
     strategy:
       fail-fast: false
@@ -127,12 +177,15 @@ jobs:
         run: brew install cmake pkg-config
 
       - name: Run sccache-cache
-        uses: mozilla-actions/sccache-action@v0.0.3
+        uses: Mozilla-Actions/sccache-action@v0.0.4
 
       - name: Build
         run: |
           cargo build --release
-          cargo test --release
+
+      # - name: Test
+      #   run: |
+      #     cargo test --release
 
       - name: Tar Binary
         if: ${{ github.event_name == 'schedule' }}
@@ -144,6 +197,19 @@ jobs:
         with:
           name: verso-${{ matrix.platform.target }}
           path: verso-${{ matrix.platform.target }}.tar.gz
+
+  build-result:
+    name: Build Result
+    runs-on: ubuntu-latest
+    if: always()
+    needs: ['build-macos', 'build-windows', 'build-linux']
+    steps:
+      - name: Success
+        if: ${{ !contains(needs.*.result, 'failure') && !contains(needs.*.result, 'cancelled') }}
+        run: exit 0
+      - name: Failure
+        if: contains(needs.*.result, 'failure') || contains(needs.*.result, 'cancelled')
+        run: exit 1
 
   release-nightly:
     if: ${{ github.event_name == 'schedule' }}

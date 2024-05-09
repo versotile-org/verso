@@ -1,6 +1,6 @@
 //! Verso Web Browser
 //!
-//! This is the documentation of Verso's types and items. See [Github page](https://github.com/wusyong/Verso) for more general introduction.
+//! This is the documentation of Verso's types and items. See [Github page](https://github.com/european-browser/verso) for more general introduction.
 
 #![deny(missing_docs)]
 
