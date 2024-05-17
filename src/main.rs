@@ -1,5 +1,6 @@
 use verso::{Result, Status, Verso};
-use winit::{dpi::PhysicalSize, event_loop::EventLoop, window::WindowBuilder};
+use winit::event_loop::{ControlFlow, DeviceEvents};
+use winit::{event_loop::EventLoop, window::WindowBuilder};
 
 /* window decoration */
 #[cfg(target_os = "macos")]
@@ -17,9 +18,9 @@ use winit::platform::macos::WindowBuilderExtMacOS;
 
 fn main() -> Result<()> {
     let event_loop = EventLoop::new()?;
+    event_loop.listen_device_events(DeviceEvents::Never);
     let window = WindowBuilder::new()
         .with_title("(*ﾟ▽ﾟ)ﾉ Verso")
-        .with_inner_size(PhysicalSize::new(1000, 500))
         .build(&event_loop)?;
 
     #[cfg(target_os = "macos")]
@@ -31,9 +32,10 @@ fn main() -> Result<()> {
     }
 
     let mut verso = Verso::new(window, event_loop.create_proxy());
-    event_loop.run(move |event, evl| match verso.run(event, evl) {
+    event_loop.run(move |event, evl| match verso.run(event) {
+        Status::None => evl.set_control_flow(ControlFlow::Wait),
+        Status::Animating => evl.set_control_flow(ControlFlow::Poll),
         Status::Shutdown => evl.exit(),
-        _ => (),
     })?;
 
     Ok(())
