@@ -11,6 +11,7 @@ use servo::{
     msg::constellation_msg::WebViewId,
     rendering_context::RenderingContext,
     script_traits::{TouchEventType, WheelDelta, WheelMode},
+    style_traits::DevicePixel,
     webrender_api::{
         units::{DeviceIntPoint, DeviceIntRect, DevicePoint, LayoutVector2D},
         ScrollLocation,
@@ -106,8 +107,7 @@ impl Window {
             }
             WindowEvent::Resized(size) => {
                 let size = Size2D::new(size.width, size.height);
-                let _ = self.resize(size.to_i32());
-                events.push(EmbedderEvent::WindowResize);
+                let _ = self.resize(size.to_i32(), events);
             }
             WindowEvent::CursorMoved { position, .. } => {
                 let event: DevicePoint = DevicePoint::new(position.x as f32, position.y as f32);
@@ -209,7 +209,6 @@ impl Window {
     ) -> bool {
         let mut need_present = false;
         servo.get_events().into_iter().for_each(|(w, m)| {
-            // TODO Move each arm into their own methods.
             match w {
                 // Handle message in Verso Panel
                 Some(p) if p == self.panel.id() => {
@@ -222,7 +221,9 @@ impl Window {
                             need_present = true;
                         }
                         EmbedderMsg::WebViewOpened(w) => {
-                            let mut rect = self.get_coordinates().get_viewport().to_f32();
+                            let size = self.window.inner_size();
+                            let size = Size2D::new(size.width as i32, size.height as i32);
+                            let mut rect = DeviceIntRect::from_size(size).to_f32();
                             rect.max.y /= 10.;
                             events.push(EmbedderEvent::FocusWebView(w));
                             events.push(EmbedderEvent::MoveResizeWebView(w, rect));
@@ -259,7 +260,9 @@ impl Window {
                             let webview = WebView::new(w);
                             self.webview = Some(webview);
 
-                            let mut rect = self.get_coordinates().get_viewport().to_f32();
+                            let size = self.window.inner_size();
+                            let size = Size2D::new(size.width as i32, size.height as i32);
+                            let mut rect = DeviceIntRect::from_size(size).to_f32();
                             rect.min.y = rect.max.y / 10.;
                             events.push(EmbedderEvent::FocusWebView(w));
                             events.push(EmbedderEvent::MoveResizeWebView(w, rect));
@@ -358,9 +361,20 @@ impl Window {
         self.gl_window.is_animating()
     }
 
-    /// Resize the rendering context.
-    pub fn resize(&self, size: Size2D<i32, UnknownUnit>) {
-        let _ = self.gl_window.rendering_context.resize(size);
+    /// Resize the rendering context and all web views.
+    pub fn resize(&self, size: Size2D<i32, DevicePixel>, events: &mut Vec<EmbedderEvent>) {
+        let _ = self.gl_window.rendering_context.resize(size.to_untyped());
+        events.push(EmbedderEvent::WindowResize);
+
+        let mut rect = DeviceIntRect::from_size(size).to_f32();
+        rect.max.y /= 10.;
+        events.push(EmbedderEvent::MoveResizeWebView(self.panel.id(), rect));
+
+        if let Some(w) = &self.webview {
+            let mut rect = DeviceIntRect::from_size(size).to_f32();
+            rect.min.y = rect.max.y / 10.;
+            events.push(EmbedderEvent::MoveResizeWebView(w.id(), rect));
+        }
     }
 
     /// Set cursor icon of the window.
