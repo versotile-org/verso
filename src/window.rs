@@ -215,18 +215,17 @@ impl Window {
                 Some(p) if p == self.panel.id() => {
                     log::trace!("Verso Panel {p:?} is handling servo message: {m:?}",);
                     match m {
-                        EmbedderMsg::LoadStart => {
-                            let mut rect = self.get_coordinates().get_viewport().to_f32();
-                            rect.max.y /= 10.;
-                            events.push(EmbedderEvent::FocusWebView(p));
-                            events.push(EmbedderEvent::MoveResizeWebView(p, rect));
-                            need_present = false;
-                        }
-                        EmbedderMsg::HeadParsed => {
+                        EmbedderMsg::LoadStart | EmbedderMsg::HeadParsed => {
                             need_present = false;
                         }
                         EmbedderMsg::LoadComplete => {
                             need_present = true;
+                        }
+                        EmbedderMsg::WebViewOpened(w) => {
+                            let mut rect = self.get_coordinates().get_viewport().to_f32();
+                            rect.max.y /= 10.;
+                            events.push(EmbedderEvent::FocusWebView(w));
+                            events.push(EmbedderEvent::MoveResizeWebView(w, rect));
                         }
                         EmbedderMsg::WebViewClosed(_w) => {
                             events.push(EmbedderEvent::Quit);

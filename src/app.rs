@@ -4,7 +4,6 @@ use servo::{
         CompositeTarget,
     },
     embedder_traits::EventLoopWaker,
-    msg::constellation_msg::BrowsingContextId,
     servo_url::ServoUrl,
     Servo, TopLevelBrowsingContextId,
 };
