@@ -4,6 +4,9 @@ A web browser that plays old world blues to build new world hope.
 
 https://github.com/european-browser/verso/assets/8409985/a7a92fa4-5980-44d1-a9b5-81ff23c01ba6
 
+Verso is a web browser built on top of Servo web engine. It's still under development. We dont' accept any feature request at the moment.
+But if you are interested, feel free to help test it.
+
 # Usage
 
 The current demo works best on macOS at the moment, since it tries to customize its traffic light buttons to be seamless in the window.
