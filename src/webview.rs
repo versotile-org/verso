@@ -1,6 +1,6 @@
 use std::cell::Cell;
 
-use servo::{msg::constellation_msg::WebViewId, url::ServoUrl};
+use servo::{base::id::WebViewId, url::ServoUrl};
 
 /// A web view is an area to display web browsing context. It's what user will treat as a "web page".
 pub struct WebView {
