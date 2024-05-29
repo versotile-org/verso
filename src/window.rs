@@ -2,20 +2,20 @@ use std::{cell::Cell, ops::Deref, rc::Rc};
 
 use raw_window_handle::{HasRawDisplayHandle, HasRawWindowHandle};
 use servo::{
+    base::id::WebViewId,
     compositing::windowing::{
         AnimationState, EmbedderCoordinates, EmbedderEvent, MouseWindowEvent, WindowMethods,
     },
     embedder_traits::{Cursor, EmbedderMsg},
-    euclid::{Point2D, Scale, Size2D, UnknownUnit},
+    euclid::{Point2D, Scale, Size2D},
     gl,
-    msg::constellation_msg::WebViewId,
-    rendering_context::RenderingContext,
     script_traits::{TouchEventType, WheelDelta, WheelMode},
     style_traits::DevicePixel,
     webrender_api::{
         units::{DeviceIntPoint, DeviceIntRect, DevicePoint, LayoutVector2D},
         ScrollLocation,
     },
+    webrender_traits::RenderingContext,
     Servo,
 };
 use surfman::{Connection, GLApi, SurfaceType};
