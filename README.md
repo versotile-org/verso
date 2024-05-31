@@ -50,7 +50,7 @@ libx11-dev libxcb-render0-dev libxcb-shape0-dev libxcb-xfixes0-dev \
 libxmu-dev libxmu6 libegl1-mesa-dev llvm-dev m4 xorg-dev
 ```
 
-For others, please follow the instructions in [Servo's wiki](https://github.com/servo/servo/wiki/Building) to bootstrap first.
+For others, please follow the instructions in [Servo book](https://book.servo.org/hacking/setting-up-your-environment.html#tools-for-linux) to bootstrap first.
 
 ## Build
 
@@ -58,12 +58,6 @@ For others, please follow the instructions in [Servo's wiki](https://github.com/
 
 ```sh
 cargo run
-```
-
-- Or if you are using Nix or NixOS, add `wayland` and `libGL` to `LD_LIBRARY_PATH` in `../servo/etc/shell.nix`
-
-```
-nix-shell ../servo/etc/shell.nix --run 'cargo run'
 ```
 
 ## Future Work
