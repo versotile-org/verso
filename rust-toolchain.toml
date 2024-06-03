@@ -1,5 +1,5 @@
 [toolchain]
-channel = "1.74"
+channel = "1.78"
 components = [
     # For support/crown
     "llvm-tools",
