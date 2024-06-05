@@ -1,6 +1,6 @@
 # Verso
 
-[![project chat](https://img.shields.io/badge/zulip-57a7ff?style=for-the-badge&labelColor=555555&logo=zulip)]([https://chat.zulip.org](https://versotile.zulipchat.com/))
+[![project chat](https://img.shields.io/badge/zulip-57a7ff?style=for-the-badge&labelColor=555555&logo=zulip)](https://versotile.zulipchat.com/)
 
 A web browser that plays old world blues to build new world hope.
 
