@@ -1,5 +1,7 @@
 # Verso
 
+[![project chat](https://img.shields.io/badge/zulip-join_chat-brightgreen.svg?style=for-the-badge&labelColor=555555&logo=zulip)]([https://chat.zulip.org](https://versotile.zulipchat.com/))
+
 A web browser that plays old world blues to build new world hope.
 
 https://github.com/european-browser/verso/assets/8409985/a7a92fa4-5980-44d1-a9b5-81ff23c01ba6
