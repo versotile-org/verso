@@ -33,6 +33,12 @@ impl WebView {
 
 /// A panel is a special web view that focus on controlling states around window. It can be treatedd as
 /// the control panel or navigation bar of the window depending on usages.
+///
+/// At the moment, following Web API is supported:
+/// - Close window: `window.close()`
+/// - Navigate to previous page: `window.prompt('PREV')`
+/// - Navigate to next page: `window.prompt('FORWARD')`
+/// - Refreash the page: `window.prompt('REFRESH')`
 pub struct Panel {
     id: Option<WebViewId>,
 }
