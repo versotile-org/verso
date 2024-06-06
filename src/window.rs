@@ -9,14 +9,15 @@ use servo::{
     embedder_traits::{Cursor, EmbedderMsg},
     euclid::{Point2D, Scale, Size2D},
     gl,
-    script_traits::{TouchEventType, WheelDelta, WheelMode},
+    script_traits::{TouchEventType, TraversalDirection, WheelDelta, WheelMode},
     style_traits::DevicePixel,
+    url::ServoUrl,
     webrender_api::{
         units::{DeviceIntPoint, DeviceIntRect, DevicePoint, LayoutVector2D},
         ScrollLocation,
     },
     webrender_traits::RenderingContext,
-    Servo,
+    Servo, TopLevelBrowsingContextId,
 };
 use surfman::{Connection, GLApi, SurfaceType};
 use winit::{
@@ -219,12 +220,19 @@ impl Window {
                         }
                         EmbedderMsg::LoadComplete => {
                             need_present = true;
+                            let demo_path = std::env::current_dir().unwrap().join("resources/demo.html");
+                            let demo_url = ServoUrl::from_file_path(demo_path.to_str().unwrap()).unwrap();
+                            let demo_id = TopLevelBrowsingContextId::new();
+                            events.push(EmbedderEvent::NewWebView(demo_url, demo_id));
+                        }
+                        EmbedderMsg::AllowNavigationRequest(id, _url) => {
+                            // The panel shouldn't navigate to other pages.
+                            events.push(EmbedderEvent::AllowNavigationResponse(id, false));
                         }
                         EmbedderMsg::WebViewOpened(w) => {
                             let size = self.window.inner_size();
                             let size = Size2D::new(size.width as i32, size.height as i32);
-                            let mut rect = DeviceIntRect::from_size(size).to_f32();
-                            rect.max.y /= 10.;
+                            let rect = DeviceIntRect::from_size(size).to_f32();
                             events.push(EmbedderEvent::FocusWebView(w));
                             events.push(EmbedderEvent::MoveResizeWebView(w, rect));
                         }
@@ -235,10 +243,41 @@ impl Window {
                             events.push(EmbedderEvent::ShowWebView(w, false));
                         }
                         EmbedderMsg::HistoryChanged(..)
-                        | EmbedderMsg::ChangePageTitle(..)
-                        | EmbedderMsg::AllowNavigationRequest(..) => {
+                        | EmbedderMsg::ChangePageTitle(..) => {
                             log::trace!("Verso Panel ignores this message: {m:?}")
                         }
+                        EmbedderMsg::Prompt(definition, _origin) => match definition {
+                            servo::embedder_traits::PromptDefinition::Input(
+                                msg,
+                                _defaut,
+                                sender,
+                            ) => {
+                                if let Some(webview) = &self.webview {
+                                    let id = webview.id();
+                                    match msg.as_str() {
+                                        "PREV" => {
+                                            events.push(EmbedderEvent::Navigation(
+                                                id,
+                                                TraversalDirection::Back(1),
+                                            ));
+                                        }
+                                        "FORWARD" => {
+                                            events.push(EmbedderEvent::Navigation(
+                                                id,
+                                                TraversalDirection::Forward(1),
+                                            ));
+                                        }
+                                        "REFRESH" => {
+                                            events.push(EmbedderEvent::Reload(id));
+                                        }
+                                        e => log::warn!("Verso Panel hasn't supported handling this prompt message yet: {e}")
+                                    }
+
+                                }
+                                let _ = sender.send(None);
+                            },
+                            _ => log::warn!("Verso Panel hasn't supported handling this prompt yet")
+                        },
                         e => {
                             log::warn!(
                                 "Verso Panel hasn't supported handling this message yet: {e:?}"
@@ -263,9 +302,13 @@ impl Window {
                             let size = self.window.inner_size();
                             let size = Size2D::new(size.width as i32, size.height as i32);
                             let mut rect = DeviceIntRect::from_size(size).to_f32();
-                            rect.min.y = rect.max.y / 10.;
+                            rect.min.y = 76.;
                             events.push(EmbedderEvent::FocusWebView(w));
                             events.push(EmbedderEvent::MoveResizeWebView(w, rect));
+                        }
+                        EmbedderMsg::AllowNavigationRequest(id, _url) => {
+                            // TODO should provide a API for users to check url
+                            events.push(EmbedderEvent::AllowNavigationResponse(id, true));
                         }
                         EmbedderMsg::WebViewClosed(_w) => {
                             self.webview = None;
@@ -366,13 +409,12 @@ impl Window {
         let _ = self.gl_window.rendering_context.resize(size.to_untyped());
         events.push(EmbedderEvent::WindowResize);
 
-        let mut rect = DeviceIntRect::from_size(size).to_f32();
-        rect.max.y /= 10.;
+        let rect = DeviceIntRect::from_size(size).to_f32();
         events.push(EmbedderEvent::MoveResizeWebView(self.panel.id(), rect));
 
         if let Some(w) = &self.webview {
             let mut rect = DeviceIntRect::from_size(size).to_f32();
-            rect.min.y = rect.max.y / 10.;
+            rect.min.y = 76.;
             events.push(EmbedderEvent::MoveResizeWebView(w.id(), rect));
         }
     }
