@@ -270,9 +270,15 @@ impl Window {
                                         "REFRESH" => {
                                             events.push(EmbedderEvent::Reload(id));
                                         }
+                                        "MINIMIZE" => {
+                                            self.window.set_minimized(true);
+                                        }
+                                        "MAXIMIZE" => {
+                                            let is_maximized = self.window.is_maximized();
+                                            self.window.set_maximized(!is_maximized);
+                                        }
                                         e => log::warn!("Verso Panel hasn't supported handling this prompt message yet: {e}")
                                     }
-
                                 }
                                 let _ = sender.send(None);
                             },
