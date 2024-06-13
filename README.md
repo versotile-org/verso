@@ -62,6 +62,10 @@ For others, please follow the instructions in [Servo book](https://book.servo.or
 cargo run
 ```
 
+## Nightly Release
+
+Nightly releases built with CrabNebula Cloud can be found at [releases](https://web.crabnebula.cloud/verso/verso-nightly/releases).
+
 ## Future Work
 
 - Add more window and servo features to make it feel more like a general web browser.
