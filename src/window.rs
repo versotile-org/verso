@@ -270,9 +270,15 @@ impl Window {
                                         "REFRESH" => {
                                             events.push(EmbedderEvent::Reload(id));
                                         }
+                                        "MINIMIZE" => {
+                                            self.window.set_minimized(true);
+                                        }
+                                        "MAXIMIZE" => {
+                                            let is_maximized = self.window.is_maximized();
+                                            self.window.set_maximized(!is_maximized);
+                                        }
                                         e => log::warn!("Verso Panel hasn't supported handling this prompt message yet: {e}")
                                     }
-
                                 }
                                 let _ = sender.send(None);
                             },
@@ -302,7 +308,7 @@ impl Window {
                             let size = self.window.inner_size();
                             let size = Size2D::new(size.width as i32, size.height as i32);
                             let mut rect = DeviceIntRect::from_size(size).to_f32();
-                            rect.min.y = 76.;
+                            rect.min.y = rect.max.y.min(76.);
                             events.push(EmbedderEvent::FocusWebView(w));
                             events.push(EmbedderEvent::MoveResizeWebView(w, rect));
                         }
@@ -414,7 +420,7 @@ impl Window {
 
         if let Some(w) = &self.webview {
             let mut rect = DeviceIntRect::from_size(size).to_f32();
-            rect.min.y = 76.;
+            rect.min.y = rect.max.y.min(76.);
             events.push(EmbedderEvent::MoveResizeWebView(w.id(), rect));
         }
     }
