@@ -31,7 +31,7 @@ scoop install git python llvm cmake curl
 - Install [Homebrew](https://brew.sh/) and then install other tools:
 
 ```sh
-brew install cmake pkg-config
+brew install cmake pkg-config harfbuzz
 ```
 
 ### Linux
