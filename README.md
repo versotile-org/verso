@@ -69,5 +69,6 @@ Nightly releases built with CrabNebula Cloud can be found at [releases](https://
 ## Future Work
 
 - Add more window and servo features to make it feel more like a general web browser.
-- Improve  development experience.
+- Improve development experience.
 - Multi webviews and multi browsing contexts in the same window.
+- Enable `Gstreamer` feature and remove `brew install harfbuzz` in README.
