@@ -220,7 +220,7 @@ impl Window {
                         }
                         EmbedderMsg::LoadComplete => {
                             need_present = true;
-                            let demo_url = ServoUrl::parse("https://versotile.org").unwrap();
+                            let demo_url = ServoUrl::parse("https://demo.versotile.org").unwrap();
                             let demo_id = TopLevelBrowsingContextId::new();
                             events.push(EmbedderEvent::NewWebView(demo_url, demo_id));
                         }
