@@ -220,8 +220,7 @@ impl Window {
                         }
                         EmbedderMsg::LoadComplete => {
                             need_present = true;
-                            let demo_path = std::env::current_dir().unwrap().join("resources/demo.html");
-                            let demo_url = ServoUrl::from_file_path(demo_path.to_str().unwrap()).unwrap();
+                            let demo_url = ServoUrl::parse("https://versotile.org").unwrap();
                             let demo_id = TopLevelBrowsingContextId::new();
                             events.push(EmbedderEvent::NewWebView(demo_url, demo_id));
                         }
