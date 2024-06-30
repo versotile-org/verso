@@ -22,9 +22,8 @@ targets = [
 [features]
 default = []
 
-
 [build-dependencies]
-cfg_aliases = "0.1"
+cfg_aliases = "0.2"
 
 [dependencies]
 owo-colors = "4.0"
@@ -44,7 +43,6 @@ cocoa = "0.25"
 core-graphics = "0.23"
 objc = "0.2"
 objc_id = "0.1"
-
 
 [[test]]
 name = "general"
