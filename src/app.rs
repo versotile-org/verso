@@ -20,7 +20,7 @@ pub enum Status {
     /// Nothing important to Verso at the moment.
     #[default]
     None,
-    /// One of webviews is animating.
+    /// One of the WebViews is animating.
     Animating,
     /// Verso has shut down.
     Shutdown,
@@ -35,7 +35,7 @@ pub struct Verso {
 }
 
 impl Verso {
-    /// Create an Verso instance from winit's window and event loop proxy.
+    /// Create a Verso instance from Winit's window and event loop proxy.
     pub fn new(window: WinitWindow, proxy: EventLoopProxy<()>) -> Self {
         resources::init();
         prefs::init();
@@ -71,7 +71,7 @@ impl Verso {
 
     /// Run an iteration of Verso handling cycle. An iteration will perform following actions:
     ///
-    /// - Hnadle Winit's event, create Servo's embedder event and push to Verso's event queue.
+    /// - Handle Winit's event, create Servo's embedder event and push to Verso's event queue.
     /// - Consume Servo's messages and then send all embedder events to Servo.
     /// - And the last step is returning the status of Verso.
     pub fn run(&mut self, event: Event<()>) -> Status {
@@ -82,7 +82,7 @@ impl Verso {
     }
 
     fn handle_winit_event(&mut self, event: Event<()>) {
-        log::trace!("Verso is creating ebedder event from: {event:?}");
+        log::trace!("Verso is creating embedder event from: {event:?}");
         match event {
             Event::Suspended => {
                 self.status = Status::None;
@@ -96,7 +96,7 @@ impl Verso {
             } => self
                 .window
                 .handle_winit_window_event(&mut self.servo, &mut self.events, &event),
-            e => log::warn!("Verso hasn't supported this event yet: {e:?}"),
+            e => log::warn!("Verso isn't supporting this event yet: {e:?}"),
         }
     }
 
@@ -127,18 +127,20 @@ impl Verso {
         }
     }
 
-    /// Helper method to access Servo instance. This can be used to check if Servo is shut down as well.
+    /// Helper method to access Servo instance.
+    ///
+    /// For instance, this could be used to check if Servo was shut down.
     pub fn servo(&mut self) -> &mut Option<Servo<GLWindow>> {
         &mut self.servo
     }
 
-    /// Tell Verso to shutdown Servo safely.
+    /// Tell Verso to shut down Servo safely.
     pub fn shutdown(&mut self) {
         self.events.push(EmbedderEvent::Quit);
     }
 }
 
-/// Embedder is required by Servo creation. Servo will use this type to wake up winit's event loop.
+/// Embedder is required by Servo creation. Servo will use this type to wake up Winit's event loop.
 #[derive(Debug, Clone)]
 struct Embedder(pub EventLoopProxy<()>);
 
