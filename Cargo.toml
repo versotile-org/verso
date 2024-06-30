@@ -8,9 +8,10 @@ edition = "2021"
 license = "Apache-2.0 OR MIT"
 description = "An innovative web browser"
 readme = "README.md"
-repository = "https://github.com/european-browser/verso"
-#documentation = "https://docs.rs/"
-categories = ["Web programming"]
+homepage = "https://versotile.org/verso"
+repository = "https://github.com/versotile-org/verso"
+documentation = "https://docs.versotile.org/verso"
+categories = ["web-programming"]
 
 [package.metadata.docs.rs]
 targets = [
