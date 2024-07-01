@@ -33,20 +33,20 @@ use crate::{
 
 /// A Verso window is a Winit window containing several web views.
 pub struct Window {
-    /// Access to winit window with webrender context.
+    /// Access to Winit window with webrender context.
     gl_window: Rc<GLWindow>,
     /// The main control panel of this window.
     panel: Panel,
-    /// The web view of this window.
+    /// The WebView of this window.
     webview: Option<WebView>,
-    /// Access to webrender gl
+    /// Access to webrender GL
     webrender_gl: Rc<dyn gl::Gl>,
     /// The mouse physical position in the web view.
     mouse_position: Cell<PhysicalPosition<f64>>,
 }
 
 impl Window {
-    /// Create a Verso window from winit window.
+    /// Create a Verso window from Winit window.
     pub fn new(window: WinitWindow) -> Self {
         let window_size = window.inner_size();
         let window_size = Size2D::new(window_size.width as i32, window_size.height as i32);
@@ -80,17 +80,17 @@ impl Window {
         }
     }
 
-    /// Set web view ID of this window.
+    /// Set WebView ID of this window.
     pub fn set_webview_id(&mut self, id: WebViewId) {
         self.panel.set_id(id);
     }
 
-    /// Return the reference counted GLWindow.
+    /// Return the reference counted `GLWindow`.
     pub fn gl_window(&self) -> Rc<GLWindow> {
         return self.gl_window.clone();
     }
 
-    /// Handle winit window event.
+    /// Handle Winit window event.
     pub fn handle_winit_window_event(
         &self,
         servo: &mut Option<Servo<GLWindow>>,
@@ -122,7 +122,7 @@ impl Window {
                     winit::event::MouseButton::Middle => servo::script_traits::MouseButton::Middle,
                     _ => {
                         log::warn!(
-                            "Verso Window hasn't supported this mouse button yet: {button:?}"
+                            "Verso Window isn't supporting this mouse button yet: {button:?}"
                         );
                         return;
                     }
@@ -138,7 +138,7 @@ impl Window {
                 };
                 events.push(EmbedderEvent::MouseWindowEventClass(event));
 
-                // winit didn't send click event, so we send it after mouse up
+                // Winit didn't send click event, so we send it after mouse up
                 if *state == ElementState::Released {
                     let event: MouseWindowEvent = MouseWindowEvent::Click(button, position);
                     events.push(EmbedderEvent::MouseWindowEventClass(event));
@@ -197,7 +197,7 @@ impl Window {
             WindowEvent::CloseRequested => {
                 events.push(EmbedderEvent::Quit);
             }
-            e => log::warn!("Verso Window hasn't supported this window event yet: {e:?}"),
+            e => log::warn!("Verso Window isn't supporting this window event yet: {e:?}"),
         }
     }
 
@@ -276,16 +276,16 @@ impl Window {
                                             let is_maximized = self.window.is_maximized();
                                             self.window.set_maximized(!is_maximized);
                                         }
-                                        e => log::warn!("Verso Panel hasn't supported handling this prompt message yet: {e}")
+                                        e => log::warn!("Verso Panel isn't supporting this prompt message yet: {e}")
                                     }
                                 }
                                 let _ = sender.send(None);
                             },
-                            _ => log::warn!("Verso Panel hasn't supported handling this prompt yet")
+                            _ => log::warn!("Verso Panel isn't supporting this prompt yet")
                         },
                         e => {
                             log::warn!(
-                                "Verso Panel hasn't supported handling this message yet: {e:?}"
+                                "Verso Panel isn't supporting this message yet: {e:?}"
                             )
                         }
                     }
@@ -323,7 +323,7 @@ impl Window {
                         }
                         e => {
                             log::warn!(
-                                "Verso WebView hasn't supported handling this message yet: {e:?}"
+                                "Verso WebView isn't supporting this message yet: {e:?}"
                             )
                         }
                     }
@@ -343,7 +343,7 @@ impl Window {
                         }
                         e => {
                             log::warn!(
-                                "Verso Window hasn't supported handling this message yet: {e:?}"
+                                "Verso Window isn't supporting handling this message yet: {e:?}"
                             )
                         }
                     }
@@ -354,7 +354,7 @@ impl Window {
         need_present
     }
 
-    /// Paint offscreen framebuffer to winit window.
+    /// Paint offscreen framebuffer to Winit window.
     pub fn paint(&self, servo: &mut Servo<GLWindow>) {
         if let Some(fbo) = servo.offscreen_framebuffer_id() {
             let viewport = self.gl_window.get_coordinates().get_flipped_viewport();
@@ -400,11 +400,12 @@ impl Window {
         }
     }
 
-    /// Queues a Winit's [`WindowEvent::RedrawRequested`] event to be emitted that aligns with the windowing system drawing loop.
+    /// Queues a Winit `WindowEvent::RedrawRequested` event to be emitted that aligns with the windowing system drawing loop.
     pub fn request_redraw(&self) {
         self.window.request_redraw()
     }
-    /// Check if window's web view is animating.
+
+    /// Check if WebView (`GLWindow`) is animating.
     pub fn is_animating(&self) -> bool {
         self.gl_window.is_animating()
     }
@@ -467,18 +468,18 @@ impl Window {
     }
 }
 
-/// A winit window with webrender rendering context.
+/// A Winit window with webrender rendering context.
 pub struct GLWindow {
     /// Access to webrender rendering context
     rendering_context: RenderingContext,
     /// Animation state set by Servo to indicate if the webview is still rendering.
     animation_state: Cell<AnimationState>,
-    /// Access to winit window
+    /// Access to Winit window
     window: WinitWindow,
 }
 
 impl GLWindow {
-    /// Create a web view from winit window.
+    /// Create a web view from Winit window.
     pub fn new(window: WinitWindow, rendering_context: RenderingContext) -> Self {
         Self {
             rendering_context,
@@ -487,7 +488,7 @@ impl GLWindow {
         }
     }
 
-    /// Check if web view is animating.
+    /// Check if WebView (`GLWindow`) is animating.
     pub fn is_animating(&self) -> bool {
         self.animation_state.get() == AnimationState::Animating
     }
