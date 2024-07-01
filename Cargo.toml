@@ -8,9 +8,10 @@ edition = "2021"
 license = "Apache-2.0 OR MIT"
 description = "An innovative web browser"
 readme = "README.md"
-repository = "https://github.com/european-browser/verso"
-#documentation = "https://docs.rs/"
-categories = ["Web programming"]
+homepage = "https://versotile.org/verso"
+repository = "https://github.com/versotile-org/verso"
+documentation = "https://docs.versotile.org/verso"
+categories = ["web-programming"]
 
 [package.metadata.docs.rs]
 targets = [
@@ -22,9 +23,8 @@ targets = [
 [features]
 default = []
 
-
 [build-dependencies]
-cfg_aliases = "0.1"
+cfg_aliases = "0.2"
 
 [dependencies]
 owo-colors = "4.0"
@@ -44,7 +44,6 @@ cocoa = "0.25"
 core-graphics = "0.23"
 objc = "0.2"
 objc_id = "0.1"
-
 
 [[test]]
 name = "general"

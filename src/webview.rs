@@ -10,7 +10,7 @@ pub struct WebView {
 }
 
 impl WebView {
-    /// Create a web view from winit window.
+    /// Create a web view from Winit window.
     pub fn new(id: WebViewId) -> Self {
         Self {
             id,
@@ -24,27 +24,27 @@ impl WebView {
         self.id
     }
 
-    /// Set the history URLs and current index of the webview
+    /// Set the history URLs and current index of the WebView
     pub fn set_history(&self, history: Vec<ServoUrl>, current: usize) {
         self.history.replace(history);
         self.current.replace(current);
     }
 }
 
-/// A panel is a special web view that focus on controlling states around window. It can be treatedd as
-/// the control panel or navigation bar of the window depending on usages.
+/// A panel is a special web view that focus on controlling states around window.
+/// It could be treated as the control panel or navigation bar of the window depending on usages.
 ///
 /// At the moment, following Web API is supported:
 /// - Close window: `window.close()`
 /// - Navigate to previous page: `window.prompt('PREV')`
 /// - Navigate to next page: `window.prompt('FORWARD')`
-/// - Refreash the page: `window.prompt('REFRESH')`
+/// - Refresh the page: `window.prompt('REFRESH')`
 pub struct Panel {
     id: Option<WebViewId>,
 }
 
 impl Panel {
-    /// Create a panel from winit window.
+    /// Create a panel from Winit window.
     pub fn new() -> Self {
         Self { id: None }
     }
