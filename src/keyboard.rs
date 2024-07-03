@@ -21,6 +21,7 @@ fn get_servo_key_from_winit_key(key: &LogicalKey) -> Key {
     // TODO: figure out how to map NavigateForward, NavigateBackward
     // TODO: map the remaining keys if possible
     match key {
+        LogicalKey::Character(c) => return Key::Character(c.to_string()),
         // printable: Key1 to Key0
         // printable: A to Z
         LogicalKey::Named(NamedKey::Escape) => Key::Escape,
