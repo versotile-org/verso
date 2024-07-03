@@ -44,7 +44,7 @@ macro_rules! __verso_test_internal_collect_test {
     ($name:expr) => {
         $crate::test::__private::VersoBasedTest {
             name: stringify!($name),
-            function: $crate::test::__private::TestFunction::Oneoff($name),
+            function: $crate::test::__private::TestFunction::OneOff($name),
         }
     };
 }
@@ -73,14 +73,14 @@ pub mod __private {
         code: i32,
     }
 
-    /// Run a set of tests using a `winit` context.
+    /// Run a set of tests using a Winit context.
     pub fn run(tests: &'static [VersoBasedTest], _ctx: Context) {
         // Create a new event loop and obtain a window target.
         let event_loop = EventLoop::new().expect("Failed to build event loop");
         let window = WindowBuilder::new()
             .with_visible(false)
             .build(&event_loop)
-            .expect("Failed to create winit window");
+            .expect("Failed to create Winit window");
         let mut verso = Verso::new(window, event_loop.create_proxy());
 
         println!("\nRunning {} tests...", tests.len());
@@ -105,7 +105,7 @@ pub mod __private {
             .expect("Event loop failed to run");
     }
 
-    /// Run a set of tests using a `winit` context.
+    /// Run a set of tests using a Winit context.
     fn run_internal(
         tests: &'static [VersoBasedTest],
         state: &mut State,
@@ -120,7 +120,7 @@ pub mod __private {
             print!("test {} ... ", test.name);
 
             match test.function {
-                TestFunction::Oneoff(f) => match catch_unwind(AssertUnwindSafe(move || f(elwt))) {
+                TestFunction::OneOff(f) => match catch_unwind(AssertUnwindSafe(move || f(elwt))) {
                     Ok(()) => {
                         println!("{}", "ok".green());
                         state.passed += 1;
@@ -172,6 +172,6 @@ pub mod __private {
     }
 
     pub enum TestFunction {
-        Oneoff(fn(&EventLoopWindowTarget<()>)),
+        OneOff(fn(&EventLoopWindowTarget<()>)),
     }
 }

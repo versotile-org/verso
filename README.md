@@ -1,8 +1,13 @@
 # Verso
 
+[![project chat](https://img.shields.io/badge/zulip-57a7ff?style=for-the-badge&labelColor=555555&logo=zulip)](https://versotile.zulipchat.com/)
+
 A web browser that plays old world blues to build new world hope.
 
-https://github.com/european-browser/verso/assets/8409985/a7a92fa4-5980-44d1-a9b5-81ff23c01ba6
+![](https://github.com/pewsheen/verso/assets/460329/7df44c7d-a4c5-4393-8378-a8b7bc438b03)
+
+Verso is a web browser built on top of Servo web engine. It's still under development. We dont' accept any feature request at the moment.
+But if you are interested, feel free to help test it.
 
 # Usage
 
@@ -26,7 +31,7 @@ scoop install git python llvm cmake curl
 - Install [Homebrew](https://brew.sh/) and then install other tools:
 
 ```sh
-brew install cmake pkg-config
+brew install cmake pkg-config harfbuzz
 ```
 
 ### Linux
@@ -47,7 +52,7 @@ libx11-dev libxcb-render0-dev libxcb-shape0-dev libxcb-xfixes0-dev \
 libxmu-dev libxmu6 libegl1-mesa-dev llvm-dev m4 xorg-dev
 ```
 
-For others, please follow the instructions in [Servo's wiki](https://github.com/servo/servo/wiki/Building) to bootstrap first.
+For others, please follow the instructions in [Servo book](https://book.servo.org/hacking/setting-up-your-environment.html#tools-for-linux) to bootstrap first.
 
 ## Build
 
@@ -57,14 +62,13 @@ For others, please follow the instructions in [Servo's wiki](https://github.com/
 cargo run
 ```
 
-- Or if you are using Nix or NixOS, add `wayland` and `libGL` to `LD_LIBRARY_PATH` in `../servo/etc/shell.nix`
+## Nightly Release
 
-```
-nix-shell ../servo/etc/shell.nix --run 'cargo run'
-```
+Nightly releases built with CrabNebula Cloud can be found at [releases](https://web.crabnebula.cloud/verso/verso-nightly/releases).
 
 ## Future Work
 
 - Add more window and servo features to make it feel more like a general web browser.
-- Improve  development experience.
+- Improve development experience.
 - Multi webviews and multi browsing contexts in the same window.
+- Enable `Gstreamer` feature and remove `brew install harfbuzz` in README.

@@ -1,6 +1,7 @@
 //! Verso Web Browser
 //!
-//! This is the documentation of Verso's types and items. See [Github page](https://github.com/european-browser/verso) for more general introduction.
+//! This is the documentation of Verso's types and items.
+//! See [GitHub repository](https://github.com/versotile-org/verso) for more general introduction.
 
 #![deny(missing_docs)]
 
@@ -14,12 +15,14 @@ pub mod keyboard;
 pub mod prefs;
 /// Utilities to access resource files
 pub mod resources;
-/// Utilities to write tests.
-pub mod test;
-/// Web view types to handle web browsing contexts and window.
+/// Web view types to handle web browsing contexts.
 pub mod webview;
+/// Verso's window types to handle Winit's window.
+pub mod window;
+/// Utilities to write tests.
+// pub mod test;
 
 pub use app::{Status, Verso};
 pub use errors::{Error, Result};
-/// Re-exporting `winit` for the sake of convenience.
+/// Re-exporting Winit for the sake of convenience.
 pub use winit;

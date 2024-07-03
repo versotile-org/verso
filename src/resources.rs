@@ -28,6 +28,9 @@ impl ResourceReaderMethods for ResourceReader {
             Resource::MediaControlsCSS => &include_bytes!("../resources/media-controls.css")[..],
             Resource::MediaControlsJS => &include_bytes!("../resources/media-controls.js")[..],
             Resource::CrashHTML => &include_bytes!("../resources/crash.html")[..],
+            Resource::DirectoryListingHTML => {
+                &include_bytes!("../resources/directory-listing.html")[..]
+            }
         }
         .to_owned()
     }
