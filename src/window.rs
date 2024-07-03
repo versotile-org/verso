@@ -201,8 +201,6 @@ impl Window {
             WindowEvent::CloseRequested => {
                 events.push(EmbedderEvent::Quit);
             }
-            // TODO ModifiersChanged and KeyboardInput handling is temporary here. This will be
-            // refactored after multiview.
             WindowEvent::ModifiersChanged(modifier) => self.modifiers_state.set(modifier.state()),
             WindowEvent::KeyboardInput { event, .. } => {
                 let event = keyboard_event_from_winit(&event, self.modifiers_state.get());
@@ -232,6 +230,7 @@ impl Window {
                         }
                         EmbedderMsg::LoadComplete => {
                             need_present = true;
+                            let demo_url = ServoUrl::parse("https://keyboard-test.space").unwrap();
                             let demo_url = ServoUrl::parse("https://demo.versotile.org").unwrap();
                             let demo_id = TopLevelBrowsingContextId::new();
                             events.push(EmbedderEvent::NewWebView(demo_url, demo_id));
