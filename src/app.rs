@@ -7,12 +7,7 @@ use servo::{
     servo_url::ServoUrl,
     Servo,
 };
-use winit::{
-    event::{Event, WindowEvent},
-    event_loop::{ControlFlow, EventLoopProxy, EventLoopWindowTarget},
-    window::CursorIcon,
-    window::Window as WinitWindow,
-};
+use winit::{event::Event, event_loop::EventLoopProxy, window::Window as WinitWindow};
 
 use crate::{
     prefs, resources,
