@@ -74,6 +74,7 @@ jobs:
           cp {docs/,}index.html
           rm -r docs/*
           mv index.html docs/
+          cp CNAME docs/
 
       - name: Download `doc`
         uses: actions/download-artifact@v4
