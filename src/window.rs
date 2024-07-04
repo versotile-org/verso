@@ -264,30 +264,36 @@ impl Window {
                             ) => {
                                 if let Some(webview) = &self.webview {
                                     let id = webview.id();
-                                    match msg.as_str() {
-                                        "PREV" => {
-                                            events.push(EmbedderEvent::Navigation(
-                                                id,
-                                                TraversalDirection::Back(1),
-                                            ));
+
+                                    if msg.starts_with("NAVIGATE_TO:") {
+                                        let url = ServoUrl::parse(msg.strip_prefix("NAVIGATE_TO:").unwrap()).unwrap();
+                                        events.push(EmbedderEvent::LoadUrl(id, url));
+                                    } else {
+                                        match msg.as_str() {
+                                            "PREV" => {
+                                                events.push(EmbedderEvent::Navigation(
+                                                    id,
+                                                    TraversalDirection::Back(1),
+                                                ));
+                                            }
+                                            "FORWARD" => {
+                                                events.push(EmbedderEvent::Navigation(
+                                                    id,
+                                                    TraversalDirection::Forward(1),
+                                                ));
+                                            }
+                                            "REFRESH" => {
+                                                events.push(EmbedderEvent::Reload(id));
+                                            }
+                                            "MINIMIZE" => {
+                                                self.window.set_minimized(true);
+                                            }
+                                            "MAXIMIZE" => {
+                                                let is_maximized = self.window.is_maximized();
+                                                self.window.set_maximized(!is_maximized);
+                                            }
+                                            e => log::warn!("Verso Panel isn't supporting this prompt message yet: {e}")
                                         }
-                                        "FORWARD" => {
-                                            events.push(EmbedderEvent::Navigation(
-                                                id,
-                                                TraversalDirection::Forward(1),
-                                            ));
-                                        }
-                                        "REFRESH" => {
-                                            events.push(EmbedderEvent::Reload(id));
-                                        }
-                                        "MINIMIZE" => {
-                                            self.window.set_minimized(true);
-                                        }
-                                        "MAXIMIZE" => {
-                                            let is_maximized = self.window.is_maximized();
-                                            self.window.set_maximized(!is_maximized);
-                                        }
-                                        e => log::warn!("Verso Panel isn't supporting this prompt message yet: {e}")
                                     }
                                 }
                                 let _ = sender.send(None);
