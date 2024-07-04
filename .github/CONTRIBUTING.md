@@ -1,13 +1,13 @@
 # Contributing Guide
 
-Hi! We, the maintainers, are really excited that you are interested in contributing to Verso. Before submitting your contribution though, please make sure to take a moment and read through the [Code of Conduct](CODE_OF_CONDUCT.md), as well as the appropriate section for the contribution you intend to make:
+Hello! We, the maintainers, are very pleased that you are interested in contributing to Verso. However, before you submit your contribution, please take a moment to read the [Code of Conduct](CODE_OF_CONDUCT.md) and the appropriate section for the contribution you plan to make:
 
 - [Issue Reporting Guidelines](#issue-reporting-guidelines)
 - [Pull Request Guidelines](#pull-request-guidelines)
 
 ## Issue Reporting Guidelines
 
-- The issue list of this repo is **exclusively** for bug reports and feature requests. Non-conforming issues will be closed immediately.
+- The issue list on this repo is **exclusively** for bug reports and feature requests. Non-conforming issues will be closed immediately.
 
 - If you have a question, you can get quick answers from the [Verso Zulip](https://versotile.zulipchat.com/).
 
@@ -29,9 +29,9 @@ Hi! We, the maintainers, are really excited that you are interested in contribut
 
 - It's OK to have multiple small commits as you work on the PR - we will let GitHub automatically squash it before merging.
 
-- If adding new feature:
+- If adding a new feature:
 
-  - Provide convincing reason to add this feature. Ideally you should open a suggestion issue first and have it greenlighted before working on it.
+  - Provide a convincing reason to add this feature. Ideally you should open a suggestion issue first and have it greenlighted before working on it.
 
 - If fixing a bug:
   - If you are resolving a special issue, add `(fix: #xxxx[,#xxx])` (#xxxx is the issue id) in your PR title for a better release log, e.g. `fix: update entities encoding/decoding (fix #3899)`.
