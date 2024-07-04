@@ -47,6 +47,7 @@ pub struct Window {
     webrender_gl: Rc<dyn gl::Gl>,
     /// The mouse physical position in the web view.
     mouse_position: Cell<PhysicalPosition<f64>>,
+    /// Modifiers state of the keyboard.
     modifiers_state: Cell<ModifiersState>,
     /// The clipboard. `None` if the platform or desktop environment is not support.
     clipboard: Option<Clipboard>,
