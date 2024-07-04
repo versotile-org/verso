@@ -39,6 +39,9 @@ impl WebView {
 /// - Navigate to previous page: `window.prompt('PREV')`
 /// - Navigate to next page: `window.prompt('FORWARD')`
 /// - Refresh the page: `window.prompt('REFRESH')`
+/// - Minimize the window: `window.prompt('MINIMIZE')`
+/// - Maximize the window: `window.prompt('MAXIMIZE')`
+/// - Navigate to a specific URL: `window.prompt('NAVIGATE_TO:${url}')`
 pub struct Panel {
     id: Option<WebViewId>,
 }
