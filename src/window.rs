@@ -31,6 +31,8 @@ use crate::{
     Status,
 };
 
+use arboard::Clipboard;
+
 /// A Verso window is a Winit window containing several web views.
 pub struct Window {
     /// Access to Winit window with webrender context.
@@ -43,6 +45,8 @@ pub struct Window {
     webrender_gl: Rc<dyn gl::Gl>,
     /// The mouse physical position in the web view.
     mouse_position: Cell<PhysicalPosition<f64>>,
+    /// The clipboard. `None` if the platform or desktop environment is not support.
+    clipboard: Option<Clipboard>,
 }
 
 impl Window {
@@ -77,6 +81,13 @@ impl Window {
             webview: None,
             webrender_gl,
             mouse_position: Cell::new(PhysicalPosition::default()),
+            clipboard: match Clipboard::new() {
+                Ok(clipboard) => Some(clipboard),
+                Err(e) => {
+                    log::warn!("Failed to create clipboard: {}", e);
+                    None
+                }
+            },
         }
     }
 
@@ -210,6 +221,36 @@ impl Window {
     ) -> bool {
         let mut need_present = false;
         servo.get_events().into_iter().for_each(|(w, m)| {
+
+            // Handle Window-wise Events
+            match &m {
+                EmbedderMsg::GetClipboardContents(sender) => {
+                    if let Some(clipboard) = self.clipboard.as_mut() {
+                        let contents = clipboard.get_text().unwrap_or_else(|e| {
+                            log::warn!("Failed to get clipboard content: {}", e);
+                            String::new()
+                        });
+                        if let Err(e) = sender.send(contents) {
+                            log::warn!("Failed to send clipboard content: {}", e);
+                        }
+                    } else {
+                        log::trace!("Clipboard is not supported on this platform.");
+                    }
+                    return
+                },
+                EmbedderMsg::SetClipboardContents(text) => {
+                    if let Some(clipboard) = self.clipboard.as_mut() {
+                        if let Err(e) = clipboard.set_text(text) {
+                            log::warn!("Failed to set clipboard contents: {}", e);
+                        }
+                    } else {
+                        log::trace!("Clipboard is not supported on this platform.");
+                    }
+                    return
+                },
+                _ => ()
+            }
+
             match w {
                 // Handle message in Verso Panel
                 Some(p) if p == self.panel.id() => {
