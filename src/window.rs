@@ -23,10 +23,12 @@ use surfman::{Connection, GLApi, SurfaceType};
 use winit::{
     dpi::PhysicalPosition,
     event::{ElementState, TouchPhase, WindowEvent},
+    keyboard::ModifiersState,
     window::{CursorIcon, Window as WinitWindow},
 };
 
 use crate::{
+    keyboard::keyboard_event_from_winit,
     webview::{Panel, WebView},
     Status,
 };
@@ -45,6 +47,7 @@ pub struct Window {
     webrender_gl: Rc<dyn gl::Gl>,
     /// The mouse physical position in the web view.
     mouse_position: Cell<PhysicalPosition<f64>>,
+    modifiers_state: Cell<ModifiersState>,
     /// The clipboard. `None` if the platform or desktop environment is not support.
     clipboard: Option<Clipboard>,
 }
@@ -81,6 +84,7 @@ impl Window {
             webview: None,
             webrender_gl,
             mouse_position: Cell::new(PhysicalPosition::default()),
+            modifiers_state: Cell::new(ModifiersState::default()),
             clipboard: match Clipboard::new() {
                 Ok(clipboard) => Some(clipboard),
                 Err(e) => {
@@ -208,6 +212,12 @@ impl Window {
             WindowEvent::CloseRequested => {
                 events.push(EmbedderEvent::Quit);
             }
+            WindowEvent::ModifiersChanged(modifier) => self.modifiers_state.set(modifier.state()),
+            WindowEvent::KeyboardInput { event, .. } => {
+                let event = keyboard_event_from_winit(&event, self.modifiers_state.get());
+                log::trace!("Verso is handling {:?}", event);
+                events.push(EmbedderEvent::Keyboard(event));
+            }
             e => log::warn!("Verso Window isn't supporting this window event yet: {e:?}"),
         }
     }
@@ -261,7 +271,8 @@ impl Window {
                         }
                         EmbedderMsg::LoadComplete => {
                             need_present = true;
-                            let demo_url = ServoUrl::parse("https://demo.versotile.org").unwrap();
+                            // let demo_url = ServoUrl::parse("https://demo.versotile.org").unwrap();
+                            let demo_url = ServoUrl::parse("https://keyboard-test.space").unwrap();
                             let demo_id = TopLevelBrowsingContextId::new();
                             events.push(EmbedderEvent::NewWebView(demo_url, demo_id));
                         }
