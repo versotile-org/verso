@@ -9,15 +9,14 @@ use servo::{
     embedder_traits::{Cursor, EmbedderMsg},
     euclid::{Point2D, Scale, Size2D},
     gl,
-    script_traits::{TouchEventType, TraversalDirection, WheelDelta, WheelMode},
+    script_traits::{TouchEventType, WheelDelta, WheelMode},
     style_traits::DevicePixel,
-    url::ServoUrl,
     webrender_api::{
         units::{DeviceIntPoint, DeviceIntRect, DevicePoint, LayoutVector2D},
         ScrollLocation,
     },
     webrender_traits::RenderingContext,
-    Servo, TopLevelBrowsingContextId,
+    Servo,
 };
 use surfman::{Connection, GLApi, SurfaceType};
 use winit::{
@@ -38,11 +37,11 @@ use arboard::Clipboard;
 /// A Verso window is a Winit window containing several web views.
 pub struct Window {
     /// Access to Winit window with webrender context.
-    gl_window: Rc<GLWindow>,
+    pub(crate) gl_window: Rc<GLWindow>,
     /// The main control panel of this window.
-    panel: Panel,
+    pub(crate) panel: Panel,
     /// The WebView of this window.
-    webview: Option<WebView>,
+    pub(crate) webview: Option<WebView>,
     /// Access to webrender GL
     webrender_gl: Rc<dyn gl::Gl>,
     /// The mouse physical position in the web view.
@@ -220,182 +219,30 @@ impl Window {
         servo: &mut Servo<GLWindow>,
         events: &mut Vec<EmbedderEvent>,
         status: &mut Status,
-        clipboard: &mut Option<Clipboard>,
+        clipboard: &mut Clipboard,
     ) -> bool {
         let mut need_present = false;
         servo.get_events().into_iter().for_each(|(w, m)| {
             match w {
                 // Handle message in Verso Panel
                 Some(p) if p == self.panel.id() => {
-                    log::trace!("Verso Panel {p:?} is handling servo message: {m:?}",);
-                    match m {
-                        EmbedderMsg::LoadStart | EmbedderMsg::HeadParsed => {
-                            need_present = false;
-                        }
-                        EmbedderMsg::LoadComplete => {
-                            need_present = true;
-                            // let demo_url = ServoUrl::parse("https://demo.versotile.org").unwrap();
-                            let demo_url = ServoUrl::parse("https://keyboard-test.space").unwrap();
-                            let demo_id = TopLevelBrowsingContextId::new();
-                            events.push(EmbedderEvent::NewWebView(demo_url, demo_id));
-                        }
-                        EmbedderMsg::AllowNavigationRequest(id, _url) => {
-                            // The panel shouldn't navigate to other pages.
-                            events.push(EmbedderEvent::AllowNavigationResponse(id, false));
-                        }
-                        EmbedderMsg::WebViewOpened(w) => {
-                            let size = self.window.inner_size();
-                            let size = Size2D::new(size.width as i32, size.height as i32);
-                            let rect = DeviceIntRect::from_size(size).to_f32();
-                            events.push(EmbedderEvent::FocusWebView(w));
-                            events.push(EmbedderEvent::MoveResizeWebView(w, rect));
-                        }
-                        EmbedderMsg::WebViewClosed(_w) => {
-                            events.push(EmbedderEvent::Quit);
-                        }
-                        EmbedderMsg::WebViewFocused(w) => {
-                            events.push(EmbedderEvent::ShowWebView(w, false));
-                        }
-                        EmbedderMsg::HistoryChanged(..)
-                        | EmbedderMsg::ChangePageTitle(..) => {
-                            log::trace!("Verso Panel ignores this message: {m:?}")
-                        }
-                        EmbedderMsg::Prompt(definition, _origin) => match definition {
-                            servo::embedder_traits::PromptDefinition::Input(
-                                msg,
-                                _defaut,
-                                sender,
-                            ) => {
-                                if let Some(webview) = &self.webview {
-                                    let id = webview.id();
-
-                                    if msg.starts_with("NAVIGATE_TO:") {
-                                        let url = ServoUrl::parse(msg.strip_prefix("NAVIGATE_TO:").unwrap()).unwrap();
-                                        events.push(EmbedderEvent::LoadUrl(id, url));
-                                    } else {
-                                        match msg.as_str() {
-                                            "PREV" => {
-                                                events.push(EmbedderEvent::Navigation(
-                                                    id,
-                                                    TraversalDirection::Back(1),
-                                                ));
-                                            }
-                                            "FORWARD" => {
-                                                events.push(EmbedderEvent::Navigation(
-                                                    id,
-                                                    TraversalDirection::Forward(1),
-                                                ));
-                                            }
-                                            "REFRESH" => {
-                                                events.push(EmbedderEvent::Reload(id));
-                                            }
-                                            "MINIMIZE" => {
-                                                self.window.set_minimized(true);
-                                            }
-                                            "MAXIMIZE" => {
-                                                let is_maximized = self.window.is_maximized();
-                                                self.window.set_maximized(!is_maximized);
-                                            }
-                                            e => log::warn!("Verso Panel isn't supporting this prompt message yet: {e}")
-                                        }
-                                    }
-                                }
-                                let _ = sender.send(None);
-                            },
-                            _ => log::warn!("Verso Panel isn't supporting this prompt yet")
-                        },
-                        EmbedderMsg::GetClipboardContents(sender) => {
-                            let contents = match clipboard.as_mut() {
-                                Some(clipboard) => clipboard.get_text().unwrap_or_else(|e| {
-                                    log::warn!("Failed to get clipboard content: {}", e);
-                                    String::new()
-                                }),
-                                None => {
-                                    log::trace!("Clipboard is not supported on this platform.");
-                                    String::new()
-                                }
-                            };
-                            if let Err(e) = sender.send(contents) {
-                                log::warn!("Failed to send clipboard content: {}", e);
-                            }
-                        },
-                        EmbedderMsg::SetClipboardContents(text) => {
-                            if let Some(clipboard) = clipboard.as_mut() {
-                                if let Err(e) = clipboard.set_text(text) {
-                                    log::warn!("Failed to set clipboard contents: {}", e);
-                                }
-                            } else {
-                                log::trace!("Clipboard is not supported on this platform.");
-                            }
-                        },
-                        e => {
-                            log::warn!(
-                                "Verso Panel isn't supporting this message yet: {e:?}"
-                            )
-                        }
-                    }
+                    self.handle_servo_messages_with_panel(
+                        events,
+                        clipboard,
+                        p,
+                        m,
+                        &mut need_present,
+                    );
                 }
                 // Handle message in Verso WebView
                 Some(w) => {
-                    log::trace!("Verso WebView {w:?} is handling servo message: {m:?}",);
-                    match m {
-                        EmbedderMsg::LoadStart | EmbedderMsg::HeadParsed => {
-                            need_present = false;
-                        }
-                        EmbedderMsg::LoadComplete => {
-                            need_present = true;
-                        }
-                        EmbedderMsg::WebViewOpened(w) => {
-                            let webview = WebView::new(w);
-                            self.webview = Some(webview);
-
-                            let size = self.window.inner_size();
-                            let size = Size2D::new(size.width as i32, size.height as i32);
-                            let mut rect = DeviceIntRect::from_size(size).to_f32();
-                            rect.min.y = rect.max.y.min(76.);
-                            events.push(EmbedderEvent::FocusWebView(w));
-                            events.push(EmbedderEvent::MoveResizeWebView(w, rect));
-                        }
-                        EmbedderMsg::AllowNavigationRequest(id, _url) => {
-                            // TODO should provide a API for users to check url
-                            events.push(EmbedderEvent::AllowNavigationResponse(id, true));
-                        }
-                        EmbedderMsg::WebViewClosed(_w) => {
-                            self.webview = None;
-                        }
-                        EmbedderMsg::WebViewFocused(w) => {
-                            events.push(EmbedderEvent::ShowWebView(w, false));
-                        }
-                        EmbedderMsg::GetClipboardContents(sender) => {
-                            let contents = match clipboard.as_mut() {
-                                Some(clipboard) => clipboard.get_text().unwrap_or_else(|e| {
-                                    log::warn!("Failed to get clipboard content: {}", e);
-                                    String::new()
-                                }),
-                                None => {
-                                    log::trace!("Clipboard is not supported on this platform.");
-                                    String::new()
-                                }
-                            };
-                            if let Err(e) = sender.send(contents) {
-                                log::warn!("Failed to send clipboard content: {}", e);
-                            }
-                        },
-                        EmbedderMsg::SetClipboardContents(text) => {
-                            if let Some(clipboard) = clipboard.as_mut() {
-                                if let Err(e) = clipboard.set_text(text) {
-                                    log::warn!("Failed to set clipboard contents: {}", e);
-                                }
-                            } else {
-                                log::trace!("Clipboard is not supported on this platform.");
-                            }
-                        },
-                        e => {
-                            log::warn!(
-                                "Verso WebView isn't supporting this message yet: {e:?}"
-                            )
-                        }
-                    }
+                    self.handle_servo_messages_with_webview(
+                        events,
+                        clipboard,
+                        w,
+                        m,
+                        &mut need_present,
+                    );
                 }
                 // Handle message in Verso Window
                 None => {
@@ -544,7 +391,7 @@ pub struct GLWindow {
     /// Animation state set by Servo to indicate if the webview is still rendering.
     animation_state: Cell<AnimationState>,
     /// Access to Winit window
-    window: WinitWindow,
+    pub(crate) window: WinitWindow,
 }
 
 impl GLWindow {

@@ -33,8 +33,7 @@ pub struct Verso {
     window: Window,
     events: Vec<EmbedderEvent>,
     status: Status,
-    /// The clipboard. `None` if the platform or desktop environment is not support.
-    clipboard: Option<Clipboard>,
+    clipboard: Clipboard,
 }
 
 impl Verso {
@@ -69,7 +68,8 @@ impl Verso {
             window,
             events: vec![],
             status: Status::None,
-            clipboard: None,
+            clipboard: Clipboard::new()
+                .expect("Clipboard isn't supported in this platform or desktop environment."),
         }
     }
 

@@ -21,7 +21,6 @@ pub mod webview;
 pub mod window;
 /// Utilities to write tests.
 // pub mod test;
-
 pub use app::{Status, Verso};
 pub use errors::{Error, Result};
 /// Re-exporting Winit for the sake of convenience.
