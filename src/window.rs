@@ -33,6 +33,8 @@ use crate::{
     Status,
 };
 
+use arboard::Clipboard;
+
 /// A Verso window is a Winit window containing several web views.
 pub struct Window {
     /// Access to Winit window with webrender context.
@@ -45,6 +47,7 @@ pub struct Window {
     webrender_gl: Rc<dyn gl::Gl>,
     /// The mouse physical position in the web view.
     mouse_position: Cell<PhysicalPosition<f64>>,
+    /// Modifiers state of the keyboard.
     modifiers_state: Cell<ModifiersState>,
 }
 
@@ -217,6 +220,7 @@ impl Window {
         servo: &mut Servo<GLWindow>,
         events: &mut Vec<EmbedderEvent>,
         status: &mut Status,
+        clipboard: &mut Option<Clipboard>,
     ) -> bool {
         let mut need_present = false;
         servo.get_events().into_iter().for_each(|(w, m)| {
@@ -300,6 +304,30 @@ impl Window {
                             },
                             _ => log::warn!("Verso Panel isn't supporting this prompt yet")
                         },
+                        EmbedderMsg::GetClipboardContents(sender) => {
+                            let contents = match clipboard.as_mut() {
+                                Some(clipboard) => clipboard.get_text().unwrap_or_else(|e| {
+                                    log::warn!("Failed to get clipboard content: {}", e);
+                                    String::new()
+                                }),
+                                None => {
+                                    log::trace!("Clipboard is not supported on this platform.");
+                                    String::new()
+                                }
+                            };
+                            if let Err(e) = sender.send(contents) {
+                                log::warn!("Failed to send clipboard content: {}", e);
+                            }
+                        },
+                        EmbedderMsg::SetClipboardContents(text) => {
+                            if let Some(clipboard) = clipboard.as_mut() {
+                                if let Err(e) = clipboard.set_text(text) {
+                                    log::warn!("Failed to set clipboard contents: {}", e);
+                                }
+                            } else {
+                                log::trace!("Clipboard is not supported on this platform.");
+                            }
+                        },
                         e => {
                             log::warn!(
                                 "Verso Panel isn't supporting this message yet: {e:?}"
@@ -338,6 +366,30 @@ impl Window {
                         EmbedderMsg::WebViewFocused(w) => {
                             events.push(EmbedderEvent::ShowWebView(w, false));
                         }
+                        EmbedderMsg::GetClipboardContents(sender) => {
+                            let contents = match clipboard.as_mut() {
+                                Some(clipboard) => clipboard.get_text().unwrap_or_else(|e| {
+                                    log::warn!("Failed to get clipboard content: {}", e);
+                                    String::new()
+                                }),
+                                None => {
+                                    log::trace!("Clipboard is not supported on this platform.");
+                                    String::new()
+                                }
+                            };
+                            if let Err(e) = sender.send(contents) {
+                                log::warn!("Failed to send clipboard content: {}", e);
+                            }
+                        },
+                        EmbedderMsg::SetClipboardContents(text) => {
+                            if let Some(clipboard) = clipboard.as_mut() {
+                                if let Err(e) = clipboard.set_text(text) {
+                                    log::warn!("Failed to set clipboard contents: {}", e);
+                                }
+                            } else {
+                                log::trace!("Clipboard is not supported on this platform.");
+                            }
+                        },
                         e => {
                             log::warn!(
                                 "Verso WebView isn't supporting this message yet: {e:?}"

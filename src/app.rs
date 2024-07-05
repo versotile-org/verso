@@ -1,3 +1,4 @@
+use arboard::Clipboard;
 use servo::{
     compositing::{
         windowing::{EmbedderEvent, EmbedderMethods},
@@ -32,6 +33,8 @@ pub struct Verso {
     window: Window,
     events: Vec<EmbedderEvent>,
     status: Status,
+    /// The clipboard. `None` if the platform or desktop environment is not support.
+    clipboard: Option<Clipboard>,
 }
 
 impl Verso {
@@ -66,6 +69,7 @@ impl Verso {
             window,
             events: vec![],
             status: Status::None,
+            clipboard: None,
         }
     }
 
@@ -105,9 +109,12 @@ impl Verso {
             return;
         };
 
-        let need_present =
-            self.window
-                .handle_servo_messages(servo, &mut self.events, &mut self.status);
+        let need_present = self.window.handle_servo_messages(
+            servo,
+            &mut self.events,
+            &mut self.status,
+            &mut self.clipboard,
+        );
 
         log::trace!("Verso is handling embedder events: {:?}", self.events);
         if servo.handle_events(self.events.drain(..)) {
