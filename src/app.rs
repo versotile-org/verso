@@ -11,7 +11,7 @@ use servo::{
 use winit::{event::Event, event_loop::EventLoopProxy, window::Window as WinitWindow};
 
 use crate::{
-    config,
+    config::Config,
     window::{GLWindow, Window},
 };
 
@@ -38,8 +38,8 @@ pub struct Verso {
 
 impl Verso {
     /// Create a Verso instance from Winit's window and event loop proxy.
-    pub fn new(window: WinitWindow, proxy: EventLoopProxy<()>) -> Self {
-        config::init();
+    pub fn new(window: WinitWindow, proxy: EventLoopProxy<()>, config: Config) -> Self {
+        config.init();
 
         let mut window = Window::new(window);
         let callback = Box::new(Embedder(proxy));
