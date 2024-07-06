@@ -7,14 +7,12 @@
 
 /// Main entry types and functions.
 pub mod app;
+/// Utilities to read options and preferences.
+pub mod config;
 /// Error and result types.
 pub mod errors;
 /// Utilities to handle keyboard inputs and states.
 pub mod keyboard;
-/// Utilities to read options and preferences.
-pub mod prefs;
-/// Utilities to access resource files
-pub mod resources;
 /// Web view types to handle web browsing contexts.
 pub mod webview;
 /// Verso's window types to handle Winit's window.
