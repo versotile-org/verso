@@ -4,7 +4,7 @@ use arboard::Clipboard;
 use servo::{
     base::id::WebViewId,
     compositing::windowing::EmbedderEvent,
-    embedder_traits::{EmbedderMsg, PromptDefinition},
+    embedder_traits::{CompositorEventVariant, EmbedderMsg, PromptDefinition},
     euclid::Size2D,
     script_traits::TraversalDirection,
     url::ServoUrl,
@@ -101,7 +101,13 @@ impl Window {
                         e
                     );
                 }
-            }
+            },
+            EmbedderMsg::EventDelivered(event) => {
+                if let CompositorEventVariant::MouseButtonEvent = event {
+                    events.push(EmbedderEvent::RaiseWebViewToTop(w, false));
+                    events.push(EmbedderEvent::FocusWebView(w));
+                } 
+            },
             e => {
                 log::warn!("Verso WebView isn't supporting this message yet: {e:?}")
             }
