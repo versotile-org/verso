@@ -32,10 +32,10 @@ log = "0.4"
 thiserror = "1.0"
 raw-window-handle = { version = "0.5", features = ["std"] }
 # Servo
-libservo = { git = "https://github.com/servo/servo.git", rev = "db4cba4", features = ["max_log_level", "native-bluetooth", "webdriver"] }
+libservo = { git = "https://github.com/servo/servo.git", rev = "968474a", features = ["max_log_level", "native-bluetooth", "webdriver"] }
 crossbeam-channel = "0.5"
 getopts = "0.2.17"
-surfman = { version = "0.9", features = ["chains", "sm-angle-default", "sm-raw-window-handle"] }
+surfman = { version = "0.9", features = ["chains", "sm-raw-window-handle"] }
 winit = { version = "0.29", features = ["rwh_05"] }
 arboard = "3.4.0"
 
