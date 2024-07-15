@@ -18,8 +18,13 @@ use raw_window_handle::{AppKitWindowHandle, HasRawWindowHandle, RawWindowHandle}
 use winit::dpi::LogicalPosition;
 #[cfg(macos)]
 use winit::platform::macos::WindowBuilderExtMacOS;
+#[cfg(target_os = "windows")]
+use surfman::declare_surfman;
 
 fn main() -> Result<()> {
+    // XXX: Toggle this with future feature flag change
+    #[cfg(target_os = "windows")]
+    declare_surfman!();
     let event_loop = EventLoop::new()?;
     event_loop.listen_device_events(DeviceEvents::Never);
     let window = WindowBuilder::new()
