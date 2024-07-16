@@ -5773,6 +5773,7 @@ dependencies = [
  "compositing_traits",
  "core-graphics 0.23.2",
  "crossbeam-channel",
+ "env_logger",
  "getopts",
  "libservo",
  "log",
