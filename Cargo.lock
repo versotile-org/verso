@@ -5770,6 +5770,7 @@ dependencies = [
  "block",
  "cfg_aliases 0.2.1",
  "cocoa 0.25.0",
+ "compositing_traits",
  "core-graphics 0.23.2",
  "crossbeam-channel",
  "getopts",
@@ -5779,8 +5780,12 @@ dependencies = [
  "objc_id",
  "owo-colors",
  "raw-window-handle 0.5.2",
+ "sparkle",
  "surfman",
  "thiserror",
+ "webdriver_server",
+ "webrender",
+ "webxr",
  "winit",
 ]
 

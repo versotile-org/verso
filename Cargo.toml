@@ -33,6 +33,11 @@ thiserror = "1.0"
 raw-window-handle = { version = "0.5", features = ["std"] }
 # Servo
 libservo = { git = "https://github.com/servo/servo.git", rev = "968474a", features = ["max_log_level", "native-bluetooth", "webdriver"] }
+compositing_traits = { git = "https://github.com/servo/servo.git", rev = "968474a" }
+webdriver_server = { git = "https://github.com/servo/servo.git", rev = "968474a" }
+webrender = { git = "https://github.com/servo/webrender", branch = "0.64", features = ["capture"] }
+sparkle = "0.1.26"
+webxr = { git = "https://github.com/servo/webxr", features = ["headless"] }
 crossbeam-channel = "0.5"
 getopts = "0.2.17"
 surfman = { version = "0.9", features = ["chains", "sm-raw-window-handle"] }

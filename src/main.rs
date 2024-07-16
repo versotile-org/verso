@@ -7,19 +7,15 @@ use winit::{event_loop::EventLoop, window::WindowBuilder};
 
 /* window decoration */
 #[cfg(macos)]
-use cocoa::appkit::{NSView, NSWindow};
+use cocoa::appkit::{NSWindow, NSWindowStyleMask, NSWindowTitleVisibility};
 #[cfg(macos)]
-use cocoa::appkit::{NSWindowStyleMask, NSWindowTitleVisibility};
-#[cfg(macos)]
-use objc::{msg_send, runtime::Object, sel, sel_impl};
+use objc::runtime::Object;
 #[cfg(macos)]
 use raw_window_handle::{AppKitWindowHandle, HasRawWindowHandle, RawWindowHandle};
-#[cfg(macos)]
-use winit::dpi::LogicalPosition;
-#[cfg(macos)]
-use winit::platform::macos::WindowBuilderExtMacOS;
 #[cfg(target_os = "windows")]
 use surfman::declare_surfman;
+#[cfg(macos)]
+use winit::dpi::LogicalPosition;
 
 fn main() -> Result<()> {
     // XXX: Toggle this with future feature flag change

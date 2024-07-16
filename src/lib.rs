@@ -23,3 +23,5 @@ pub use app::{Status, Verso};
 pub use errors::{Error, Result};
 /// Re-exporting Winit for the sake of convenience.
 pub use winit;
+/// Verso instance
+pub mod verso;
