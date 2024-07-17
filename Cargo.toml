@@ -57,7 +57,12 @@ cargo-packager-resource-resolver = { version = "0.1.1", features = [
   "auto-detect-format",
 ], optional = true }
 
-[target."cfg(any(target_os = \"ios\", target_os = \"macos\"))".dependencies]
+[target.'cfg(target_os = "windows")'.dependencies]
+libservo = { git = "https://github.com/servo/servo.git", rev = "968474a", features = [
+  "no-wgl",
+] }
+
+[target.'cfg(any(target_os = "ios", target_os = "macos"))'.dependencies]
 block = "0.1"
 cocoa = "0.25"
 core-graphics = "0.23"

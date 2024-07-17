@@ -20,9 +20,6 @@ use winit::dpi::LogicalPosition;
 use winit::platform::macos::WindowBuilderExtMacOS;
 
 fn main() -> Result<()> {
-    // XXX: Toggle this with future feature flag change
-    #[cfg(target_os = "windows")]
-    declare_surfman!();
     let event_loop = EventLoop::new()?;
     event_loop.listen_device_events(DeviceEvents::Never);
     let window = WindowBuilder::new()
