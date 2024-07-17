@@ -632,6 +632,27 @@ dependencies = [
 ]
 
 [[package]]
+name = "cargo-packager-resource-resolver"
+version = "0.1.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "5b5ef5863f81afa1b45d1b7e01b319d9e940c9be5615bc0a988421987d35c9f8"
+dependencies = [
+ "cargo-packager-utils",
+ "heck",
+ "log",
+ "thiserror",
+]
+
+[[package]]
+name = "cargo-packager-utils"
+version = "0.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "d435b1a5799cfee502f151f857a0b415a04d3834562d83fea2bb8c6e33bfc167"
+dependencies = [
+ "ctor",
+]
+
+[[package]]
 name = "cc"
 version = "1.1.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1108,6 +1129,16 @@ checksum = "68523903c8ae5aacfa32a0d9ae60cadeb764e1da14ee0d26b1f3089f13a54636"
 dependencies = [
  "proc-macro2",
  "quote",
+]
+
+[[package]]
+name = "ctor"
+version = "0.2.8"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "edb49164822f3ee45b17acd4a208cfc1251410cf0cad9a833234c9890774dd9f"
+dependencies = [
+ "quote",
+ "syn 2.0.71",
 ]
 
 [[package]]
@@ -2113,6 +2144,12 @@ checksum = "e7f66481bfee273957b1f20485a4ff3362987f85b2c236580d81b4eb7a326429"
 dependencies = [
  "http",
 ]
+
+[[package]]
+name = "heck"
+version = "0.4.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "95505c38b4572b2d910cecb0281560f54b440a19336cbbcb27bf6ce6adc6f5a8"
 
 [[package]]
 name = "hermit-abi"
@@ -5768,6 +5805,7 @@ version = "0.0.1"
 dependencies = [
  "arboard",
  "block",
+ "cargo-packager-resource-resolver",
  "cfg_aliases 0.2.1",
  "cocoa 0.25.0",
  "core-graphics 0.23.2",

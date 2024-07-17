@@ -1,5 +1,3 @@
-use std::env::current_dir;
-
 use verso::config::Config;
 use verso::{Result, Status, Verso};
 use winit::event_loop::{ControlFlow, DeviceEvents};
@@ -14,12 +12,12 @@ use cocoa::appkit::{NSWindowStyleMask, NSWindowTitleVisibility};
 use objc::{msg_send, runtime::Object, sel, sel_impl};
 #[cfg(macos)]
 use raw_window_handle::{AppKitWindowHandle, HasRawWindowHandle, RawWindowHandle};
+#[cfg(target_os = "windows")]
+use surfman::declare_surfman;
 #[cfg(macos)]
 use winit::dpi::LogicalPosition;
 #[cfg(macos)]
 use winit::platform::macos::WindowBuilderExtMacOS;
-#[cfg(target_os = "windows")]
-use surfman::declare_surfman;
 
 fn main() -> Result<()> {
     // XXX: Toggle this with future feature flag change
@@ -39,7 +37,7 @@ fn main() -> Result<()> {
         }
     }
 
-    let config = Config::new(current_dir().unwrap().join("resources"));
+    let config = Config::new(Config::resources_dir_path().unwrap());
     let mut verso = Verso::new(window, event_loop.create_proxy(), config);
     event_loop.run(move |event, evl| match verso.run(event) {
         Status::None => evl.set_control_flow(ControlFlow::Wait),

@@ -101,13 +101,13 @@ impl Window {
                         e
                     );
                 }
-            },
+            }
             EmbedderMsg::EventDelivered(event) => {
                 if let CompositorEventVariant::MouseButtonEvent = event {
                     events.push(EmbedderEvent::RaiseWebViewToTop(w, false));
                     events.push(EmbedderEvent::FocusWebView(w));
-                } 
-            },
+                }
+            }
             e => {
                 log::warn!("Verso WebView isn't supporting this message yet: {e:?}")
             }

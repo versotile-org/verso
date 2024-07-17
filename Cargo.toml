@@ -13,6 +13,16 @@ repository = "https://github.com/versotile-org/verso"
 documentation = "https://docs.versotile.org/verso"
 categories = ["web-programming"]
 
+[package.metadata.packager]
+name = "verso"
+product-name = "verso"
+identifier = "org.versotile.verso"
+version = "0.0.1"
+before-each-package-command = "cargo build --release --features packager"
+out-dir = "target/release"
+resources = ["resources", "icons"]
+icons = ["icons/icon256x256.png", "icons/icon.ico"]
+
 [package.metadata.docs.rs]
 targets = [
   "x86_64-unknown-linux-gnu",
@@ -22,6 +32,7 @@ targets = [
 
 [features]
 default = []
+packager = ["dep:cargo-packager-resource-resolver"]
 
 [build-dependencies]
 cfg_aliases = "0.2"
@@ -32,12 +43,19 @@ log = "0.4"
 thiserror = "1.0"
 raw-window-handle = { version = "0.5", features = ["std"] }
 # Servo
-libservo = { git = "https://github.com/servo/servo.git", rev = "968474a", features = ["max_log_level", "native-bluetooth", "webdriver"] }
+libservo = { git = "https://github.com/servo/servo.git", rev = "968474a", features = [
+  "max_log_level",
+  "native-bluetooth",
+  "webdriver",
+] }
 crossbeam-channel = "0.5"
 getopts = "0.2.17"
 surfman = { version = "0.9", features = ["chains", "sm-raw-window-handle"] }
 winit = { version = "0.29", features = ["rwh_05"] }
 arboard = "3.4.0"
+cargo-packager-resource-resolver = { version = "0.1.1", features = [
+  "auto-detect-format",
+], optional = true }
 
 [target."cfg(any(target_os = \"ios\", target_os = \"macos\"))".dependencies]
 block = "0.1"

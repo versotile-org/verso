@@ -54,9 +54,7 @@ impl Verso {
         window.set_webview_id(init_servo.browser_id);
 
         // TODO should extend resource trait to handle local html files
-        let path = std::env::current_dir()
-            .unwrap()
-            .join("resources/panel.html");
+        let path = Config::resources_dir_path().unwrap().join("panel.html");
         let url = ServoUrl::from_file_path(path.to_str().unwrap()).unwrap();
         init_servo
             .servo
