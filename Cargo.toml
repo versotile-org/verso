@@ -32,14 +32,23 @@ log = "0.4"
 thiserror = "1.0"
 raw-window-handle = { version = "0.5", features = ["std"] }
 # Servo
-libservo = { git = "https://github.com/servo/servo.git", rev = "968474a", features = ["max_log_level", "native-bluetooth", "webdriver"] }
+libservo = { git = "https://github.com/servo/servo.git", rev = "968474a", features = [
+  "max_log_level",
+  "native-bluetooth",
+  "webdriver",
+] }
 crossbeam-channel = "0.5"
 getopts = "0.2.17"
 surfman = { version = "0.9", features = ["chains", "sm-raw-window-handle"] }
 winit = { version = "0.29", features = ["rwh_05"] }
 arboard = "3.4.0"
 
-[target."cfg(any(target_os = \"ios\", target_os = \"macos\"))".dependencies]
+[target.'cfg(target_os = "windows")'.dependencies]
+libservo = { git = "https://github.com/servo/servo.git", rev = "968474a", features = [
+  "no-wgl",
+] }
+
+[target.'cfg(any(target_os = "ios", target_os = "macos"))'.dependencies]
 block = "0.1"
 cocoa = "0.25"
 core-graphics = "0.23"
