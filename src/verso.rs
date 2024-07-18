@@ -48,7 +48,6 @@ use winit::{event::Event, event_loop::EventLoopProxy, window::Window as WinitWin
 use crate::{
     config::Config,
     window::{GLWindow, Window},
-    Status,
 };
 
 /// Main entry point of Verso browser.
@@ -61,7 +60,6 @@ pub struct Verso {
     /// and deinitialization of the JS Engine. Multiprocess Servo instances have their
     /// own instance that exists in the content process instead.
     _js_engine_setup: Option<JSEngineSetup>,
-    status: Status,
     clipboard: Clipboard,
 }
 
@@ -383,7 +381,6 @@ impl Verso {
             constellation_sender,
             embedder_receiver,
             _js_engine_setup: js_engine_setup,
-            status: Status::None,
             clipboard: Clipboard::new()
                 .expect("Clipboard isn't supported in this platform or desktop environment."),
         };
@@ -400,22 +397,16 @@ impl Verso {
     /// Run an iteration of Verso handling cycle. An iteration will perform following actions:
     ///
     /// - Handle Winit's event, updating Compositor and sending messages to Constellation.
-    /// - Consume Servo's messages and updating Compositor again.
-    /// - And the last step is returning the status of Verso.
-    pub fn run(&mut self, event: Event<()>) -> Status {
+    /// - Handle Servo's messages and updating Compositor again.
+    pub fn run(&mut self, event: Event<()>) {
         self.handle_winit_event(event);
         self.handle_servo_messages();
-        log::trace!("Verso sets status to: {:?}", self.status);
-        self.status
     }
 
     fn handle_winit_event(&mut self, event: Event<()>) {
         log::trace!("Verso is creating embedder event from: {event:?}");
         match event {
-            Event::Suspended => {
-                self.status = Status::None;
-            }
-            Event::Resumed | Event::UserEvent(()) => {}
+            Event::Suspended | Event::Resumed | Event::UserEvent(()) => {}
             Event::WindowEvent {
                 window_id: _,
                 event,
@@ -440,20 +431,16 @@ impl Verso {
                 {
                     match compositor.shutdown_state {
                         ShutdownState::NotShuttingDown => {
-                            if self.window.handle_servo_message(
+                            self.window.handle_servo_message(
                                 top_level_browsing_context,
                                 msg,
                                 &self.constellation_sender,
                                 compositor,
                                 &mut self.clipboard,
-                            ) {
-                                self.status = Status::Shutdown;
-                            }
+                            );
                         }
                         ShutdownState::FinishedShuttingDown => {
-                            log::error!(
-                        "embedder shouldn't be handling messages after compositor has shut down"
-                    );
+                            log::error!("embedder shouldn't be handling messages after compositor has shut down");
                         }
                         ShutdownState::ShuttingDown => {}
                     }
@@ -463,18 +450,19 @@ impl Verso {
             if compositor.shutdown_state != ShutdownState::FinishedShuttingDown {
                 compositor.perform_updates();
             } else {
-                compositor.maybe_start_shutting_down();
+                self.compositor.take().map(IOCompositor::deinit);
             }
         }
+    }
 
-        if let Status::Shutdown = self.status {
-            log::trace!("Verso is shutting down Servo");
-            self.compositor.take().map(IOCompositor::deinit);
-        } else if self.window.is_animating() {
-            self.status = Status::Animating;
-        } else {
-            self.status = Status::None;
-        }
+    /// Return true if one of the Verso windows is animating.
+    pub fn is_animating(&self) -> bool {
+        self.window.is_animating()
+    }
+
+    /// Return true if Verso has shut down and hence there's no compositor.
+    pub fn finished_shutting_down(&self) -> bool {
+        self.compositor.is_none()
     }
 
     fn setup_logging(&self) {

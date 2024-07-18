@@ -1,7 +1,7 @@
 use std::env::current_dir;
 
 use verso::config::Config;
-use verso::{Result, Status, Verso};
+use verso::{Result, Verso};
 use winit::event_loop::{ControlFlow, DeviceEvents};
 use winit::{event_loop::EventLoop, window::WindowBuilder};
 
@@ -37,10 +37,15 @@ fn main() -> Result<()> {
 
     let config = Config::new(current_dir().unwrap().join("resources"));
     let mut verso = Verso::new(window, event_loop.create_proxy(), config);
-    event_loop.run(move |event, evl| match verso.run(event) {
-        Status::None => evl.set_control_flow(ControlFlow::Wait),
-        Status::Animating => evl.set_control_flow(ControlFlow::Poll),
-        Status::Shutdown => evl.exit(),
+    event_loop.run(move |event, evl| {
+        verso.run(event);
+        if verso.finished_shutting_down() {
+            evl.exit();
+        } else if verso.is_animating() {
+            evl.set_control_flow(ControlFlow::Poll);
+        } else {
+            evl.set_control_flow(ControlFlow::Wait);
+        }
     })?;
 
     Ok(())

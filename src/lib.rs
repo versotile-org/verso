@@ -23,16 +23,3 @@ pub use errors::{Error, Result};
 pub use verso::Verso;
 /// Re-exporting Winit for the sake of convenience.
 pub use winit;
-/// Verso instance
-
-/// Status of Verso instance.
-#[derive(Clone, Copy, Debug, Default)]
-pub enum Status {
-    /// Nothing important to Verso at the moment.
-    #[default]
-    None,
-    /// One of the WebViews is animating.
-    Animating,
-    /// Verso has shut down.
-    Shutdown,
-}

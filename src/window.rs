@@ -212,7 +212,7 @@ impl Window {
         }
     }
 
-    /// Handle servo messages and return a boolean to indicate servo needs to shutdown or not.
+    /// Handle servo messages.
     pub fn handle_servo_message(
         &mut self,
         webview_id: Option<TopLevelBrowsingContextId>,
@@ -220,7 +220,7 @@ impl Window {
         sender: &Sender<ConstellationMsg>,
         compositor: &mut IOCompositor<GLWindow>,
         clipboard: &mut Clipboard,
-    ) -> bool {
+    ) {
         match webview_id {
             // // Handle message in Verso Panel
             Some(p) if p == self.panel.id() => {
@@ -240,17 +240,13 @@ impl Window {
                     EmbedderMsg::SetCursor(cursor) => {
                         self.set_cursor_icon(cursor);
                     }
-                    EmbedderMsg::Shutdown => {
-                        return true;
-                    }
+                    EmbedderMsg::Shutdown => {}
                     e => {
                         log::warn!("Verso Window isn't supporting handling this message yet: {e:?}")
                     }
                 }
             }
         }
-
-        false
     }
 
     /// Paint offscreen framebuffer to Winit window.
