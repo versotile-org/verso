@@ -12,15 +12,10 @@ use cocoa::appkit::{NSWindow, NSWindowStyleMask, NSWindowTitleVisibility};
 use objc::runtime::Object;
 #[cfg(macos)]
 use raw_window_handle::{AppKitWindowHandle, HasRawWindowHandle, RawWindowHandle};
-#[cfg(target_os = "windows")]
-use surfman::declare_surfman;
 #[cfg(macos)]
 use winit::dpi::LogicalPosition;
 
 fn main() -> Result<()> {
-    // XXX: Toggle this with future feature flag change
-    #[cfg(target_os = "windows")]
-    declare_surfman!();
     let event_loop = EventLoop::new()?;
     event_loop.listen_device_events(DeviceEvents::Never);
     let window = WindowBuilder::new()

@@ -3176,7 +3176,9 @@ checksum = "b14af7d1a65278923835af94ac23d4c3662478001ac6e78075fe1210a7067e4b"
 dependencies = [
  "bindgen",
  "cc",
+ "gl_generator",
  "lazy_static",
+ "libz-sys",
  "walkdir",
 ]
 
