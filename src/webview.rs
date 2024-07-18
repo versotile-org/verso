@@ -5,7 +5,7 @@ use compositing_traits::ConstellationMsg;
 use crossbeam_channel::Sender;
 use servo::{
     base::id::WebViewId,
-    compositing::{webview::UnknownWebView, windowing::EmbedderEvent, IOCompositor},
+    compositing::{webview::UnknownWebView, IOCompositor},
     embedder_traits::{CompositorEventVariant, EmbedderMsg, PromptDefinition},
     euclid::Size2D,
     script_traits::TraversalDirection,
@@ -111,7 +111,6 @@ impl Window {
                 }
             }
             EmbedderMsg::EventDelivered(event) => {
-                dbg!(1);
                 if let CompositorEventVariant::MouseButtonEvent = event {
                     if let Err(UnknownWebView(webview_id)) =
                         compositor.raise_webview_to_top(webview_id, false)

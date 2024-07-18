@@ -5781,6 +5781,8 @@ dependencies = [
  "objc_id",
  "owo-colors",
  "raw-window-handle 0.5.2",
+ "servo-media",
+ "servo-media-dummy",
  "sparkle",
  "surfman",
  "thiserror",

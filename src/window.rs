@@ -6,9 +6,7 @@ use raw_window_handle::{HasRawDisplayHandle, HasRawWindowHandle};
 use servo::{
     base::id::WebViewId,
     compositing::{
-        windowing::{
-            AnimationState, EmbedderCoordinates, EmbedderEvent, MouseWindowEvent, WindowMethods,
-        },
+        windowing::{AnimationState, EmbedderCoordinates, MouseWindowEvent, WindowMethods},
         IOCompositor,
     },
     embedder_traits::{Cursor, EmbedderMsg},
@@ -35,7 +33,6 @@ use crate::{
     keyboard::keyboard_event_from_winit,
     verso::send_to_constellation,
     webview::{Panel, WebView},
-    Status,
 };
 
 use arboard::Clipboard;

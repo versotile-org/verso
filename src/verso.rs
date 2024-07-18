@@ -1,7 +1,6 @@
 use std::{
     borrow::Cow,
     sync::{atomic::Ordering, Arc},
-    vec::Drain,
 };
 
 use arboard::Clipboard;
@@ -19,14 +18,13 @@ use servo::{
         WebGLComm,
     },
     compositing::{
-        webview::UnknownWebView,
-        windowing::{EmbedderEvent, WindowMethods},
-        CompositeTarget, IOCompositor, InitialCompositorState, ShutdownState,
+        windowing::WindowMethods, CompositeTarget, IOCompositor, InitialCompositorState,
+        ShutdownState,
     },
     config::{opts, pref},
     constellation::{Constellation, FromCompositorLogger, InitialConstellationState},
     devtools,
-    embedder_traits::{EmbedderMsg, EmbedderProxy, EmbedderReceiver, EventLoopWaker},
+    embedder_traits::{EmbedderProxy, EmbedderReceiver, EventLoopWaker},
     euclid::Scale,
     fonts::FontCacheThread,
     gl,
@@ -56,10 +54,9 @@ use crate::{
 /// Main entry point of Verso browser.
 pub struct Verso {
     window: Window,
-    compositor: IOCompositor<GLWindow>,
+    compositor: Option<IOCompositor<GLWindow>>,
     constellation_sender: Sender<ConstellationMsg>,
     embedder_receiver: EmbedderReceiver,
-    profiler_enabled: bool,
     /// For single-process Servo instances, this field controls the initialization
     /// and deinitialization of the JS Engine. Multiprocess Servo instances have their
     /// own instance that exists in the content process instead.
@@ -105,7 +102,7 @@ impl Verso {
         style::traversal::IS_SERVO_NONINCREMENTAL_LAYOUT
             .store(opts.nonincremental_layout, Ordering::Relaxed);
 
-        // TODO init media platform
+        servo_media::ServoMedia::init::<servo_media_dummy::DummyBackend>();
 
         let user_agent: Cow<'static, str> = default_user_agent_string().into();
 
@@ -382,10 +379,9 @@ impl Verso {
         window.set_webview_id(top_level_browsing_context_id);
         let verso = Verso {
             window,
-            compositor,
+            compositor: Some(compositor),
             constellation_sender,
             embedder_receiver,
-            profiler_enabled: false,
             _js_engine_setup: js_engine_setup,
             status: Status::None,
             clipboard: Clipboard::new()
@@ -401,175 +397,14 @@ impl Verso {
         verso
     }
 
-    // TODO Remove this fn and implement in Window
-    fn handle_window_event(&mut self, event: EmbedderEvent) -> bool {
-        match event {
-            EmbedderEvent::Refresh => {
-                self.compositor.composite();
-            }
-            EmbedderEvent::InvalidateNativeSurface => {
-                self.compositor.invalidate_native_surface();
-            }
-            EmbedderEvent::ReplaceNativeSurface(native_widget, coords) => {
-                self.compositor
-                    .replace_native_surface(native_widget, coords);
-                self.compositor.composite();
-            }
-            EmbedderEvent::AllowNavigationResponse(pipeline_id, allowed) => {
-                let msg = ConstellationMsg::AllowNavigationResponse(pipeline_id, allowed);
-                if let Err(e) = self.constellation_sender.send(msg) {
-                    log::warn!(
-                        "Sending allow navigation to constellation failed ({:?}).",
-                        e
-                    );
-                }
-            }
-
-            EmbedderEvent::ClearCache => {
-                let msg = ConstellationMsg::ClearCache;
-                if let Err(e) = self.constellation_sender.send(msg) {
-                    log::warn!("Sending clear cache to constellation failed ({:?}).", e);
-                }
-            }
-
-            EmbedderEvent::Touch(event_type, identifier, location) => {
-                self.compositor
-                    .on_touch_event(event_type, identifier, location);
-            }
-            EmbedderEvent::ResetZoom => {
-                self.compositor.on_zoom_reset_window_event();
-            }
-
-            EmbedderEvent::PinchZoom(zoom) => {
-                self.compositor.on_pinch_zoom_window_event(zoom);
-            }
-            EmbedderEvent::IMEDismissed => {
-                let msg = ConstellationMsg::IMEDismissed;
-                if let Err(e) = self.constellation_sender.send(msg) {
-                    log::warn!(
-                        "Sending IMEDismissed event to constellation failed ({:?}).",
-                        e
-                    );
-                }
-            }
-            EmbedderEvent::ExitFullScreen(top_level_browsing_context_id) => {
-                let msg = ConstellationMsg::ExitFullScreen(top_level_browsing_context_id);
-                if let Err(e) = self.constellation_sender.send(msg) {
-                    log::warn!("Sending exit fullscreen to constellation failed ({:?}).", e);
-                }
-            }
-
-            EmbedderEvent::ToggleSamplingProfiler(rate, max_duration) => {
-                self.profiler_enabled = !self.profiler_enabled;
-                let msg = if self.profiler_enabled {
-                    ConstellationMsg::EnableProfiler(rate, max_duration)
-                } else {
-                    ConstellationMsg::DisableProfiler
-                };
-                if let Err(e) = self.constellation_sender.send(msg) {
-                    log::warn!("Sending profiler toggle to constellation failed ({:?}).", e);
-                }
-            }
-
-            EmbedderEvent::ToggleWebRenderDebug(option) => {
-                self.compositor.toggle_webrender_debug(option);
-            }
-
-            EmbedderEvent::CaptureWebRender => {
-                self.compositor.capture_webrender();
-            }
-            EmbedderEvent::CloseWebView(top_level_browsing_context_id) => {
-                let msg = ConstellationMsg::CloseWebView(top_level_browsing_context_id);
-                if let Err(e) = self.constellation_sender.send(msg) {
-                    log::warn!(
-                        "Sending CloseBrowser message to constellation failed ({:?}).",
-                        e
-                    );
-                }
-            }
-            EmbedderEvent::HideWebView(webview_id) => {
-                if let Err(UnknownWebView(webview_id)) = self.compositor.hide_webview(webview_id) {
-                    log::warn!("{webview_id}: HideWebView on unknown webview id");
-                }
-            }
-            EmbedderEvent::BlurWebView => {
-                let msg = ConstellationMsg::BlurWebView;
-                if let Err(e) = self.constellation_sender.send(msg) {
-                    log::warn!(
-                        "Sending BlurWebView message to constellation failed ({:?}).",
-                        e
-                    );
-                }
-            }
-
-            EmbedderEvent::SendError(top_level_browsing_context_id, e) => {
-                let msg = ConstellationMsg::SendError(top_level_browsing_context_id, e);
-                if let Err(e) = self.constellation_sender.send(msg) {
-                    log::warn!(
-                        "Sending SendError message to constellation failed ({:?}).",
-                        e
-                    );
-                }
-            }
-
-            EmbedderEvent::MediaSessionAction(a) => {
-                let msg = ConstellationMsg::MediaSessionAction(a);
-                if let Err(e) = self.constellation_sender.send(msg) {
-                    log::warn!(
-                        "Sending MediaSessionAction message to constellation failed ({:?}).",
-                        e
-                    );
-                }
-            }
-
-            EmbedderEvent::SetWebViewThrottled(webview_id, throttled) => {
-                let msg = ConstellationMsg::SetWebViewThrottled(webview_id, throttled);
-                if let Err(e) = self.constellation_sender.send(msg) {
-                    log::warn!(
-                        "Sending SetWebViewThrottled to constellation failed ({:?}).",
-                        e
-                    );
-                }
-            }
-
-            EmbedderEvent::Gamepad(gamepad_event) => {
-                let msg = ConstellationMsg::Gamepad(gamepad_event);
-                if let Err(e) = self.constellation_sender.send(msg) {
-                    log::warn!("Sending Gamepad event to constellation failed ({:?}).", e);
-                }
-            }
-            _ => todo!(),
-        }
-        false
-    }
-
-    /// Deinit the compositor
-    pub fn deinit(self) {
-        self.compositor.deinit();
-    }
-
-    fn setup_logging(&self) {
-        let constellation_chan = self.constellation_sender.clone();
-        let env = env_logger::Env::default();
-        let env_logger = env_logger::Builder::from_env(env).build();
-        let con_logger = FromCompositorLogger::new(constellation_chan);
-
-        let filter = std::cmp::max(env_logger.filter(), con_logger.filter());
-        let logger = BothLogger(env_logger, con_logger);
-
-        log::set_boxed_logger(Box::new(logger)).expect("Failed to set logger.");
-        log::set_max_level(filter);
-    }
-
     /// Run an iteration of Verso handling cycle. An iteration will perform following actions:
     ///
-    /// - Handle Winit's event, create Servo's embedder event and push to Verso's event queue.
-    /// - Consume Servo's messages and then send all embedder events to Servo.
+    /// - Handle Winit's event, updating Compositor and sending messages to Constellation.
+    /// - Consume Servo's messages and updating Compositor again.
     /// - And the last step is returning the status of Verso.
     pub fn run(&mut self, event: Event<()>) -> Status {
-        self.handle_servo_messages();
         self.handle_winit_event(event);
-        self.handle_servo_messages2();
+        self.handle_servo_messages();
         log::trace!("Verso sets status to: {:?}", self.status);
         self.status
     }
@@ -584,60 +419,75 @@ impl Verso {
             Event::WindowEvent {
                 window_id: _,
                 event,
-            } => self.window.handle_winit_window_event(
-                &self.constellation_sender,
-                &mut self.compositor,
-                &event,
-            ),
+            } => {
+                if let Some(compositor) = &mut self.compositor {
+                    self.window.handle_winit_window_event(
+                        &self.constellation_sender,
+                        compositor,
+                        &event,
+                    )
+                }
+            }
             e => log::warn!("Verso isn't supporting this event yet: {e:?}"),
         }
     }
 
     fn handle_servo_messages(&mut self) {
-        if self.compositor.receive_messages() {
-            while let Some((top_level_browsing_context, msg)) =
-                self.embedder_receiver.try_recv_embedder_msg()
-            {
-                match self.compositor.shutdown_state {
-                    ShutdownState::NotShuttingDown => {
-                        if self.window.handle_servo_message(
-                            top_level_browsing_context,
-                            msg,
-                            &self.constellation_sender,
-                            &mut self.compositor,
-                            &mut self.clipboard,
-                        ) {
-                            self.status = Status::Shutdown;
+        if let Some(compositor) = &mut self.compositor {
+            if compositor.receive_messages() {
+                while let Some((top_level_browsing_context, msg)) =
+                    self.embedder_receiver.try_recv_embedder_msg()
+                {
+                    match compositor.shutdown_state {
+                        ShutdownState::NotShuttingDown => {
+                            if self.window.handle_servo_message(
+                                top_level_browsing_context,
+                                msg,
+                                &self.constellation_sender,
+                                compositor,
+                                &mut self.clipboard,
+                            ) {
+                                self.status = Status::Shutdown;
+                            }
                         }
-                    }
-                    ShutdownState::FinishedShuttingDown => {
-                        log::error!(
+                        ShutdownState::FinishedShuttingDown => {
+                            log::error!(
                         "embedder shouldn't be handling messages after compositor has shut down"
                     );
+                        }
+                        ShutdownState::ShuttingDown => {}
                     }
-                    ShutdownState::ShuttingDown => {}
                 }
             }
-        }
-    }
 
-    fn handle_servo_messages2(&mut self) {
-        // log::trace!("Verso is handling embedder events: {:?}", self.events);
-
-        if self.compositor.shutdown_state != ShutdownState::FinishedShuttingDown {
-            self.compositor.perform_updates();
-        } else {
-            self.compositor.maybe_start_shutting_down();
+            if compositor.shutdown_state != ShutdownState::FinishedShuttingDown {
+                compositor.perform_updates();
+            } else {
+                compositor.maybe_start_shutting_down();
+            }
         }
 
         if let Status::Shutdown = self.status {
             log::trace!("Verso is shutting down Servo");
-            // self.servo.take().map(Servo::deinit);
+            self.compositor.take().map(IOCompositor::deinit);
         } else if self.window.is_animating() {
             self.status = Status::Animating;
         } else {
             self.status = Status::None;
         }
+    }
+
+    fn setup_logging(&self) {
+        let constellation_chan = self.constellation_sender.clone();
+        let env = env_logger::Env::default();
+        let env_logger = env_logger::Builder::from_env(env).build();
+        let con_logger = FromCompositorLogger::new(constellation_chan);
+
+        let filter = std::cmp::max(env_logger.filter(), con_logger.filter());
+        let logger = BothLogger(env_logger, con_logger);
+
+        log::set_boxed_logger(Box::new(logger)).expect("Failed to set logger.");
+        log::set_max_level(filter);
     }
 }
 
