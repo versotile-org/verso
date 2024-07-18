@@ -20,8 +20,16 @@ identifier = "org.versotile.verso"
 version = "0.0.1"
 before-each-package-command = "cargo build --release --features packager"
 out-dir = "target/release"
-resources = ["resources", "icons"]
+resources = [
+  "resources",
+  "icons",
+  "target/release/build/**/libEGL.dll",
+  "target/release/build/**/libGLESv2.dll",
+]
 icons = ["icons/icon256x256.png", "icons/icon.ico"]
+
+[package.metadata.packager.nsis]
+appdata-paths = ["$LOCALAPPDATA/$IDENTIFIER"]
 
 [package.metadata.docs.rs]
 targets = [

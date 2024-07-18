@@ -1,3 +1,6 @@
+// Prevent console window from appearing on Windows
+#![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
+
 use verso::config::Config;
 use verso::{Result, Status, Verso};
 use winit::event_loop::{ControlFlow, DeviceEvents};
@@ -12,8 +15,6 @@ use cocoa::appkit::{NSWindowStyleMask, NSWindowTitleVisibility};
 use objc::{msg_send, runtime::Object, sel, sel_impl};
 #[cfg(macos)]
 use raw_window_handle::{AppKitWindowHandle, HasRawWindowHandle, RawWindowHandle};
-#[cfg(target_os = "windows")]
-use surfman::declare_surfman;
 #[cfg(macos)]
 use winit::dpi::LogicalPosition;
 #[cfg(macos)]
