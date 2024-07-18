@@ -424,6 +424,7 @@ impl Verso {
     }
 
     fn handle_servo_messages(&mut self) {
+        let mut shutdown = false;
         if let Some(compositor) = &mut self.compositor {
             if compositor.receive_messages() {
                 while let Some((top_level_browsing_context, msg)) =
@@ -450,8 +451,12 @@ impl Verso {
             if compositor.shutdown_state != ShutdownState::FinishedShuttingDown {
                 compositor.perform_updates();
             } else {
-                self.compositor.take().map(IOCompositor::deinit);
+                shutdown = true;
             }
+        }
+
+        if shutdown {
+            self.compositor.take().map(IOCompositor::deinit);
         }
     }
 
