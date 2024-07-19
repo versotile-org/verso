@@ -1,23 +1,19 @@
 use std::env::current_dir;
 
 use verso::config::Config;
-use verso::{Result, Status, Verso};
+use verso::{Result, Verso};
 use winit::event_loop::{ControlFlow, DeviceEvents};
 use winit::{event_loop::EventLoop, window::WindowBuilder};
 
 /* window decoration */
 #[cfg(macos)]
-use cocoa::appkit::{NSView, NSWindow};
+use cocoa::appkit::{NSWindow, NSWindowStyleMask, NSWindowTitleVisibility};
 #[cfg(macos)]
-use cocoa::appkit::{NSWindowStyleMask, NSWindowTitleVisibility};
-#[cfg(macos)]
-use objc::{msg_send, runtime::Object, sel, sel_impl};
+use objc::runtime::Object;
 #[cfg(macos)]
 use raw_window_handle::{AppKitWindowHandle, HasRawWindowHandle, RawWindowHandle};
 #[cfg(macos)]
 use winit::dpi::LogicalPosition;
-#[cfg(macos)]
-use winit::platform::macos::WindowBuilderExtMacOS;
 
 fn main() -> Result<()> {
     let event_loop = EventLoop::new()?;
@@ -36,10 +32,15 @@ fn main() -> Result<()> {
 
     let config = Config::new(current_dir().unwrap().join("resources"));
     let mut verso = Verso::new(window, event_loop.create_proxy(), config);
-    event_loop.run(move |event, evl| match verso.run(event) {
-        Status::None => evl.set_control_flow(ControlFlow::Wait),
-        Status::Animating => evl.set_control_flow(ControlFlow::Poll),
-        Status::Shutdown => evl.exit(),
+    event_loop.run(move |event, evl| {
+        verso.run(event);
+        if verso.finished_shutting_down() {
+            evl.exit();
+        } else if verso.is_animating() {
+            evl.set_control_flow(ControlFlow::Poll);
+        } else {
+            evl.set_control_flow(ControlFlow::Wait);
+        }
     })?;
 
     Ok(())

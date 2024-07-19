@@ -3176,7 +3176,9 @@ checksum = "b14af7d1a65278923835af94ac23d4c3662478001ac6e78075fe1210a7067e4b"
 dependencies = [
  "bindgen",
  "cc",
+ "gl_generator",
  "lazy_static",
+ "libz-sys",
  "walkdir",
 ]
 
@@ -5770,8 +5772,10 @@ dependencies = [
  "block",
  "cfg_aliases 0.2.1",
  "cocoa 0.25.0",
+ "compositing_traits",
  "core-graphics 0.23.2",
  "crossbeam-channel",
+ "env_logger",
  "getopts",
  "libservo",
  "log",
@@ -5779,8 +5783,14 @@ dependencies = [
  "objc_id",
  "owo-colors",
  "raw-window-handle 0.5.2",
+ "servo-media",
+ "servo-media-dummy",
+ "sparkle",
  "surfman",
  "thiserror",
+ "webdriver_server",
+ "webrender",
+ "webxr",
  "winit",
 ]
 
