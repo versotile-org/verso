@@ -4,7 +4,7 @@ use arboard::Clipboard;
 use compositing_traits::ConstellationMsg;
 use crossbeam_channel::Sender;
 use servo::{
-    base::id::WebViewId,
+    base::id::{PipelineNamespace, PipelineNamespaceId, WebViewId},
     compositing::{webview::UnknownWebView, IOCompositor},
     embedder_traits::{CompositorEventVariant, EmbedderMsg, PromptDefinition},
     euclid::Size2D,
@@ -58,7 +58,7 @@ impl Window {
         compositor: &mut IOCompositor<GLWindow>,
         clipboard: &mut Clipboard,
     ) {
-        log::trace!("Verso WebView {webview_id:?} is handling servo message: {message:?}",);
+        log::trace!("Verso WebView {webview_id:?} is handling Embedder message: {message:?}",);
         match message {
             EmbedderMsg::LoadStart | EmbedderMsg::HeadParsed => {}
             EmbedderMsg::LoadComplete => {
@@ -139,25 +139,23 @@ impl Window {
 /// - Maximize the window: `window.prompt('MAXIMIZE')`
 /// - Navigate to a specific URL: `window.prompt('NAVIGATE_TO:${url}')`
 pub struct Panel {
-    id: Option<WebViewId>,
+    id: WebViewId,
 }
 
 impl Panel {
     /// Create a panel from Winit window.
     pub fn new() -> Self {
-        Self { id: None }
-    }
-
-    /// Set web view ID of this panel.
-    pub fn set_id(&mut self, id: WebViewId) {
-        self.id = Some(id);
+        // Reserving a namespace to create TopLevelBrowsingContextId.
+        PipelineNamespace::install(PipelineNamespaceId(0));
+        let id = TopLevelBrowsingContextId::new();
+        Self { id }
     }
 
     /// Get web view ID of this panel.
     ///
     /// We assume this is always called after `set_id`. Calling before it will cause panic.
     pub fn id(&self) -> WebViewId {
-        self.id.unwrap()
+        self.id
     }
 }
 
@@ -171,7 +169,7 @@ impl Window {
         compositor: &mut IOCompositor<GLWindow>,
         clipboard: &mut Clipboard,
     ) {
-        log::trace!("Verso Panel {panel_id:?} is handling servo message: {message:?}",);
+        log::trace!("Verso Panel {panel_id:?} is handling Embedder message: {message:?}",);
         match message {
             EmbedderMsg::LoadStart | EmbedderMsg::HeadParsed => {}
             EmbedderMsg::LoadComplete => {

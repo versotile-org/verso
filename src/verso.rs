@@ -10,7 +10,6 @@ use compositing_traits::{
 use crossbeam_channel::{unbounded, Sender};
 use log::{Log, Metadata, Record};
 use servo::{
-    base::id::{PipelineNamespace, PipelineNamespaceId},
     bluetooth::BluetoothThreadFactory,
     bluetooth_traits::BluetoothRequest,
     canvas::{
@@ -39,9 +38,7 @@ use servo::{
     url::ServoUrl,
     webgpu,
     webrender_traits::*,
-    TopLevelBrowsingContextId,
 };
-use surfman::GLApi;
 use webrender::{api::*, ShaderPrecacheFlags};
 use winit::{event::Event, event_loop::EventLoopProxy, window::Window as WinitWindow};
 
@@ -67,7 +64,7 @@ impl Verso {
     /// Create a Verso instance from Winit's window and event loop proxy.
     ///
     /// // TODO list the flag to toggle them and ways to disable by default
-    /// Following threads will be created while initializing Veros:
+    /// Following threads will be created while initializing Verso:
     /// - Time Profiler
     /// - Memory Profiler
     /// - DevTools
@@ -80,19 +77,15 @@ impl Verso {
     /// - Canvas
     /// - Constellation
     pub fn new(window: WinitWindow, proxy: EventLoopProxy<()>, config: Config) -> Self {
-        let path = config
-            .opts
-            .config_dir
-            .clone()
-            .filter(|d| d.exists())
-            .expect("Can't get the resources directory.")
-            .join("panel.html");
+        // Initialize configurations and Verso window
+        let path = config.resource_dir.join("panel.html");
         let url = ServoUrl::from_file_path(path.to_str().unwrap()).unwrap();
         config.init();
-        let mut window = Window::new(window);
+        let window = Window::new(window);
         let event_loop_waker = Box::new(Waker(proxy));
         let opts = opts::get();
 
+        // Set Stylo flags
         style::context::DEFAULT_DISABLE_STYLE_SHARING_CACHE
             .store(opts.debug.disable_share_style_cache, Ordering::Relaxed);
         style::context::DEFAULT_DUMP_STYLE_STATISTICS
@@ -100,18 +93,12 @@ impl Verso {
         style::traversal::IS_SERVO_NONINCREMENTAL_LAYOUT
             .store(opts.nonincremental_layout, Ordering::Relaxed);
 
+        // Initialize servo media with dummy backend
         servo_media::ServoMedia::init::<servo_media_dummy::DummyBackend>();
-
-        let user_agent: Cow<'static, str> = default_user_agent_string().into();
 
         // Initialize surfman & get GL bindings
         let rendering_context = window.rendering_context();
-        let webrender_gl = match rendering_context.connection().gl_api() {
-            GLApi::GL => unsafe { gl::GlFns::load_with(|s| rendering_context.get_proc_address(s)) },
-            GLApi::GLES => unsafe {
-                gl::GlesFns::load_with(|s| rendering_context.get_proc_address(s))
-            },
-        };
+        let webrender_gl = window.webrender_gl.clone();
         // Make sure the gl context is made current.
         rendering_context.make_gl_context_current().unwrap();
         debug_assert_eq!(webrender_gl.get_error(), gl::NO_ERROR,);
@@ -123,9 +110,12 @@ impl Verso {
             .unwrap_or(0);
         webrender_gl.bind_framebuffer(gl::FRAMEBUFFER, framebuffer_object);
 
-        // Reserving a namespace to create TopLevelBrowsingContextId.
-        PipelineNamespace::install(PipelineNamespaceId(0));
-        let top_level_browsing_context_id = TopLevelBrowsingContextId::new();
+        // Create profiler threads
+        let time_profiler_sender = profile::time::Profiler::create(
+            &opts.time_profiling,
+            opts.time_profiler_trace_path.clone(),
+        );
+        let mem_profiler_sender = profile::mem::Profiler::create(opts.mem_profiler_period);
 
         // Create compositor and embedder channels
         let (compositor_sender, compositor_receiver) = {
@@ -148,13 +138,6 @@ impl Verso {
                 EmbedderReceiver { receiver },
             )
         };
-
-        // Create profiler threads
-        let time_profiler_sender = profile::time::Profiler::create(
-            &opts.time_profiling,
-            opts.time_profiler_trace_path.clone(),
-        );
-        let mem_profiler_sender = profile::mem::Profiler::create(opts.mem_profiler_period);
 
         // Create dev tools thread
         let devtools_sender = if opts.devtools_server_enabled {
@@ -209,6 +192,7 @@ impl Verso {
         let webrender_api = webrender_api_sender.create_api();
         let webrender_document = webrender_api.add_document(coordinates.get_viewport().size());
 
+        // Initialize js engine if it's single process mode
         let js_engine_setup = if !opts.multiprocess {
             Some(script::init())
         } else {
@@ -267,17 +251,12 @@ impl Verso {
 
         webrender.set_external_image_handler(external_image_handlers);
 
-        // The division by 1 represents the page's default zoom of 100%,
-        // and gives us the appropriate CSSPixel type for the viewport.
-        let window_size = WindowSizeData {
-            initial_viewport: viewport_size / Scale::new(1.0),
-            device_pixel_ratio: Scale::new(device_pixel_ratio),
-        };
-
         // Create bluetooth thread
         let bluetooth_thread: IpcSender<BluetoothRequest> =
             BluetoothThreadFactory::new(embedder_sender.clone());
 
+        // Create resource thread pool
+        let user_agent: Cow<'static, str> = default_user_agent_string().into();
         let (public_resource_threads, private_resource_threads) =
             resource_thread::new_resource_threads(
                 user_agent.clone(),
@@ -302,6 +281,7 @@ impl Verso {
             public_resource_threads.clone(),
         );
 
+        // Create layout factory
         let layout_factory = Arc::new(layout_thread_2020::LayoutFactoryImpl());
         let initial_state = InitialConstellationState {
             compositor_proxy: compositor_sender.clone(),
@@ -322,6 +302,13 @@ impl Verso {
             user_agent,
             webrender_external_images: external_images,
             wgpu_image_map,
+        };
+
+        // The division by 1 represents the page's default zoom of 100%,
+        // and gives us the appropriate CSSPixel type for the viewport.
+        let window_size = WindowSizeData {
+            initial_viewport: viewport_size / Scale::new(1.0),
+            device_pixel_ratio: Scale::new(device_pixel_ratio),
         };
 
         // Create constellation thread
@@ -353,6 +340,7 @@ impl Verso {
 
         // The compositor coordinates with the client window to create the final
         // rendered page and display it somewhere.
+        let panel_id = window.panel.id();
         let compositor = IOCompositor::create(
             window.gl_window(),
             InitialCompositorState {
@@ -371,10 +359,10 @@ impl Verso {
             composite_target,
             opts.exit_after_load,
             opts.debug.convert_mouse_to_touch,
-            top_level_browsing_context_id,
+            panel_id,
         );
 
-        window.set_webview_id(top_level_browsing_context_id);
+        // Create Verso instance
         let verso = Verso {
             window,
             compositor: Some(compositor),
@@ -385,9 +373,10 @@ impl Verso {
                 .expect("Clipboard isn't supported in this platform or desktop environment."),
         };
 
+        // Send the constellation message to start Panel UI
         send_to_constellation(
             &verso.constellation_sender,
-            ConstellationMsg::NewWebView(url, top_level_browsing_context_id),
+            ConstellationMsg::NewWebView(url, panel_id),
         );
         verso.setup_logging();
 
@@ -403,8 +392,9 @@ impl Verso {
         self.handle_servo_messages();
     }
 
+    /// Handle Winit events
     fn handle_winit_event(&mut self, event: Event<()>) {
-        log::trace!("Verso is creating embedder event from: {event:?}");
+        log::trace!("Verso is handling Winit event: {event:?}");
         match event {
             Event::Suspended | Event::Resumed | Event::UserEvent(()) => {}
             Event::WindowEvent {
@@ -423,15 +413,25 @@ impl Verso {
         }
     }
 
+    /// Handle message came from Servo.
     fn handle_servo_messages(&mut self) {
         let mut shutdown = false;
         if let Some(compositor) = &mut self.compositor {
+            // Handle Compositor's messages first
+            log::trace!("Verso is handling Compositor messages");
             if compositor.receive_messages() {
+                // And then handle Embedder messages
+                log::trace!(
+                    "Verso is handling Embedder messages when shutdown state is set to {:?}",
+                    compositor.shutdown_state
+                );
                 while let Some((top_level_browsing_context, msg)) =
                     self.embedder_receiver.try_recv_embedder_msg()
                 {
                     match compositor.shutdown_state {
                         ShutdownState::NotShuttingDown => {
+                            // TODO we need to worry about which window to handle message in
+                            // multiwindow
                             self.window.handle_servo_message(
                                 top_level_browsing_context,
                                 msg,
@@ -441,7 +441,7 @@ impl Verso {
                             );
                         }
                         ShutdownState::FinishedShuttingDown => {
-                            log::error!("embedder shouldn't be handling messages after compositor has shut down");
+                            log::error!("Verso shouldn't be handling messages after compositor has shut down");
                         }
                         ShutdownState::ShuttingDown => {}
                     }
@@ -449,6 +449,7 @@ impl Verso {
             }
 
             if compositor.shutdown_state != ShutdownState::FinishedShuttingDown {
+                // Update compositor
                 compositor.perform_updates();
             } else {
                 shutdown = true;
@@ -456,6 +457,7 @@ impl Verso {
         }
 
         if shutdown {
+            // If Compositor has shut down, deinit and remove it.
             self.compositor.take().map(IOCompositor::deinit);
         }
     }
@@ -494,10 +496,7 @@ impl EventLoopWaker for Waker {
 
     fn wake(&self) {
         if let Err(e) = self.0.send_event(()) {
-            log::error!(
-                "Servo embedder failed to send wake up event to Verso: {}",
-                e
-            );
+            log::error!("Servo failed to send wake up event to Verso: {}", e);
         }
     }
 }

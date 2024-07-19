@@ -4,7 +4,6 @@ use compositing_traits::ConstellationMsg;
 use crossbeam_channel::Sender;
 use raw_window_handle::{HasRawDisplayHandle, HasRawWindowHandle};
 use servo::{
-    base::id::WebViewId,
     compositing::{
         windowing::{AnimationState, EmbedderCoordinates, MouseWindowEvent, WindowMethods},
         IOCompositor,
@@ -46,7 +45,7 @@ pub struct Window {
     /// The WebView of this window.
     pub(crate) webview: Option<WebView>,
     /// Access to webrender GL
-    webrender_gl: Rc<dyn gl::Gl>,
+    pub(crate) webrender_gl: Rc<dyn gl::Gl>,
     /// The mouse physical position in the web view.
     mouse_position: Cell<PhysicalPosition<f64>>,
     /// Modifiers state of the keyboard.
@@ -87,11 +86,6 @@ impl Window {
             mouse_position: Cell::new(PhysicalPosition::default()),
             modifiers_state: Cell::new(ModifiersState::default()),
         }
-    }
-
-    /// Set WebView ID of this window.
-    pub fn set_webview_id(&mut self, id: WebViewId) {
-        self.panel.set_id(id);
     }
 
     /// Return the reference counted `GLWindow`.
@@ -232,7 +226,7 @@ impl Window {
             }
             // Handle message in Verso Window
             None => {
-                log::trace!("Verso Window is handling servo message: {message:?}");
+                log::trace!("Verso Window is handling Embedder message: {message:?}");
                 match message {
                     EmbedderMsg::ReadyToPresent(_w) => {
                         self.window.request_redraw();
