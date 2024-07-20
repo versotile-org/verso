@@ -10,29 +10,22 @@ use servo::{
 pub struct Config {
     /// Global flag options of Servo.
     pub opts: Opts,
+    /// Path to resources directory.
+    pub resource_dir: PathBuf,
 }
 
 impl Config {
     /// Create a new configuration for creating Verso instance. It must provide the path of
     /// resources directory.
-    pub fn new(path: PathBuf) -> Self {
-        let mut opts = default_opts();
-        opts.config_dir = Some(path);
-        Self { opts }
+    pub fn new(resource_dir: PathBuf) -> Self {
+        let opts = default_opts();
+        Self { opts, resource_dir }
     }
 
     /// Init options and preferences.
-    ///
-    /// TODO write down how prefs and opts work.
     pub fn init(self) {
         // Set the resource files and preferences of Servo.
-        let config_dir = self
-            .opts
-            .config_dir
-            .clone()
-            .filter(|d| d.exists())
-            .expect("Can't get the resources directory.");
-        resources::set(Box::new(ResourceReader(config_dir)));
+        resources::set(Box::new(ResourceReader(self.resource_dir)));
 
         // Set the global options of Servo.
         set_options(self.opts);
