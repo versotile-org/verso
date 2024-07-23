@@ -1,10 +1,12 @@
 use std::{cell::Cell, ops::Deref, rc::Rc};
 
+use compositing_traits::ConstellationMsg;
+use crossbeam_channel::Sender;
 use raw_window_handle::{HasRawDisplayHandle, HasRawWindowHandle};
 use servo::{
-    base::id::WebViewId,
-    compositing::windowing::{
-        AnimationState, EmbedderCoordinates, EmbedderEvent, MouseWindowEvent, WindowMethods,
+    compositing::{
+        windowing::{AnimationState, EmbedderCoordinates, MouseWindowEvent, WindowMethods},
+        IOCompositor,
     },
     embedder_traits::{Cursor, EmbedderMsg},
     euclid::{Point2D, Scale, Size2D},
@@ -16,7 +18,7 @@ use servo::{
         ScrollLocation,
     },
     webrender_traits::RenderingContext,
-    Servo,
+    Servo, TopLevelBrowsingContextId,
 };
 use surfman::{Connection, GLApi, SurfaceType};
 use winit::{
@@ -28,8 +30,8 @@ use winit::{
 
 use crate::{
     keyboard::keyboard_event_from_winit,
+    verso::send_to_constellation,
     webview::{Panel, WebView},
-    Status,
 };
 
 use arboard::Clipboard;
@@ -43,7 +45,7 @@ pub struct Window {
     /// The WebView of this window.
     pub(crate) webview: Option<WebView>,
     /// Access to webrender GL
-    webrender_gl: Rc<dyn gl::Gl>,
+    pub(crate) webrender_gl: Rc<dyn gl::Gl>,
     /// The mouse physical position in the web view.
     mouse_position: Cell<PhysicalPosition<f64>>,
     /// Modifiers state of the keyboard.
@@ -86,11 +88,6 @@ impl Window {
         }
     }
 
-    /// Set WebView ID of this window.
-    pub fn set_webview_id(&mut self, id: WebViewId) {
-        self.panel.set_id(id);
-    }
-
     /// Return the reference counted `GLWindow`.
     pub fn gl_window(&self) -> Rc<GLWindow> {
         return self.gl_window.clone();
@@ -99,27 +96,22 @@ impl Window {
     /// Handle Winit window event.
     pub fn handle_winit_window_event(
         &self,
-        servo: &mut Option<Servo<GLWindow>>,
-        events: &mut Vec<EmbedderEvent>,
+        sender: &Sender<ConstellationMsg>,
+        compositor: &mut IOCompositor<GLWindow>,
         event: &winit::event::WindowEvent,
     ) {
         match event {
             WindowEvent::RedrawRequested => {
-                let Some(servo) = servo.as_mut() else {
-                    return;
-                };
-
-                self.paint(servo);
-                events.push(EmbedderEvent::Idle);
+                compositor.present();
             }
             WindowEvent::Resized(size) => {
                 let size = Size2D::new(size.width, size.height);
-                let _ = self.resize(size.to_i32(), events);
+                let _ = self.resize(size.to_i32(), compositor);
             }
             WindowEvent::CursorMoved { position, .. } => {
-                let event: DevicePoint = DevicePoint::new(position.x as f32, position.y as f32);
+                let cursor: DevicePoint = DevicePoint::new(position.x as f32, position.y as f32);
                 self.mouse_position.set(*position);
-                events.push(EmbedderEvent::MouseWindowMoveEventClass(event));
+                compositor.on_mouse_window_move_event_class(cursor);
             }
             WindowEvent::MouseInput { state, button, .. } => {
                 let button: servo::script_traits::MouseButton = match button {
@@ -142,16 +134,16 @@ impl Window {
                     ElementState::Pressed => MouseWindowEvent::MouseDown(button, position),
                     ElementState::Released => MouseWindowEvent::MouseUp(button, position),
                 };
-                events.push(EmbedderEvent::MouseWindowEventClass(event));
+                compositor.on_mouse_window_event_class(event);
 
                 // Winit didn't send click event, so we send it after mouse up
                 if *state == ElementState::Released {
                     let event: MouseWindowEvent = MouseWindowEvent::Click(button, position);
-                    events.push(EmbedderEvent::MouseWindowEventClass(event));
+                    compositor.on_mouse_window_event_class(event);
                 }
             }
             WindowEvent::TouchpadMagnify { delta, .. } => {
-                events.push(EmbedderEvent::Zoom(1.0 + *delta as f32));
+                compositor.on_zoom_window_event(1.0 + *delta as f32);
             }
             WindowEvent::MouseWheel { delta, phase, .. } => {
                 // FIXME: Pixels per line, should be configurable (from browser setting?) and vary by zoom level.
@@ -168,13 +160,13 @@ impl Window {
                 };
 
                 // Wheel Event
-                events.push(EmbedderEvent::Wheel(
+                compositor.on_wheel_event(
                     WheelDelta { x, y, z: 0.0, mode },
                     DevicePoint::new(
                         self.mouse_position.get().x as f32,
                         self.mouse_position.get().y as f32,
                     ),
-                ));
+                );
 
                 // Scroll Event
                 // Do one axis at a time.
@@ -191,83 +183,64 @@ impl Window {
                     TouchPhase::Cancelled => TouchEventType::Cancel,
                 };
 
-                events.push(EmbedderEvent::Scroll(
+                compositor.on_scroll_event(
                     ScrollLocation::Delta(LayoutVector2D::new(x as f32, y as f32)),
                     DeviceIntPoint::new(
                         self.mouse_position.get().x as i32,
                         self.mouse_position.get().y as i32,
                     ),
                     phase,
-                ));
+                );
             }
             WindowEvent::CloseRequested => {
-                events.push(EmbedderEvent::Quit);
+                compositor.maybe_start_shutting_down();
             }
             WindowEvent::ModifiersChanged(modifier) => self.modifiers_state.set(modifier.state()),
             WindowEvent::KeyboardInput { event, .. } => {
                 let event = keyboard_event_from_winit(&event, self.modifiers_state.get());
                 log::trace!("Verso is handling {:?}", event);
-                events.push(EmbedderEvent::Keyboard(event));
+                let msg = ConstellationMsg::Keyboard(event);
+                send_to_constellation(sender, msg);
             }
             e => log::warn!("Verso Window isn't supporting this window event yet: {e:?}"),
         }
     }
 
-    /// Handle servo messages and return a boolean to indicate servo needs to present or not.
-    pub fn handle_servo_messages(
+    /// Handle servo messages.
+    pub fn handle_servo_message(
         &mut self,
-        servo: &mut Servo<GLWindow>,
-        events: &mut Vec<EmbedderEvent>,
-        status: &mut Status,
+        webview_id: Option<TopLevelBrowsingContextId>,
+        message: EmbedderMsg,
+        sender: &Sender<ConstellationMsg>,
+        compositor: &mut IOCompositor<GLWindow>,
         clipboard: &mut Clipboard,
-    ) -> bool {
-        let mut need_present = false;
-        servo.get_events().into_iter().for_each(|(w, m)| {
-            match w {
-                // Handle message in Verso Panel
-                Some(p) if p == self.panel.id() => {
-                    self.handle_servo_messages_with_panel(
-                        events,
-                        clipboard,
-                        p,
-                        m,
-                        &mut need_present,
-                    );
-                }
-                // Handle message in Verso WebView
-                Some(w) => {
-                    self.handle_servo_messages_with_webview(
-                        events,
-                        clipboard,
-                        w,
-                        m,
-                        &mut need_present,
-                    );
-                }
-                // Handle message in Verso Window
-                None => {
-                    log::trace!("Verso Window is handling servo message: {m:?}");
-                    match m {
-                        EmbedderMsg::ReadyToPresent(_w) => {
-                            need_present = true;
-                        }
-                        EmbedderMsg::SetCursor(cursor) => {
-                            self.set_cursor_icon(cursor);
-                        }
-                        EmbedderMsg::Shutdown => {
-                            *status = Status::Shutdown;
-                        }
-                        e => {
-                            log::warn!(
-                                "Verso Window isn't supporting handling this message yet: {e:?}"
-                            )
-                        }
+    ) {
+        match webview_id {
+            // // Handle message in Verso Panel
+            Some(p) if p == self.panel.id() => {
+                self.handle_servo_messages_with_panel(p, message, sender, compositor, clipboard);
+            }
+            // Handle message in Verso WebView
+            Some(w) => {
+                self.handle_servo_messages_with_webview(w, message, sender, compositor, clipboard);
+            }
+            // Handle message in Verso Window
+            None => {
+                log::trace!("Verso Window is handling Embedder message: {message:?}");
+                match message {
+                    EmbedderMsg::ReadyToPresent(_w) => {
+                        self.window.request_redraw();
+                    }
+                    EmbedderMsg::SetCursor(cursor) => {
+                        self.set_cursor_icon(cursor);
+                    }
+                    EmbedderMsg::Shutdown => {}
+                    e => {
+                        log::warn!("Verso Window isn't supporting handling this message yet: {e:?}")
                     }
                 }
             }
-        });
-
-        need_present
+        }
     }
 
     /// Paint offscreen framebuffer to Winit window.
@@ -327,17 +300,22 @@ impl Window {
     }
 
     /// Resize the rendering context and all web views.
-    pub fn resize(&self, size: Size2D<i32, DevicePixel>, events: &mut Vec<EmbedderEvent>) {
+    pub fn resize(&self, size: Size2D<i32, DevicePixel>, compositor: &mut IOCompositor<GLWindow>) {
         let _ = self.gl_window.rendering_context.resize(size.to_untyped());
-        events.push(EmbedderEvent::WindowResize);
+        let need_resize = compositor.on_resize_window_event();
 
         let rect = DeviceIntRect::from_size(size).to_f32();
-        events.push(EmbedderEvent::MoveResizeWebView(self.panel.id(), rect));
+        compositor.move_resize_webview(self.panel.id(), rect);
 
         if let Some(w) = &self.webview {
             let mut rect = DeviceIntRect::from_size(size).to_f32();
             rect.min.y = rect.max.y.min(76.);
-            events.push(EmbedderEvent::MoveResizeWebView(w.id(), rect));
+            compositor.move_resize_webview(w.id(), rect);
+        }
+
+        if need_resize {
+            compositor.repaint_synchronously();
+            compositor.present();
         }
     }
 

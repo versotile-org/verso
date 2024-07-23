@@ -1,9 +1,11 @@
 use std::cell::Cell;
 
 use arboard::Clipboard;
+use compositing_traits::ConstellationMsg;
+use crossbeam_channel::Sender;
 use servo::{
-    base::id::WebViewId,
-    compositing::windowing::EmbedderEvent,
+    base::id::{PipelineNamespace, PipelineNamespaceId, WebViewId},
+    compositing::{webview::UnknownWebView, IOCompositor},
     embedder_traits::{CompositorEventVariant, EmbedderMsg, PromptDefinition},
     euclid::Size2D,
     script_traits::TraversalDirection,
@@ -12,7 +14,10 @@ use servo::{
     TopLevelBrowsingContextId,
 };
 
-use crate::window::Window;
+use crate::{
+    verso::send_to_constellation,
+    window::{GLWindow, Window},
+};
 
 /// A web view is an area to display web browsing context. It's what user will treat as a "web page".
 pub struct WebView {
@@ -47,19 +52,17 @@ impl Window {
     /// Handle servo messages with corresponding web view ID.
     pub fn handle_servo_messages_with_webview(
         &mut self,
-        events: &mut Vec<EmbedderEvent>,
+        webview_id: WebViewId,
+        message: EmbedderMsg,
+        sender: &Sender<ConstellationMsg>,
+        compositor: &mut IOCompositor<GLWindow>,
         clipboard: &mut Clipboard,
-        w: WebViewId,
-        m: EmbedderMsg,
-        need_present: &mut bool,
     ) {
-        log::trace!("Verso WebView {w:?} is handling servo message: {m:?}",);
-        match m {
-            EmbedderMsg::LoadStart | EmbedderMsg::HeadParsed => {
-                *need_present = false;
-            }
+        log::trace!("Verso WebView {webview_id:?} is handling Embedder message: {message:?}",);
+        match message {
+            EmbedderMsg::LoadStart | EmbedderMsg::HeadParsed => {}
             EmbedderMsg::LoadComplete => {
-                *need_present = true;
+                self.window.request_redraw();
             }
             EmbedderMsg::WebViewOpened(w) => {
                 let webview = WebView::new(w);
@@ -69,27 +72,32 @@ impl Window {
                 let size = Size2D::new(size.width as i32, size.height as i32);
                 let mut rect = DeviceIntRect::from_size(size).to_f32();
                 rect.min.y = rect.max.y.min(76.);
-                events.push(EmbedderEvent::FocusWebView(w));
-                events.push(EmbedderEvent::MoveResizeWebView(w, rect));
+                send_to_constellation(sender, ConstellationMsg::FocusWebView(w));
+                compositor.move_resize_webview(w, rect);
             }
             EmbedderMsg::AllowNavigationRequest(id, _url) => {
                 // TODO should provide a API for users to check url
-                events.push(EmbedderEvent::AllowNavigationResponse(id, true));
+                send_to_constellation(sender, ConstellationMsg::AllowNavigationResponse(id, true));
             }
             EmbedderMsg::WebViewClosed(_w) => {
                 self.webview = None;
             }
             EmbedderMsg::WebViewFocused(w) => {
-                events.push(EmbedderEvent::ShowWebView(w, false));
+                if let Err(UnknownWebView(webview_id)) = compositor.show_webview(w, false) {
+                    log::warn!("{webview_id}: ShowWebView on unknown webview id");
+                }
             }
             EmbedderMsg::GetClipboardContents(sender) => {
                 let contents = clipboard.get_text().unwrap_or_else(|e| {
-                    log::warn!("Verso WebView {w:?} failed to get clipboard content: {}", e);
+                    log::warn!(
+                        "Verso WebView {webview_id:?} failed to get clipboard content: {}",
+                        e
+                    );
                     String::new()
                 });
                 if let Err(e) = sender.send(contents) {
                     log::warn!(
-                        "Verso WebView {w:?} failed to send clipboard content: {}",
+                        "Verso WebView {webview_id:?} failed to send clipboard content: {}",
                         e
                     );
                 }
@@ -97,15 +105,19 @@ impl Window {
             EmbedderMsg::SetClipboardContents(text) => {
                 if let Err(e) = clipboard.set_text(text) {
                     log::warn!(
-                        "Verso WebView {w:?} failed to set clipboard contents: {}",
+                        "Verso WebView {webview_id:?} failed to set clipboard contents: {}",
                         e
                     );
                 }
             }
             EmbedderMsg::EventDelivered(event) => {
                 if let CompositorEventVariant::MouseButtonEvent = event {
-                    events.push(EmbedderEvent::RaiseWebViewToTop(w, false));
-                    events.push(EmbedderEvent::FocusWebView(w));
+                    if let Err(UnknownWebView(webview_id)) =
+                        compositor.raise_webview_to_top(webview_id, false)
+                    {
+                        log::warn!("{webview_id}: RaiseWebViewToTop on unknown webview id");
+                    }
+                    send_to_constellation(sender, ConstellationMsg::FocusWebView(webview_id));
                 }
             }
             e => {
@@ -127,25 +139,23 @@ impl Window {
 /// - Maximize the window: `window.prompt('MAXIMIZE')`
 /// - Navigate to a specific URL: `window.prompt('NAVIGATE_TO:${url}')`
 pub struct Panel {
-    id: Option<WebViewId>,
+    id: WebViewId,
 }
 
 impl Panel {
     /// Create a panel from Winit window.
     pub fn new() -> Self {
-        Self { id: None }
-    }
-
-    /// Set web view ID of this panel.
-    pub fn set_id(&mut self, id: WebViewId) {
-        self.id = Some(id);
+        // Reserving a namespace to create TopLevelBrowsingContextId.
+        PipelineNamespace::install(PipelineNamespaceId(0));
+        let id = TopLevelBrowsingContextId::new();
+        Self { id }
     }
 
     /// Get web view ID of this panel.
     ///
     /// We assume this is always called after `set_id`. Calling before it will cause panic.
     pub fn id(&self) -> WebViewId {
-        self.id.unwrap()
+        self.id
     }
 }
 
@@ -153,87 +163,98 @@ impl Window {
     /// Handle servo messages with main panel.
     pub fn handle_servo_messages_with_panel(
         &mut self,
-        events: &mut Vec<EmbedderEvent>,
+        panel_id: WebViewId,
+        message: EmbedderMsg,
+        sender: &Sender<ConstellationMsg>,
+        compositor: &mut IOCompositor<GLWindow>,
         clipboard: &mut Clipboard,
-        p: WebViewId,
-        m: EmbedderMsg,
-        need_present: &mut bool,
     ) {
-        log::trace!("Verso Panel {p:?} is handling servo message: {m:?}",);
-        match m {
-            EmbedderMsg::LoadStart | EmbedderMsg::HeadParsed => {
-                *need_present = false;
-            }
+        log::trace!("Verso Panel {panel_id:?} is handling Embedder message: {message:?}",);
+        match message {
+            EmbedderMsg::LoadStart | EmbedderMsg::HeadParsed => {}
             EmbedderMsg::LoadComplete => {
-                *need_present = true;
+                self.window.request_redraw();
                 // let demo_url = ServoUrl::parse("https://demo.versotile.org").unwrap();
                 let demo_url = ServoUrl::parse("https://keyboard-test.space").unwrap();
                 let demo_id = TopLevelBrowsingContextId::new();
-                events.push(EmbedderEvent::NewWebView(demo_url, demo_id));
+                send_to_constellation(sender, ConstellationMsg::NewWebView(demo_url, demo_id));
             }
             EmbedderMsg::AllowNavigationRequest(id, _url) => {
                 // The panel shouldn't navigate to other pages.
-                events.push(EmbedderEvent::AllowNavigationResponse(id, false));
+                send_to_constellation(sender, ConstellationMsg::AllowNavigationResponse(id, false));
             }
             EmbedderMsg::WebViewOpened(w) => {
                 let size = self.window.inner_size();
                 let size = Size2D::new(size.width as i32, size.height as i32);
                 let rect = DeviceIntRect::from_size(size).to_f32();
-                events.push(EmbedderEvent::FocusWebView(w));
-                events.push(EmbedderEvent::MoveResizeWebView(w, rect));
+                send_to_constellation(sender, ConstellationMsg::FocusWebView(w));
+                compositor.move_resize_webview(w, rect);
             }
             EmbedderMsg::WebViewClosed(_w) => {
-                events.push(EmbedderEvent::Quit);
+                compositor.maybe_start_shutting_down();
             }
             EmbedderMsg::WebViewFocused(w) => {
-                events.push(EmbedderEvent::ShowWebView(w, false));
+                if let Err(UnknownWebView(webview_id)) = compositor.show_webview(w, false) {
+                    log::warn!("{webview_id}: ShowWebView on unknown webview id");
+                }
             }
             EmbedderMsg::HistoryChanged(..) | EmbedderMsg::ChangePageTitle(..) => {
-                log::trace!("Verso Panel ignores this message: {m:?}")
+                log::trace!("Verso Panel ignores this message: {message:?}")
             }
-            EmbedderMsg::Prompt(definition, _origin) => match definition {
-                PromptDefinition::Input(msg, _defaut, sender) => {
-                    if let Some(webview) = &self.webview {
-                        let id = webview.id();
+            EmbedderMsg::Prompt(definition, _origin) => {
+                match definition {
+                    PromptDefinition::Input(msg, _, prompt_sender) => {
+                        if let Some(webview) = &self.webview {
+                            let id = webview.id();
 
-                        if msg.starts_with("NAVIGATE_TO:") {
-                            let url =
-                                ServoUrl::parse(msg.strip_prefix("NAVIGATE_TO:").unwrap()).unwrap();
-                            events.push(EmbedderEvent::LoadUrl(id, url));
-                        } else {
-                            match msg.as_str() {
-                                "PREV" => {
-                                    events.push(EmbedderEvent::Navigation(
-                                        id,
-                                        TraversalDirection::Back(1),
-                                    ));
+                            if msg.starts_with("NAVIGATE_TO:") {
+                                let url =
+                                    ServoUrl::parse(msg.strip_prefix("NAVIGATE_TO:").unwrap())
+                                        .unwrap();
+                                send_to_constellation(sender, ConstellationMsg::LoadUrl(id, url));
+                            } else {
+                                match msg.as_str() {
+                                    "PREV" => {
+                                        send_to_constellation(
+                                            sender,
+                                            ConstellationMsg::TraverseHistory(
+                                                id,
+                                                TraversalDirection::Back(1),
+                                            ),
+                                        );
+                                        // TODO Set EmbedderMsg::Status to None
+                                    }
+                                    "FORWARD" => {
+                                        send_to_constellation(
+                                            sender,
+                                            ConstellationMsg::TraverseHistory(
+                                                id,
+                                                TraversalDirection::Forward(1),
+                                            ),
+                                        );
+                                        // TODO Set EmbedderMsg::Status to None
+                                    }
+                                    "REFRESH" => {
+                                        send_to_constellation(sender, ConstellationMsg::Reload(id));
+                                    }
+                                    "MINIMIZE" => {
+                                        self.window.set_minimized(true);
+                                    }
+                                    "MAXIMIZE" => {
+                                        let is_maximized = self.window.is_maximized();
+                                        self.window.set_maximized(!is_maximized);
+                                    }
+                                    e => log::warn!(
+                                        "Verso Panel isn't supporting this prompt message yet: {e}"
+                                    ),
                                 }
-                                "FORWARD" => {
-                                    events.push(EmbedderEvent::Navigation(
-                                        id,
-                                        TraversalDirection::Forward(1),
-                                    ));
-                                }
-                                "REFRESH" => {
-                                    events.push(EmbedderEvent::Reload(id));
-                                }
-                                "MINIMIZE" => {
-                                    self.window.set_minimized(true);
-                                }
-                                "MAXIMIZE" => {
-                                    let is_maximized = self.window.is_maximized();
-                                    self.window.set_maximized(!is_maximized);
-                                }
-                                e => log::warn!(
-                                    "Verso Panel isn't supporting this prompt message yet: {e}"
-                                ),
                             }
                         }
+                        let _ = prompt_sender.send(None);
                     }
-                    let _ = sender.send(None);
+                    _ => log::warn!("Verso Panel isn't supporting this prompt yet"),
                 }
-                _ => log::warn!("Verso Panel isn't supporting this prompt yet"),
-            },
+            }
             EmbedderMsg::GetClipboardContents(sender) => {
                 let contents = clipboard.get_text().unwrap_or_else(|e| {
                     log::warn!("Verso Panel failed to get clipboard content: {}", e);
