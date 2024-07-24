@@ -16,10 +16,6 @@ use servo::{
         canvas_paint_thread::{self, CanvasPaintThread},
         WebGLComm,
     },
-    compositing::{
-        windowing::WindowMethods, CompositeTarget, IOCompositor, InitialCompositorState,
-        ShutdownState,
-    },
     config::{opts, pref},
     constellation::{Constellation, FromCompositorLogger, InitialConstellationState},
     devtools,
@@ -43,6 +39,10 @@ use webrender::{api::*, ShaderPrecacheFlags};
 use winit::{event::Event, event_loop::EventLoopProxy, window::Window as WinitWindow};
 
 use crate::{
+    compositor::{
+        windowing::WindowMethods, CompositeTarget, IOCompositor, InitialCompositorState,
+        ShutdownState,
+    },
     config::Config,
     window::{GLWindow, Window},
 };

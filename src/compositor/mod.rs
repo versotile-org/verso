@@ -8,7 +8,7 @@ use profile_traits::{mem, time};
 use servo::webrender_traits::RenderingContext;
 use webrender::{api::DocumentId, RenderApi};
 
-// pub use crate::compositor::{CompositeTarget, IOCompositor, ShutdownState};
+pub use compositor::{CompositeTarget, IOCompositor, ShutdownState};
 
 #[macro_use]
 mod tracing;

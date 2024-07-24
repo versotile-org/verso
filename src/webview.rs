@@ -5,7 +5,6 @@ use compositing_traits::ConstellationMsg;
 use crossbeam_channel::Sender;
 use servo::{
     base::id::{PipelineNamespace, PipelineNamespaceId, WebViewId},
-    compositing::{webview::UnknownWebView, IOCompositor},
     embedder_traits::{CompositorEventVariant, EmbedderMsg, PromptDefinition},
     euclid::Size2D,
     script_traits::TraversalDirection,
@@ -15,6 +14,7 @@ use servo::{
 };
 
 use crate::{
+    compositor::{webview::UnknownWebView, IOCompositor},
     verso::send_to_constellation,
     window::{GLWindow, Window},
 };

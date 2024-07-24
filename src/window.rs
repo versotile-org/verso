@@ -4,10 +4,6 @@ use compositing_traits::ConstellationMsg;
 use crossbeam_channel::Sender;
 use raw_window_handle::{HasRawDisplayHandle, HasRawWindowHandle};
 use servo::{
-    compositing::{
-        windowing::{AnimationState, EmbedderCoordinates, MouseWindowEvent, WindowMethods},
-        IOCompositor,
-    },
     embedder_traits::{Cursor, EmbedderMsg},
     euclid::{Point2D, Scale, Size2D},
     gl,
@@ -29,6 +25,10 @@ use winit::{
 };
 
 use crate::{
+    compositor::{
+        windowing::{AnimationState, EmbedderCoordinates, MouseWindowEvent, WindowMethods},
+        IOCompositor,
+    },
     keyboard::keyboard_event_from_winit,
     verso::send_to_constellation,
     webview::{Panel, WebView},
@@ -243,51 +243,51 @@ impl Window {
         }
     }
 
-    /// Paint offscreen framebuffer to Winit window.
-    pub fn paint(&self, servo: &mut Servo<GLWindow>) {
-        if let Some(fbo) = servo.offscreen_framebuffer_id() {
-            let viewport = self.gl_window.get_coordinates().get_flipped_viewport();
-            let webrender_gl = &self.webrender_gl;
-
-            let target_fbo = self
-                .gl_window
-                .rendering_context
-                .context_surface_info()
-                .unwrap_or(None)
-                .map(|info| info.framebuffer_object)
-                .unwrap_or(0);
-
-            webrender_gl.bind_framebuffer(gl::READ_FRAMEBUFFER, fbo);
-            webrender_gl.bind_framebuffer(gl::DRAW_FRAMEBUFFER, target_fbo);
-
-            let x = viewport.min.x;
-            let y = viewport.min.y;
-            let width = viewport.size().width;
-            let height = viewport.size().height;
-            webrender_gl.blit_framebuffer(
-                x,
-                y,
-                x + width,
-                y + height,
-                x,
-                y,
-                x + width,
-                y + height,
-                gl::COLOR_BUFFER_BIT,
-                gl::NEAREST,
-            );
-
-            debug_assert_eq!(
-                (
-                    self.webrender_gl.get_error(),
-                    self.webrender_gl.check_frame_buffer_status(gl::FRAMEBUFFER)
-                ),
-                (gl::NO_ERROR, gl::FRAMEBUFFER_COMPLETE)
-            );
-
-            servo.present();
-        }
-    }
+    // /// Paint offscreen framebuffer to Winit window.
+    // pub fn paint(&self, servo: &mut Servo<GLWindow>) {
+    //     if let Some(fbo) = servo.offscreen_framebuffer_id() {
+    //         let viewport = self.gl_window.get_coordinates().get_flipped_viewport();
+    //         let webrender_gl = &self.webrender_gl;
+    //
+    //         let target_fbo = self
+    //             .gl_window
+    //             .rendering_context
+    //             .context_surface_info()
+    //             .unwrap_or(None)
+    //             .map(|info| info.framebuffer_object)
+    //             .unwrap_or(0);
+    //
+    //         webrender_gl.bind_framebuffer(gl::READ_FRAMEBUFFER, fbo);
+    //         webrender_gl.bind_framebuffer(gl::DRAW_FRAMEBUFFER, target_fbo);
+    //
+    //         let x = viewport.min.x;
+    //         let y = viewport.min.y;
+    //         let width = viewport.size().width;
+    //         let height = viewport.size().height;
+    //         webrender_gl.blit_framebuffer(
+    //             x,
+    //             y,
+    //             x + width,
+    //             y + height,
+    //             x,
+    //             y,
+    //             x + width,
+    //             y + height,
+    //             gl::COLOR_BUFFER_BIT,
+    //             gl::NEAREST,
+    //         );
+    //
+    //         debug_assert_eq!(
+    //             (
+    //                 self.webrender_gl.get_error(),
+    //                 self.webrender_gl.check_frame_buffer_status(gl::FRAMEBUFFER)
+    //             ),
+    //             (gl::NO_ERROR, gl::FRAMEBUFFER_COMPLETE)
+    //         );
+    //
+    //         servo.present();
+    //     }
+    // }
 
     /// Queues a Winit `WindowEvent::RedrawRequested` event to be emitted that aligns with the windowing system drawing loop.
     pub fn request_redraw(&self) {
