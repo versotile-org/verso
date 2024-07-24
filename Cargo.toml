@@ -32,13 +32,20 @@ log = "0.4"
 thiserror = "1.0"
 raw-window-handle = { version = "0.5", features = ["std"] }
 arboard = "3.4.0"
-# Servo
+# Servo Embedder
 libservo = { git = "https://github.com/servo/servo.git", rev = "2a31e62", features = ["max_log_level", "native-bluetooth", "webdriver"] }
 compositing_traits = { git = "https://github.com/servo/servo.git", rev = "2a31e62" }
 webdriver_server = { git = "https://github.com/servo/servo.git", rev = "2a31e62" }
 webrender = { git = "https://github.com/servo/webrender", branch = "0.64", features = ["capture"] }
 sparkle = "0.1.26"
 webxr = { git = "https://github.com/servo/webxr", features = ["headless"] }
+# Servo Compositor
+profile_traits = { git = "https://github.com/servo/servo.git", rev = "2a31e62" }
+pixels = { git = "https://github.com/servo/servo.git", rev = "2a31e62" }
+image = "0.24"
+ipc-channel = "0.18"
+fnv = "1.0"
+# Servo
 env_logger = "0.10"
 servo-media = { git = "https://github.com/servo/media" }
 servo-media-dummy = { git = "https://github.com/servo/media" }
