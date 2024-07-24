@@ -10,9 +10,6 @@ use webrender::{api::DocumentId, RenderApi};
 
 pub use compositor::{CompositeTarget, IOCompositor, ShutdownState};
 
-#[macro_use]
-mod tracing;
-
 mod compositor;
 mod gl;
 mod touch;

@@ -7,7 +7,6 @@ use std::collections::HashMap;
 use std::env;
 use std::ffi::c_void;
 use std::fs::{create_dir_all, File};
-use std::io::Write;
 use std::iter::once;
 use std::rc::Rc;
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
@@ -47,12 +46,12 @@ use webrender::api::units::{
     LayoutVector2D, WorldPoint,
 };
 use webrender::api::{
-    self, BuiltDisplayList, DirtyRect, DisplayListPayload, DocumentId, Epoch as WebRenderEpoch,
+    BuiltDisplayList, DirtyRect, DisplayListPayload, DocumentId, Epoch as WebRenderEpoch,
     ExternalScrollId, FontInstanceOptions, HitTestFlags, PipelineId as WebRenderPipelineId,
     PropertyBinding, ReferenceFrameKind, RenderReasons, SampledScrollOffset, ScrollLocation,
     SpaceAndClipInfo, SpatialId, SpatialTreeItemKey, TransformStyle,
 };
-use webrender::{CaptureBits, RenderApi, Transaction};
+use webrender::{RenderApi, Transaction};
 
 use super::gl::RenderTargetInfo;
 use super::touch::{TouchAction, TouchHandler};
@@ -524,8 +523,6 @@ impl<Window: WindowMethods + ?Sized> IOCompositor<Window> {
     }
 
     fn handle_browser_message(&mut self, msg: CompositorMsg) -> bool {
-        trace_msg_from_constellation!(msg, "{msg:?}");
-
         match self.shutdown_state {
             ShutdownState::NotShuttingDown => {}
             ShutdownState::ShuttingDown => {
