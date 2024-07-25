@@ -36,6 +36,28 @@ impl WebView {
         }
     }
 
+    /// Create a panel view from Winit window. A panel is a special web view that focus on controlling states around window.
+    /// It could be treated as the control panel or navigation bar of the window depending on usages.
+    ///
+    /// At the moment, following Web API is supported:
+    /// - Close window: `window.close()`
+    /// - Navigate to previous page: `window.prompt('PREV')`
+    /// - Navigate to next page: `window.prompt('FORWARD')`
+    /// - Refresh the page: `window.prompt('REFRESH')`
+    /// - Minimize the window: `window.prompt('MINIMIZE')`
+    /// - Maximize the window: `window.prompt('MAXIMIZE')`
+    /// - Navigate to a specific URL: `window.prompt('NAVIGATE_TO:${url}')`
+    pub fn new_panel() -> Self {
+        // Reserving a namespace to create TopLevelBrowsingContextId.
+        PipelineNamespace::install(PipelineNamespaceId(0));
+        let id = TopLevelBrowsingContextId::new();
+        Self {
+            id,
+            history: Cell::new(vec![]),
+            current: Cell::new(0),
+        }
+    }
+
     /// Get web view ID of this window.
     pub fn id(&self) -> WebViewId {
         self.id
@@ -125,41 +147,7 @@ impl Window {
             }
         }
     }
-}
 
-/// A panel is a special web view that focus on controlling states around window.
-/// It could be treated as the control panel or navigation bar of the window depending on usages.
-///
-/// At the moment, following Web API is supported:
-/// - Close window: `window.close()`
-/// - Navigate to previous page: `window.prompt('PREV')`
-/// - Navigate to next page: `window.prompt('FORWARD')`
-/// - Refresh the page: `window.prompt('REFRESH')`
-/// - Minimize the window: `window.prompt('MINIMIZE')`
-/// - Maximize the window: `window.prompt('MAXIMIZE')`
-/// - Navigate to a specific URL: `window.prompt('NAVIGATE_TO:${url}')`
-pub struct Panel {
-    id: WebViewId,
-}
-
-impl Panel {
-    /// Create a panel from Winit window.
-    pub fn new() -> Self {
-        // Reserving a namespace to create TopLevelBrowsingContextId.
-        PipelineNamespace::install(PipelineNamespaceId(0));
-        let id = TopLevelBrowsingContextId::new();
-        Self { id }
-    }
-
-    /// Get web view ID of this panel.
-    ///
-    /// We assume this is always called after `set_id`. Calling before it will cause panic.
-    pub fn id(&self) -> WebViewId {
-        self.id
-    }
-}
-
-impl Window {
     /// Handle servo messages with main panel.
     pub fn handle_servo_messages_with_panel(
         &mut self,

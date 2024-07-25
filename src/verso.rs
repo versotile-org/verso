@@ -412,7 +412,7 @@ impl Verso {
         if let Some(compositor) = &mut self.compositor {
             // Handle Compositor's messages first
             log::trace!("Verso is handling Compositor messages");
-            if compositor.receive_messages() {
+            if compositor.receive_messages(&mut self.window) {
                 // And then handle Embedder messages
                 log::trace!(
                     "Verso is handling Embedder messages when shutdown state is set to {:?}",

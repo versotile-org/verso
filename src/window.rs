@@ -28,7 +28,7 @@ use crate::{
     compositor::{IOCompositor, MouseWindowEvent},
     keyboard::keyboard_event_from_winit,
     verso::send_to_constellation,
-    webview::{Panel, WebView},
+    webview::WebView,
 };
 
 use arboard::Clipboard;
@@ -38,7 +38,7 @@ pub struct Window {
     /// Access to Winit window
     pub(crate) window: WinitWindow,
     /// The main control panel of this window.
-    pub(crate) panel: Panel,
+    pub(crate) panel: WebView,
     /// The WebView of this window.
     pub(crate) webview: Option<WebView>,
     /// The mouse physical position in the web view.
@@ -69,7 +69,7 @@ impl Window {
         (
             Self {
                 window,
-                panel: Panel::new(),
+                panel: WebView::new_panel(),
                 webview: None,
                 mouse_position: Cell::new(PhysicalPosition::default()),
                 modifiers_state: Cell::new(ModifiersState::default()),
@@ -247,8 +247,25 @@ impl Window {
         }
 
         if need_resize {
-            compositor.repaint_synchronously();
+            // TODO remove this? compositor.repaint_synchronously();
             compositor.present();
+        }
+    }
+
+    pub fn size(&self) -> DeviceIntSize {
+        let size = self.window.inner_size();
+        Size2D::new(size.width as i32, size.height as i32)
+    }
+
+    pub fn scale_factor(&self) -> f64 {
+        self.window.scale_factor()
+    }
+
+    pub fn get_webview(&mut self, id: TopLevelBrowsingContextId) -> Option<&mut WebView> {
+        if self.panel.id() == id {
+            Some(&mut self.panel)
+        } else {
+            self.webview.as_mut().filter(|w| w.id() == id)
         }
     }
 
@@ -292,14 +309,5 @@ impl Window {
             _ => CursorIcon::Default,
         };
         self.window.set_cursor_icon(winit_cursor);
-    }
-
-    pub fn size(&self) -> DeviceIntSize {
-        let size = self.window.inner_size();
-        Size2D::new(size.width as i32, size.height as i32)
-    }
-
-    pub fn scale_factor(&self) -> f64 {
-        self.window.scale_factor()
     }
 }

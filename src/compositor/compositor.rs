@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::ffi::c_void;
 use std::iter::once;
 use std::rc::Rc;
@@ -9,7 +9,6 @@ use compositing_traits::{
     ForwardedToCompositorMsg, SendableFrameTree,
 };
 use crossbeam_channel::Sender;
-use fnv::{FnvHashMap, FnvHashSet};
 use ipc_channel::ipc;
 use log::{debug, error, trace, warn};
 use servo::base::id::{PipelineId, TopLevelBrowsingContextId, WebViewId};
@@ -43,6 +42,8 @@ use webrender::api::{
     SpaceAndClipInfo, SpatialId, SpatialTreeItemKey, TransformStyle,
 };
 use webrender::{RenderApi, Transaction};
+
+use crate::window::Window;
 
 use super::touch::{TouchAction, TouchHandler};
 use super::webview::{UnknownWebView, WebView, WebViewAlreadyExists, WebViewManager};
@@ -288,7 +289,7 @@ impl PipelineDetails {
     }
 
     fn install_new_scroll_tree(&mut self, new_scroll_tree: ScrollTree) {
-        let old_scroll_offsets: FnvHashMap<ExternalScrollId, LayoutVector2D> = self
+        let old_scroll_offsets: HashMap<ExternalScrollId, LayoutVector2D> = self
             .scroll_tree
             .nodes
             .drain(..)
@@ -321,22 +322,22 @@ impl IOCompositor {
         top_level_browsing_context_id: TopLevelBrowsingContextId,
     ) -> Self {
         let mut webviews = WebViewManager::default();
-        webviews
-            .add(
-                top_level_browsing_context_id,
-                WebView {
-                    pipeline_id: None,
-                    rect: DeviceIntRect::from_size(viewport),
-                },
-            )
-            .expect("Infallible with a new WebViewManager");
-        let msg = ConstellationMsg::WebViewOpened(top_level_browsing_context_id);
-        if let Err(e) = state.constellation_chan.send(msg) {
-            warn!("Sending event to constellation failed ({:?}).", e);
-        }
-        webviews
-            .show(top_level_browsing_context_id)
-            .expect("Infallible due to add");
+        // webviews
+        //     .add(
+        //         top_level_browsing_context_id,
+        //         WebView {
+        //             pipeline_id: None,
+        //             rect: DeviceIntRect::from_size(viewport),
+        //         },
+        //     )
+        //     .expect("Infallible with a new WebViewManager");
+        // let msg = ConstellationMsg::WebViewOpened(top_level_browsing_context_id);
+        // if let Err(e) = state.constellation_chan.send(msg) {
+        //     warn!("Sending event to constellation failed ({:?}).", e);
+        // }
+        // webviews
+        //     .show(top_level_browsing_context_id)
+        //     .expect("Infallible due to add");
 
         let compositor = IOCompositor {
             viewport,
@@ -461,7 +462,7 @@ impl IOCompositor {
         }
     }
 
-    fn handle_browser_message(&mut self, msg: CompositorMsg) -> bool {
+    fn handle_browser_message(&mut self, msg: CompositorMsg, window: &mut Window) -> bool {
         match self.shutdown_state {
             ShutdownState::NotShuttingDown => {}
             ShutdownState::ShuttingDown => {
@@ -485,7 +486,7 @@ impl IOCompositor {
             }
 
             CompositorMsg::CreateOrUpdateWebView(frame_tree) => {
-                self.set_frame_tree_for_webview(&frame_tree);
+                self.set_frame_tree_for_webview(&frame_tree, window);
                 self.send_scroll_positions_to_layout_for_pipeline(&frame_tree.pipeline.id);
             }
 
@@ -1107,7 +1108,7 @@ impl IOCompositor {
         }
     }
 
-    fn set_frame_tree_for_webview(&mut self, frame_tree: &SendableFrameTree) {
+    fn set_frame_tree_for_webview(&mut self, frame_tree: &SendableFrameTree, window: &mut Window) {
         debug!("{}: Setting frame tree for webview", frame_tree.pipeline.id);
 
         let top_level_browsing_context_id = frame_tree.pipeline.top_level_browsing_context_id;
@@ -1276,17 +1277,14 @@ impl IOCompositor {
         // TODO(mrobinson): Eventually this can selectively preserve the scroll trees
         // state for some unattached pipelines in order to preserve scroll position when
         // navigating backward and forward.
-        fn collect_pipelines(
-            pipelines: &mut FnvHashSet<PipelineId>,
-            frame_tree: &SendableFrameTree,
-        ) {
+        fn collect_pipelines(pipelines: &mut HashSet<PipelineId>, frame_tree: &SendableFrameTree) {
             pipelines.insert(frame_tree.pipeline.id);
             for kid in &frame_tree.children {
                 collect_pipelines(pipelines, kid);
             }
         }
 
-        let mut attached_pipelines: FnvHashSet<PipelineId> = FnvHashSet::default();
+        let mut attached_pipelines = HashSet::default();
         collect_pipelines(&mut attached_pipelines, frame_tree);
 
         self.pipeline_details
@@ -2172,7 +2170,7 @@ impl IOCompositor {
         );
     }
 
-    pub fn receive_messages(&mut self) -> bool {
+    pub fn receive_messages(&mut self, window: &mut Window) -> bool {
         // Check for new messages coming from the other threads in the system.
         let mut compositor_messages = vec![];
         let mut found_recomposite_msg = false;
@@ -2191,7 +2189,7 @@ impl IOCompositor {
             }
         }
         for msg in compositor_messages {
-            if !self.handle_browser_message(msg) {
+            if !self.handle_browser_message(msg, window) {
                 return false;
             }
         }
@@ -2227,25 +2225,6 @@ impl IOCompositor {
             self.process_pending_scroll_events()
         }
         self.shutdown_state != ShutdownState::FinishedShuttingDown
-    }
-
-    /// Repaints and recomposites synchronously. You must be careful when calling this, as if a
-    /// paint is not scheduled the compositor will hang forever.
-    ///
-    /// This is used when resizing the window.
-    pub fn repaint_synchronously(&mut self) {
-        while self.shutdown_state != ShutdownState::ShuttingDown {
-            let msg = self.port.recv_compositor_msg();
-            let need_recomposite = matches!(msg, CompositorMsg::NewWebRenderFrameReady(_));
-            let keep_going = self.handle_browser_message(msg);
-            if need_recomposite {
-                self.composite();
-                break;
-            }
-            if !keep_going {
-                break;
-            }
-        }
     }
 
     pub fn pinch_zoom_level(&self) -> Scale<f32, DevicePixel, DevicePixel> {
