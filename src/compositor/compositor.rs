@@ -1340,6 +1340,7 @@ impl IOCompositor {
             return false;
         }
 
+        let _ = self.rendering_context.resize(new_viewport.to_untyped());
         self.viewport = new_viewport;
         let mut transaction = Transaction::new();
         transaction.set_document_view(DeviceIntRect::from_size(self.viewport));

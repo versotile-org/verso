@@ -35,6 +35,7 @@ use servo::{
     webgpu,
     webrender_traits::*,
 };
+use surfman::GLApi;
 use webrender::{api::*, ShaderPrecacheFlags};
 use winit::{event::Event, event_loop::EventLoopProxy, window::Window as WinitWindow};
 
@@ -78,7 +79,7 @@ impl Verso {
         let path = config.resource_dir.join("panel.html");
         let url = ServoUrl::from_file_path(path.to_str().unwrap()).unwrap();
         config.init();
-        let window = Window::new(window);
+        let (window, rendering_context) = Window::new_with_context(window);
         let event_loop_waker = Box::new(Waker(proxy));
         let opts = opts::get();
 
@@ -94,8 +95,12 @@ impl Verso {
         servo_media::ServoMedia::init::<servo_media_dummy::DummyBackend>();
 
         // Initialize surfman & get GL bindings
-        let rendering_context = window.rendering_context();
-        let webrender_gl = window.webrender_gl.clone();
+        let webrender_gl = match rendering_context.connection().gl_api() {
+            GLApi::GL => unsafe { gl::GlFns::load_with(|s| rendering_context.get_proc_address(s)) },
+            GLApi::GLES => unsafe {
+                gl::GlesFns::load_with(|s| rendering_context.get_proc_address(s))
+            },
+        };
         // Make sure the gl context is made current.
         rendering_context.make_gl_context_current().unwrap();
         debug_assert_eq!(webrender_gl.get_error(), gl::NO_ERROR,);

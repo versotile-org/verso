@@ -1,4 +1,4 @@
-use std::{cell::Cell, rc::Rc};
+use std::cell::Cell;
 
 use compositing_traits::ConstellationMsg;
 use crossbeam_channel::Sender;
@@ -6,7 +6,6 @@ use raw_window_handle::{HasRawDisplayHandle, HasRawWindowHandle};
 use servo::{
     embedder_traits::{Cursor, EmbedderMsg},
     euclid::{Point2D, Size2D},
-    gl,
     script_traits::{TouchEventType, WheelDelta, WheelMode},
     style_traits::DevicePixel,
     webrender_api::{
@@ -16,7 +15,7 @@ use servo::{
     webrender_traits::RenderingContext,
     TopLevelBrowsingContextId,
 };
-use surfman::{Connection, GLApi, SurfaceType};
+use surfman::{Connection, SurfaceType};
 use webrender::api::units::DeviceIntSize;
 use winit::{
     dpi::PhysicalPosition,
@@ -36,16 +35,12 @@ use arboard::Clipboard;
 
 /// A Verso window is a Winit window containing several web views.
 pub struct Window {
-    /// Access to webrender rendering context
-    rendering_context: RenderingContext,
     /// Access to Winit window
     pub(crate) window: WinitWindow,
     /// The main control panel of this window.
     pub(crate) panel: Panel,
     /// The WebView of this window.
     pub(crate) webview: Option<WebView>,
-    /// Access to webrender GL
-    pub(crate) webrender_gl: Rc<dyn gl::Gl>,
     /// The mouse physical position in the web view.
     mouse_position: Cell<PhysicalPosition<f64>>,
     /// Modifiers state of the keyboard.
@@ -53,8 +48,8 @@ pub struct Window {
 }
 
 impl Window {
-    /// Create a Verso window from Winit window.
-    pub fn new(window: WinitWindow) -> Self {
+    /// Create a Verso window from Winit window and return the rendering context.
+    pub fn new_with_context(window: WinitWindow) -> (Self, RenderingContext) {
         let window_size = window.inner_size();
         let window_size = Size2D::new(window_size.width as i32, window_size.height as i32);
         let display_handle = window.raw_display_handle();
@@ -70,23 +65,17 @@ impl Window {
         let rendering_context = RenderingContext::create(&connection, &adapter, surface_type)
             .expect("Failed to create rendering context");
         log::trace!("Created rendering context for window {:?}", window);
-        let webrender_gl = match rendering_context.connection().gl_api() {
-            GLApi::GL => unsafe { gl::GlFns::load_with(|s| rendering_context.get_proc_address(s)) },
-            GLApi::GLES => unsafe {
-                gl::GlesFns::load_with(|s| rendering_context.get_proc_address(s))
-            },
-        };
-        debug_assert_eq!(webrender_gl.get_error(), gl::NO_ERROR);
 
-        Self {
-            window,
+        (
+            Self {
+                window,
+                panel: Panel::new(),
+                webview: None,
+                mouse_position: Cell::new(PhysicalPosition::default()),
+                modifiers_state: Cell::new(ModifiersState::default()),
+            },
             rendering_context,
-            panel: Panel::new(),
-            webview: None,
-            webrender_gl,
-            mouse_position: Cell::new(PhysicalPosition::default()),
-            modifiers_state: Cell::new(ModifiersState::default()),
-        }
+        )
     }
 
     /// Handle Winit window event.
@@ -246,7 +235,6 @@ impl Window {
 
     /// Resize the rendering context and all web views.
     pub fn resize(&self, size: Size2D<i32, DevicePixel>, compositor: &mut IOCompositor) {
-        let _ = self.rendering_context.resize(size.to_untyped());
         let need_resize = compositor.on_resize_window_event(size);
 
         let rect = DeviceIntRect::from_size(size);
@@ -304,10 +292,6 @@ impl Window {
             _ => CursorIcon::Default,
         };
         self.window.set_cursor_icon(winit_cursor);
-    }
-
-    pub fn rendering_context(&self) -> RenderingContext {
-        self.rendering_context.clone()
     }
 
     pub fn size(&self) -> DeviceIntSize {
