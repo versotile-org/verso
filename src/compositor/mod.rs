@@ -8,12 +8,11 @@ use profile_traits::{mem, time};
 use servo::webrender_traits::RenderingContext;
 use webrender::{api::DocumentId, RenderApi};
 
-pub use compositor::{IOCompositor, ShutdownState};
+pub use compositor::{IOCompositor, MouseWindowEvent, ShutdownState};
 
 mod compositor;
 mod touch;
 pub mod webview;
-pub mod windowing;
 
 /// Data used to construct a compositor.
 pub struct InitialCompositorState {

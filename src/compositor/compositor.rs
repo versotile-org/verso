@@ -33,7 +33,7 @@ use servo::webrender_traits::{
     UntrustedNodeAddress,
 };
 use webrender::api::units::{
-    DeviceIntPoint, DeviceIntSize, DevicePoint, DeviceRect, LayoutPoint, LayoutRect, LayoutSize,
+    DeviceIntPoint, DeviceIntRect, DeviceIntSize, DevicePoint, LayoutPoint, LayoutRect, LayoutSize,
     LayoutVector2D, WorldPoint,
 };
 use webrender::api::{
@@ -46,9 +46,6 @@ use webrender::{RenderApi, Transaction};
 
 use super::touch::{TouchAction, TouchHandler};
 use super::webview::{UnknownWebView, WebView, WebViewAlreadyExists, WebViewManager};
-use super::windowing::{
-    self, EmbedderCoordinates, MouseWindowEvent, WebRenderDebugOption, WindowMethods,
-};
 use super::InitialCompositorState;
 
 #[derive(Debug, PartialEq)]
@@ -86,9 +83,9 @@ impl FrameTreeId {
 }
 
 /// NB: Never block on the constellation, because sometimes the constellation blocks on us.
-pub struct IOCompositor<Window: WindowMethods + ?Sized> {
-    /// The application window.
-    pub window: Rc<Window>,
+pub struct IOCompositor {
+    /// Size of current viewport that Compositor is handling.
+    viewport: DeviceIntSize,
 
     /// The port on which we receive messages.
     port: CompositorReceiver,
@@ -98,6 +95,9 @@ pub struct IOCompositor<Window: WindowMethods + ?Sized> {
 
     /// Tracks details about each active pipeline that the compositor knows about.
     pipeline_details: HashMap<PipelineId, PipelineDetails>,
+
+    /// The pixel density of the display.
+    scale_factor: Scale<f32, DeviceIndependentPixel, DevicePixel>,
 
     /// "Mobile-style" zoom that does not reflow the page.
     viewport_zoom: PinchZoomFactor,
@@ -166,9 +166,6 @@ pub struct IOCompositor<Window: WindowMethods + ?Sized> {
     /// metric to the corresponding Layout.
     pending_paint_metrics: HashMap<PipelineId, Epoch>,
 
-    /// The coordinates of the native window, its view and the screen.
-    embedder_coordinates: EmbedderCoordinates,
-
     /// Current mouse cursor.
     cursor: Cursor,
 
@@ -190,6 +187,12 @@ pub struct IOCompositor<Window: WindowMethods + ?Sized> {
     /// The [`Instant`] of the last animation tick, used to avoid flooding the Constellation and
     /// ScriptThread with a deluge of animation ticks.
     last_animation_tick: Instant,
+
+    /// Whether the application is currently animating.
+    /// Typically, when animations are active, the window
+    /// will want to avoid blocking on UI events, and just
+    /// run the event loop at the vsync interval.
+    pub is_animating: bool,
 }
 
 #[derive(Clone, Copy)]
@@ -308,22 +311,22 @@ impl PipelineDetails {
     }
 }
 
-impl<Window: WindowMethods + ?Sized> IOCompositor<Window> {
+impl IOCompositor {
     pub fn new(
-        window: Rc<Window>,
+        viewport: DeviceIntSize,
+        scale_factor: Scale<f32, DeviceIndependentPixel, DevicePixel>,
         state: InitialCompositorState,
         exit_after_load: bool,
         convert_mouse_to_touch: bool,
         top_level_browsing_context_id: TopLevelBrowsingContextId,
     ) -> Self {
-        let embedder_coordinates = window.get_coordinates();
         let mut webviews = WebViewManager::default();
         webviews
             .add(
                 top_level_browsing_context_id,
                 WebView {
                     pipeline_id: None,
-                    rect: embedder_coordinates.get_viewport().to_f32(),
+                    rect: DeviceIntRect::from_size(viewport),
                 },
             )
             .expect("Infallible with a new WebViewManager");
@@ -336,11 +339,11 @@ impl<Window: WindowMethods + ?Sized> IOCompositor<Window> {
             .expect("Infallible due to add");
 
         let compositor = IOCompositor {
-            embedder_coordinates: window.get_coordinates(),
-            window,
+            viewport,
             port: state.receiver,
             webviews,
             pipeline_details: HashMap::new(),
+            scale_factor,
             composition_request: CompositionRequest::NoCompositingNecessary,
             touch_handler: TouchHandler::new(),
             pending_scroll_zoom_events: Vec::new(),
@@ -369,6 +372,7 @@ impl<Window: WindowMethods + ?Sized> IOCompositor<Window> {
             pending_frames: 0,
             waiting_on_present: false,
             last_animation_tick: Instant::now(),
+            is_animating: false,
         };
 
         // Make sure the GL state is OK
@@ -489,8 +493,9 @@ impl<Window: WindowMethods + ?Sized> IOCompositor<Window> {
                 self.remove_webview(top_level_browsing_context_id);
             }
 
-            CompositorMsg::MoveResizeWebView(webview_id, rect) => {
-                self.move_resize_webview(webview_id, rect);
+            CompositorMsg::MoveResizeWebView(_webview_id, _rect) => {
+                // TODO Remove this variant since it's no longer used.
+                // self.move_resize_webview(webview_id, rect);
             }
 
             CompositorMsg::ShowWebView(webview_id, hide_others) => {
@@ -518,7 +523,7 @@ impl<Window: WindowMethods + ?Sized> IOCompositor<Window> {
                 self.touch_handler.on_event_processed(result);
             }
 
-            CompositorMsg::CreatePng(page_rect, reply) => {
+            CompositorMsg::CreatePng(_page_rect, reply) => {
                 // TODO create image
                 if let Err(e) = reply.send(None) {
                     warn!("Sending reply to create png failed ({:?}).", e);
@@ -591,19 +596,22 @@ impl<Window: WindowMethods + ?Sized> IOCompositor<Window> {
             }
 
             CompositorMsg::GetClientWindow(req) => {
-                if let Err(e) = req.send(self.embedder_coordinates.window) {
+                // TODO get real size
+                if let Err(e) = req.send((self.viewport, Point2D::new(0, 0))) {
                     warn!("Sending response to get client window failed ({:?}).", e);
                 }
             }
 
             CompositorMsg::GetScreenSize(req) => {
-                if let Err(e) = req.send(self.embedder_coordinates.screen) {
+                // TODO get real size
+                if let Err(e) = req.send(self.viewport) {
                     warn!("Sending response to get screen size failed ({:?}).", e);
                 }
             }
 
             CompositorMsg::GetScreenAvailSize(req) => {
-                if let Err(e) = req.send(self.embedder_coordinates.screen_avail) {
+                // TODO get real size
+                if let Err(e) = req.send(self.viewport) {
                     warn!(
                         "Sending response to get screen avail size failed ({:?}).",
                         e
@@ -909,17 +917,17 @@ impl<Window: WindowMethods + ?Sized> IOCompositor<Window> {
                 let _ = sender.send(self.webrender_api.generate_image_key());
             }
             CompositorMsg::GetClientWindow(sender) => {
-                if let Err(e) = sender.send(self.embedder_coordinates.window) {
+                if let Err(e) = sender.send((self.viewport, Point2D::new(0, 0))) {
                     warn!("Sending response to get client window failed ({:?}).", e);
                 }
             }
             CompositorMsg::GetScreenSize(sender) => {
-                if let Err(e) = sender.send(self.embedder_coordinates.screen) {
+                if let Err(e) = sender.send(self.viewport) {
                     warn!("Sending response to get screen size failed ({:?}).", e);
                 }
             }
             CompositorMsg::GetScreenAvailSize(sender) => {
-                if let Err(e) = sender.send(self.embedder_coordinates.screen_avail) {
+                if let Err(e) = sender.send(self.viewport) {
                     warn!(
                         "Sending response to get screen avail size failed ({:?}).",
                         e
@@ -1040,8 +1048,7 @@ impl<Window: WindowMethods + ?Sized> IOCompositor<Window> {
             SpatialTreeItemKey::new(0, 0),
         );
 
-        let scaled_viewport_size =
-            self.embedder_coordinates.get_viewport().size().to_f32() / zoom_factor;
+        let scaled_viewport_size = self.viewport.to_f32() / zoom_factor;
         let scaled_viewport_size = LayoutSize::from_untyped(scaled_viewport_size.to_untyped());
         let scaled_viewport_rect =
             LayoutRect::from_origin_and_size(LayoutPoint::zero(), scaled_viewport_size);
@@ -1050,7 +1057,7 @@ impl<Window: WindowMethods + ?Sized> IOCompositor<Window> {
         let clip_chain_id = builder.define_clip_chain(None, [root_clip_id]);
         for (_, webview) in self.webviews.painting_order() {
             if let Some(pipeline_id) = webview.pipeline_id {
-                let scaled_webview_rect = webview.rect / zoom_factor;
+                let scaled_webview_rect = webview.rect.to_f32() / zoom_factor;
                 builder.push_iframe(
                     LayoutRect::from_untyped(&scaled_webview_rect.to_untyped()),
                     LayoutRect::from_untyped(&scaled_webview_rect.to_untyped()),
@@ -1124,7 +1131,7 @@ impl<Window: WindowMethods + ?Sized> IOCompositor<Window> {
                 top_level_browsing_context_id,
                 WebView {
                     pipeline_id,
-                    rect: self.embedder_coordinates.get_viewport().to_f32(),
+                    rect: DeviceIntRect::from_size(self.viewport),
                 },
             ) {
                 error!("{webview_id}: Creating webview that already exists");
@@ -1158,7 +1165,11 @@ impl<Window: WindowMethods + ?Sized> IOCompositor<Window> {
         self.frame_tree_id.next();
     }
 
-    pub fn move_resize_webview(&mut self, webview_id: TopLevelBrowsingContextId, rect: DeviceRect) {
+    pub fn move_resize_webview(
+        &mut self,
+        webview_id: TopLevelBrowsingContextId,
+        rect: DeviceIntRect,
+    ) {
         debug!("{webview_id}: Moving and/or resizing webview; rect={rect:?}");
         let rect_changed;
         let size_changed;
@@ -1241,7 +1252,7 @@ impl<Window: WindowMethods + ?Sized> IOCompositor<Window> {
 
     fn send_window_size_message_for_top_level_browser_context(
         &self,
-        rect: DeviceRect,
+        rect: DeviceIntRect,
         top_level_browsing_context_id: TopLevelBrowsingContextId,
     ) {
         // The device pixel ratio used by the style system should include the scale from page pixels
@@ -1324,28 +1335,16 @@ impl<Window: WindowMethods + ?Sized> IOCompositor<Window> {
         self.pipeline_details.remove(&pipeline_id);
     }
 
-    pub fn on_resize_window_event(&mut self) -> bool {
+    pub fn on_resize_window_event(&mut self, new_viewport: DeviceIntSize) -> bool {
         if self.shutdown_state != ShutdownState::NotShuttingDown {
             return false;
         }
 
-        let old_coords = self.embedder_coordinates;
-        self.embedder_coordinates = self.window.get_coordinates();
-
-        if self.embedder_coordinates.viewport != old_coords.viewport {
-            let mut transaction = Transaction::new();
-            transaction.set_document_view(self.embedder_coordinates.get_viewport());
-            self.webrender_api
-                .send_transaction(self.webrender_document, transaction);
-        }
-
-        // A size change could also mean a resolution change.
-        if self.embedder_coordinates.hidpi_factor == old_coords.hidpi_factor
-            && self.embedder_coordinates.viewport == old_coords.viewport
-        {
-            return false;
-        }
-
+        self.viewport = new_viewport;
+        let mut transaction = Transaction::new();
+        transaction.set_document_view(DeviceIntRect::from_size(self.viewport));
+        self.webrender_api
+            .send_transaction(self.webrender_document, transaction);
         self.update_after_zoom_or_hidpi_change();
         self.composite_if_necessary(CompositingReason::Resize);
         true
@@ -1777,12 +1776,11 @@ impl<Window: WindowMethods + ?Sized> IOCompositor<Window> {
                 pipeline_ids.push(*pipeline_id);
             }
         }
-        let animation_state = if pipeline_ids.is_empty() && !self.webxr_main_thread.running() {
-            windowing::AnimationState::Idle
+        if pipeline_ids.is_empty() && !self.webxr_main_thread.running() {
+            self.is_animating = false;
         } else {
-            windowing::AnimationState::Animating
+            self.is_animating = true;
         };
-        self.window.set_animation_state(animation_state);
         for pipeline_id in &pipeline_ids {
             self.tick_animations_for_pipeline(*pipeline_id)
         }
@@ -1811,8 +1809,8 @@ impl<Window: WindowMethods + ?Sized> IOCompositor<Window> {
         }
     }
 
-    fn hidpi_factor(&self) -> Scale<f32, DeviceIndependentPixel, DevicePixel> {
-        self.embedder_coordinates.hidpi_factor
+    fn scale_factor(&self) -> Scale<f32, DeviceIndependentPixel, DevicePixel> {
+        self.scale_factor
     }
 
     fn device_pixels_per_page_pixel(&self) -> Scale<f32, CSSPixel, DevicePixel> {
@@ -1822,7 +1820,7 @@ impl<Window: WindowMethods + ?Sized> IOCompositor<Window> {
     fn device_pixels_per_page_pixel_not_including_page_zoom(
         &self,
     ) -> Scale<f32, CSSPixel, DevicePixel> {
-        self.page_zoom * self.hidpi_factor()
+        self.page_zoom * self.scale_factor()
     }
 
     pub fn on_zoom_reset_window_event(&mut self) {
@@ -1990,8 +1988,6 @@ impl<Window: WindowMethods + ?Sized> IOCompositor<Window> {
             ));
         }
 
-        let size = self.embedder_coordinates.framebuffer.to_u32();
-
         if let Err(err) = self.rendering_context.make_gl_context_current() {
             warn!("Failed to make GL context current: {:?}", err);
         }
@@ -2033,14 +2029,13 @@ impl<Window: WindowMethods + ?Sized> IOCompositor<Window> {
             self.time_profiler_chan.clone(),
             || {
                 trace!("Compositing");
-
-                let size =
-                    DeviceIntSize::from_untyped(self.embedder_coordinates.framebuffer.to_untyped());
-
                 // Paint the scene.
                 // TODO(gw): Take notice of any errors the renderer returns!
                 self.clear_background();
-                self.webrender.render(size, 0 /* buffer_age */).ok();
+                self.webrender
+                    // TODO to untyped?
+                    .render(self.viewport, 0 /* buffer_age */)
+                    .ok();
             },
         );
 
@@ -2134,9 +2129,17 @@ impl<Window: WindowMethods + ?Sized> IOCompositor<Window> {
             color[3] as f32,
         );
 
+        let framebuffer_height = self.viewport.height;
         // Clear the viewport rect of each top-level browsing context.
         for (_, webview) in self.webviews.painting_order() {
-            let rect = self.embedder_coordinates.flip_rect(&webview.rect.to_i32());
+            // Flip the rectangle in the framebuffer
+            let origin = webview.rect.to_i32();
+            let mut rect = origin.clone();
+            let min_y = framebuffer_height - rect.max.y;
+            let max_y = framebuffer_height - rect.min.y;
+            rect.min.y = min_y;
+            rect.max.y = max_y;
+
             gl.scissor(
                 rect.min.x,
                 rect.min.y,
@@ -2279,4 +2282,19 @@ impl<Window: WindowMethods + ?Sized> IOCompositor<Window> {
         self.webrender_api
             .send_transaction(self.webrender_document, txn);
     }
+}
+
+/// Various debug and profiling flags that WebRender supports.
+#[derive(Clone)]
+pub enum WebRenderDebugOption {
+    Profiler,
+    TextureCacheDebug,
+    RenderTargetDebug,
+}
+
+#[derive(Clone)]
+pub enum MouseWindowEvent {
+    Click(MouseButton, DevicePoint),
+    MouseDown(MouseButton, DevicePoint),
+    MouseUp(MouseButton, DevicePoint),
 }

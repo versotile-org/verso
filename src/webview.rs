@@ -16,7 +16,7 @@ use servo::{
 use crate::{
     compositor::{webview::UnknownWebView, IOCompositor},
     verso::send_to_constellation,
-    window::{GLWindow, Window},
+    window::Window,
 };
 
 /// A web view is an area to display web browsing context. It's what user will treat as a "web page".
@@ -55,7 +55,7 @@ impl Window {
         webview_id: WebViewId,
         message: EmbedderMsg,
         sender: &Sender<ConstellationMsg>,
-        compositor: &mut IOCompositor<GLWindow>,
+        compositor: &mut IOCompositor,
         clipboard: &mut Clipboard,
     ) {
         log::trace!("Verso WebView {webview_id:?} is handling Embedder message: {message:?}",);
@@ -70,8 +70,8 @@ impl Window {
 
                 let size = self.window.inner_size();
                 let size = Size2D::new(size.width as i32, size.height as i32);
-                let mut rect = DeviceIntRect::from_size(size).to_f32();
-                rect.min.y = rect.max.y.min(76.);
+                let mut rect = DeviceIntRect::from_size(size);
+                rect.min.y = rect.max.y.min(76);
                 send_to_constellation(sender, ConstellationMsg::FocusWebView(w));
                 compositor.move_resize_webview(w, rect);
             }
@@ -166,7 +166,7 @@ impl Window {
         panel_id: WebViewId,
         message: EmbedderMsg,
         sender: &Sender<ConstellationMsg>,
-        compositor: &mut IOCompositor<GLWindow>,
+        compositor: &mut IOCompositor,
         clipboard: &mut Clipboard,
     ) {
         log::trace!("Verso Panel {panel_id:?} is handling Embedder message: {message:?}",);
@@ -186,7 +186,7 @@ impl Window {
             EmbedderMsg::WebViewOpened(w) => {
                 let size = self.window.inner_size();
                 let size = Size2D::new(size.width as i32, size.height as i32);
-                let rect = DeviceIntRect::from_size(size).to_f32();
+                let rect = DeviceIntRect::from_size(size);
                 send_to_constellation(sender, ConstellationMsg::FocusWebView(w));
                 compositor.move_resize_webview(w, rect);
             }

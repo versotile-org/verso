@@ -39,15 +39,15 @@ use webrender::{api::*, ShaderPrecacheFlags};
 use winit::{event::Event, event_loop::EventLoopProxy, window::Window as WinitWindow};
 
 use crate::{
-    compositor::{windowing::WindowMethods, IOCompositor, InitialCompositorState, ShutdownState},
+    compositor::{IOCompositor, InitialCompositorState, ShutdownState},
     config::Config,
-    window::{GLWindow, Window},
+    window::Window,
 };
 
 /// Main entry point of Verso browser.
 pub struct Verso {
     window: Window,
-    compositor: Option<IOCompositor<GLWindow>>,
+    compositor: Option<IOCompositor>,
     constellation_sender: Sender<ConstellationMsg>,
     embedder_receiver: EmbedderReceiver,
     /// For single-process Servo instances, this field controls the initialization
@@ -147,9 +147,6 @@ impl Verso {
         };
 
         // Create Webrender threads
-        let coordinates = window.get_coordinates();
-        let device_pixel_ratio = coordinates.hidpi_factor.get();
-        let viewport_size = coordinates.viewport.size().to_f32() / device_pixel_ratio;
         let (mut webrender, webrender_api_sender) = {
             let mut debug_flags = webrender::DebugFlags::empty();
             debug_flags.set(
@@ -187,7 +184,7 @@ impl Verso {
             .expect("Unable to initialize webrender!")
         };
         let webrender_api = webrender_api_sender.create_api();
-        let webrender_document = webrender_api.add_document(coordinates.get_viewport().size());
+        let webrender_document = webrender_api.add_document(window.size());
 
         // Initialize js engine if it's single process mode
         let js_engine_setup = if !opts.multiprocess {
@@ -304,8 +301,8 @@ impl Verso {
         // The division by 1 represents the page's default zoom of 100%,
         // and gives us the appropriate CSSPixel type for the viewport.
         let window_size = WindowSizeData {
-            initial_viewport: viewport_size / Scale::new(1.0),
-            device_pixel_ratio: Scale::new(device_pixel_ratio),
+            initial_viewport: window.size().to_f32() / Scale::new(1.0),
+            device_pixel_ratio: Scale::new(window.scale_factor() as f32),
         };
 
         // Create constellation thread
@@ -333,7 +330,8 @@ impl Verso {
         // rendered page and display it somewhere.
         let panel_id = window.panel.id();
         let compositor = IOCompositor::new(
-            window.gl_window(),
+            window.size(),
+            Scale::new(window.scale_factor() as f32),
             InitialCompositorState {
                 sender: compositor_sender,
                 receiver: compositor_receiver,
@@ -454,7 +452,10 @@ impl Verso {
 
     /// Return true if one of the Verso windows is animating.
     pub fn is_animating(&self) -> bool {
-        self.window.is_animating()
+        self.compositor
+            .as_ref()
+            .map(|c| c.is_animating)
+            .unwrap_or(false)
     }
 
     /// Return true if Verso has shut down and hence there's no compositor.

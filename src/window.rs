@@ -1,11 +1,11 @@
-use std::{cell::Cell, ops::Deref, rc::Rc};
+use std::{cell::Cell, rc::Rc};
 
 use compositing_traits::ConstellationMsg;
 use crossbeam_channel::Sender;
 use raw_window_handle::{HasRawDisplayHandle, HasRawWindowHandle};
 use servo::{
     embedder_traits::{Cursor, EmbedderMsg},
-    euclid::{Point2D, Scale, Size2D},
+    euclid::{Point2D, Size2D},
     gl,
     script_traits::{TouchEventType, WheelDelta, WheelMode},
     style_traits::DevicePixel,
@@ -14,9 +14,10 @@ use servo::{
         ScrollLocation,
     },
     webrender_traits::RenderingContext,
-    Servo, TopLevelBrowsingContextId,
+    TopLevelBrowsingContextId,
 };
 use surfman::{Connection, GLApi, SurfaceType};
+use webrender::api::units::DeviceIntSize;
 use winit::{
     dpi::PhysicalPosition,
     event::{ElementState, TouchPhase, WindowEvent},
@@ -25,10 +26,7 @@ use winit::{
 };
 
 use crate::{
-    compositor::{
-        windowing::{AnimationState, EmbedderCoordinates, MouseWindowEvent, WindowMethods},
-        IOCompositor,
-    },
+    compositor::{IOCompositor, MouseWindowEvent},
     keyboard::keyboard_event_from_winit,
     verso::send_to_constellation,
     webview::{Panel, WebView},
@@ -38,8 +36,10 @@ use arboard::Clipboard;
 
 /// A Verso window is a Winit window containing several web views.
 pub struct Window {
-    /// Access to Winit window with webrender context.
-    pub(crate) gl_window: Rc<GLWindow>,
+    /// Access to webrender rendering context
+    rendering_context: RenderingContext,
+    /// Access to Winit window
+    pub(crate) window: WinitWindow,
     /// The main control panel of this window.
     pub(crate) panel: Panel,
     /// The WebView of this window.
@@ -79,7 +79,8 @@ impl Window {
         debug_assert_eq!(webrender_gl.get_error(), gl::NO_ERROR);
 
         Self {
-            gl_window: Rc::new(GLWindow::new(window, rendering_context)),
+            window,
+            rendering_context,
             panel: Panel::new(),
             webview: None,
             webrender_gl,
@@ -88,16 +89,11 @@ impl Window {
         }
     }
 
-    /// Return the reference counted `GLWindow`.
-    pub fn gl_window(&self) -> Rc<GLWindow> {
-        return self.gl_window.clone();
-    }
-
     /// Handle Winit window event.
     pub fn handle_winit_window_event(
         &self,
         sender: &Sender<ConstellationMsg>,
-        compositor: &mut IOCompositor<GLWindow>,
+        compositor: &mut IOCompositor,
         event: &winit::event::WindowEvent,
     ) {
         match event {
@@ -212,7 +208,7 @@ impl Window {
         webview_id: Option<TopLevelBrowsingContextId>,
         message: EmbedderMsg,
         sender: &Sender<ConstellationMsg>,
-        compositor: &mut IOCompositor<GLWindow>,
+        compositor: &mut IOCompositor,
         clipboard: &mut Clipboard,
     ) {
         match webview_id {
@@ -243,73 +239,22 @@ impl Window {
         }
     }
 
-    // /// Paint offscreen framebuffer to Winit window.
-    // pub fn paint(&self, servo: &mut Servo<GLWindow>) {
-    //     if let Some(fbo) = servo.offscreen_framebuffer_id() {
-    //         let viewport = self.gl_window.get_coordinates().get_flipped_viewport();
-    //         let webrender_gl = &self.webrender_gl;
-    //
-    //         let target_fbo = self
-    //             .gl_window
-    //             .rendering_context
-    //             .context_surface_info()
-    //             .unwrap_or(None)
-    //             .map(|info| info.framebuffer_object)
-    //             .unwrap_or(0);
-    //
-    //         webrender_gl.bind_framebuffer(gl::READ_FRAMEBUFFER, fbo);
-    //         webrender_gl.bind_framebuffer(gl::DRAW_FRAMEBUFFER, target_fbo);
-    //
-    //         let x = viewport.min.x;
-    //         let y = viewport.min.y;
-    //         let width = viewport.size().width;
-    //         let height = viewport.size().height;
-    //         webrender_gl.blit_framebuffer(
-    //             x,
-    //             y,
-    //             x + width,
-    //             y + height,
-    //             x,
-    //             y,
-    //             x + width,
-    //             y + height,
-    //             gl::COLOR_BUFFER_BIT,
-    //             gl::NEAREST,
-    //         );
-    //
-    //         debug_assert_eq!(
-    //             (
-    //                 self.webrender_gl.get_error(),
-    //                 self.webrender_gl.check_frame_buffer_status(gl::FRAMEBUFFER)
-    //             ),
-    //             (gl::NO_ERROR, gl::FRAMEBUFFER_COMPLETE)
-    //         );
-    //
-    //         servo.present();
-    //     }
-    // }
-
     /// Queues a Winit `WindowEvent::RedrawRequested` event to be emitted that aligns with the windowing system drawing loop.
     pub fn request_redraw(&self) {
         self.window.request_redraw()
     }
 
-    /// Check if WebView (`GLWindow`) is animating.
-    pub fn is_animating(&self) -> bool {
-        self.gl_window.is_animating()
-    }
-
     /// Resize the rendering context and all web views.
-    pub fn resize(&self, size: Size2D<i32, DevicePixel>, compositor: &mut IOCompositor<GLWindow>) {
-        let _ = self.gl_window.rendering_context.resize(size.to_untyped());
-        let need_resize = compositor.on_resize_window_event();
+    pub fn resize(&self, size: Size2D<i32, DevicePixel>, compositor: &mut IOCompositor) {
+        let _ = self.rendering_context.resize(size.to_untyped());
+        let need_resize = compositor.on_resize_window_event(size);
 
-        let rect = DeviceIntRect::from_size(size).to_f32();
+        let rect = DeviceIntRect::from_size(size);
         compositor.move_resize_webview(self.panel.id(), rect);
 
         if let Some(w) = &self.webview {
-            let mut rect = DeviceIntRect::from_size(size).to_f32();
-            rect.min.y = rect.max.y.min(76.);
+            let mut rect = DeviceIntRect::from_size(size);
+            rect.min.y = rect.max.y.min(76);
             compositor.move_resize_webview(w.id(), rect);
         }
 
@@ -360,65 +305,17 @@ impl Window {
         };
         self.window.set_cursor_icon(winit_cursor);
     }
-}
 
-/// A Winit window with webrender rendering context.
-pub struct GLWindow {
-    /// Access to webrender rendering context
-    rendering_context: RenderingContext,
-    /// Animation state set by Servo to indicate if the webview is still rendering.
-    animation_state: Cell<AnimationState>,
-    /// Access to Winit window
-    pub(crate) window: WinitWindow,
-}
-
-impl GLWindow {
-    /// Create a web view from Winit window.
-    pub fn new(window: WinitWindow, rendering_context: RenderingContext) -> Self {
-        Self {
-            rendering_context,
-            animation_state: Cell::new(AnimationState::Idle),
-            window,
-        }
-    }
-
-    /// Check if WebView (`GLWindow`) is animating.
-    pub fn is_animating(&self) -> bool {
-        self.animation_state.get() == AnimationState::Animating
-    }
-}
-
-impl WindowMethods for GLWindow {
-    fn get_coordinates(&self) -> EmbedderCoordinates {
-        let size = self.window.inner_size();
-        let pos = Point2D::new(0, 0);
-        let viewport = Size2D::new(size.width as i32, size.height as i32);
-
-        let size = self.window.available_monitors().nth(0).unwrap().size();
-        let screen = Size2D::new(size.width as i32, size.height as i32);
-        EmbedderCoordinates {
-            hidpi_factor: Scale::new(self.window.scale_factor() as f32),
-            screen,
-            screen_avail: screen,
-            window: (viewport, pos),
-            framebuffer: viewport,
-            viewport: DeviceIntRect::from_origin_and_size(pos, viewport),
-        }
-    }
-
-    fn set_animation_state(&self, state: AnimationState) {
-        self.animation_state.set(state);
-    }
-
-    fn rendering_context(&self) -> RenderingContext {
+    pub fn rendering_context(&self) -> RenderingContext {
         self.rendering_context.clone()
     }
-}
 
-impl Deref for Window {
-    type Target = GLWindow;
+    pub fn size(&self) -> DeviceIntSize {
+        let size = self.window.inner_size();
+        Size2D::new(size.width as i32, size.height as i32)
+    }
 
-    fn deref(&self) -> &Self::Target {
-        &self.gl_window
+    pub fn scale_factor(&self) -> f64 {
+        self.window.scale_factor()
     }
 }

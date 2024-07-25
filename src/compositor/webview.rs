@@ -1,12 +1,12 @@
 use std::collections::HashMap;
 
 use servo::base::id::{PipelineId, WebViewId};
-use webrender::api::units::DeviceRect;
+use webrender::api::units::DeviceIntRect;
 
 #[derive(Debug, Default)]
 pub struct WebView {
     pub pipeline_id: Option<PipelineId>,
-    pub rect: DeviceRect,
+    pub rect: DeviceIntRect,
 }
 
 #[derive(Debug, Default)]
