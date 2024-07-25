@@ -80,7 +80,7 @@ impl Window {
 
     /// Handle Winit window event.
     pub fn handle_winit_window_event(
-        &self,
+        &mut self,
         sender: &Sender<ConstellationMsg>,
         compositor: &mut IOCompositor,
         event: &winit::event::WindowEvent,
@@ -234,7 +234,7 @@ impl Window {
     }
 
     /// Resize the rendering context and all web views.
-    pub fn resize(&self, size: Size2D<i32, DevicePixel>, compositor: &mut IOCompositor) {
+    pub fn resize(&mut self, size: Size2D<i32, DevicePixel>, compositor: &mut IOCompositor) {
         let need_resize = compositor.on_resize_window_event(size);
 
         let rect = DeviceIntRect::from_size(size);
@@ -247,7 +247,7 @@ impl Window {
         }
 
         if need_resize {
-            // TODO remove this? compositor.repaint_synchronously();
+            compositor.repaint_synchronously(self);
             compositor.present();
         }
     }

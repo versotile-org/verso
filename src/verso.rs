@@ -1,5 +1,6 @@
 use std::{
     borrow::Cow,
+    path::PathBuf,
     sync::{atomic::Ordering, Arc},
 };
 
@@ -37,7 +38,11 @@ use servo::{
 };
 use surfman::GLApi;
 use webrender::{api::*, ShaderPrecacheFlags};
-use winit::{event::Event, event_loop::EventLoopProxy, window::Window as WinitWindow};
+use winit::{
+    event::{Event, StartCause},
+    event_loop::EventLoopProxy,
+    window::Window as WinitWindow,
+};
 
 use crate::{
     compositor::{IOCompositor, InitialCompositorState, ShutdownState},
@@ -56,6 +61,7 @@ pub struct Verso {
     /// own instance that exists in the content process instead.
     _js_engine_setup: Option<JSEngineSetup>,
     clipboard: Clipboard,
+    resource_dir: PathBuf,
 }
 
 impl Verso {
@@ -76,8 +82,7 @@ impl Verso {
     /// - Constellation
     pub fn new(window: WinitWindow, proxy: EventLoopProxy<()>, config: Config) -> Self {
         // Initialize configurations and Verso window
-        let path = config.resource_dir.join("panel.html");
-        let url = ServoUrl::from_file_path(path.to_str().unwrap()).unwrap();
+        let resource_dir = config.resource_dir.clone();
         config.init();
         let (window, rendering_context) = Window::new_with_context(window);
         let event_loop_waker = Box::new(Waker(proxy));
@@ -333,7 +338,6 @@ impl Verso {
 
         // The compositor coordinates with the client window to create the final
         // rendered page and display it somewhere.
-        let panel_id = window.panel.id();
         let compositor = IOCompositor::new(
             window.size(),
             Scale::new(window.scale_factor() as f32),
@@ -352,7 +356,6 @@ impl Verso {
             },
             opts.exit_after_load,
             opts.debug.convert_mouse_to_touch,
-            panel_id,
         );
 
         // Create Verso instance
@@ -364,15 +367,10 @@ impl Verso {
             _js_engine_setup: js_engine_setup,
             clipboard: Clipboard::new()
                 .expect("Clipboard isn't supported in this platform or desktop environment."),
+            resource_dir,
         };
 
-        // Send the constellation message to start Panel UI
-        send_to_constellation(
-            &verso.constellation_sender,
-            ConstellationMsg::NewWebView(url, panel_id),
-        );
         verso.setup_logging();
-
         verso
     }
 
@@ -389,6 +387,16 @@ impl Verso {
     fn handle_winit_event(&mut self, event: Event<()>) {
         log::trace!("Verso is handling Winit event: {event:?}");
         match event {
+            Event::NewEvents(StartCause::Init) => {
+                // Send the constellation message to start Panel UI
+                let panel_id = self.window.panel.id();
+                let path = self.resource_dir.join("panel.html");
+                let url = ServoUrl::from_file_path(path.to_str().unwrap()).unwrap();
+                send_to_constellation(
+                    &self.constellation_sender,
+                    ConstellationMsg::NewWebView(url, panel_id),
+                );
+            }
             Event::Suspended | Event::Resumed | Event::UserEvent(()) => {}
             Event::WindowEvent {
                 window_id: _,

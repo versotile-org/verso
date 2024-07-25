@@ -319,25 +319,8 @@ impl IOCompositor {
         state: InitialCompositorState,
         exit_after_load: bool,
         convert_mouse_to_touch: bool,
-        top_level_browsing_context_id: TopLevelBrowsingContextId,
     ) -> Self {
-        let mut webviews = WebViewManager::default();
-        // webviews
-        //     .add(
-        //         top_level_browsing_context_id,
-        //         WebView {
-        //             pipeline_id: None,
-        //             rect: DeviceIntRect::from_size(viewport),
-        //         },
-        //     )
-        //     .expect("Infallible with a new WebViewManager");
-        // let msg = ConstellationMsg::WebViewOpened(top_level_browsing_context_id);
-        // if let Err(e) = state.constellation_chan.send(msg) {
-        //     warn!("Sending event to constellation failed ({:?}).", e);
-        // }
-        // webviews
-        //     .show(top_level_browsing_context_id)
-        //     .expect("Infallible due to add");
+        let webviews = WebViewManager::default();
 
         let compositor = IOCompositor {
             viewport,
@@ -1122,6 +1105,7 @@ impl IOCompositor {
             }
             webview.pipeline_id = new_pipeline_id;
         } else {
+            self.viewport = window.size();
             let top_level_browsing_context_id = frame_tree.pipeline.top_level_browsing_context_id;
             let pipeline_id = Some(frame_tree.pipeline.id);
             debug!(
@@ -2225,6 +2209,24 @@ impl IOCompositor {
             self.process_pending_scroll_events()
         }
         self.shutdown_state != ShutdownState::FinishedShuttingDown
+    }
+    /// Repaints and recomposites synchronously. You must be careful when calling this, as if a
+    /// paint is not scheduled the compositor will hang forever.
+    ///
+    /// This is used when resizing the window.
+    pub fn repaint_synchronously(&mut self, window: &mut Window) {
+        while self.shutdown_state != ShutdownState::ShuttingDown {
+            let msg = self.port.recv_compositor_msg();
+            let need_recomposite = matches!(msg, CompositorMsg::NewWebRenderFrameReady(_));
+            let keep_going = self.handle_browser_message(msg, window);
+            if need_recomposite {
+                self.composite();
+                break;
+            }
+            if !keep_going {
+                break;
+            }
+        }
     }
 
     pub fn pinch_zoom_level(&self) -> Scale<f32, DevicePixel, DevicePixel> {

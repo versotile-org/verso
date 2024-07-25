@@ -92,10 +92,8 @@ impl Window {
 
                 let size = self.window.inner_size();
                 let size = Size2D::new(size.width as i32, size.height as i32);
-                let mut rect = DeviceIntRect::from_size(size);
-                rect.min.y = rect.max.y.min(76);
                 send_to_constellation(sender, ConstellationMsg::FocusWebView(w));
-                compositor.move_resize_webview(w, rect);
+                self.resize(size, compositor);
             }
             EmbedderMsg::AllowNavigationRequest(id, _url) => {
                 // TODO should provide a API for users to check url
@@ -174,9 +172,8 @@ impl Window {
             EmbedderMsg::WebViewOpened(w) => {
                 let size = self.window.inner_size();
                 let size = Size2D::new(size.width as i32, size.height as i32);
-                let rect = DeviceIntRect::from_size(size);
                 send_to_constellation(sender, ConstellationMsg::FocusWebView(w));
-                compositor.move_resize_webview(w, rect);
+                self.resize(size, compositor);
             }
             EmbedderMsg::WebViewClosed(_w) => {
                 compositor.maybe_start_shutting_down();
