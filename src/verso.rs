@@ -39,10 +39,7 @@ use webrender::{api::*, ShaderPrecacheFlags};
 use winit::{event::Event, event_loop::EventLoopProxy, window::Window as WinitWindow};
 
 use crate::{
-    compositor::{
-        windowing::WindowMethods, CompositeTarget, IOCompositor, InitialCompositorState,
-        ShutdownState,
-    },
+    compositor::{windowing::WindowMethods, IOCompositor, InitialCompositorState, ShutdownState},
     config::Config,
     window::{GLWindow, Window},
 };
@@ -332,16 +329,10 @@ impl Verso {
             webdriver_server::start_server(port, constellation_sender.clone());
         }
 
-        let composite_target = if let Some(path) = opts.output_file.clone() {
-            CompositeTarget::PngFile(path.into())
-        } else {
-            CompositeTarget::Window
-        };
-
         // The compositor coordinates with the client window to create the final
         // rendered page and display it somewhere.
         let panel_id = window.panel.id();
-        let compositor = IOCompositor::create(
+        let compositor = IOCompositor::new(
             window.gl_window(),
             InitialCompositorState {
                 sender: compositor_sender,
@@ -356,7 +347,6 @@ impl Verso {
                 webrender_gl,
                 webxr_main_thread: webxr_registry,
             },
-            composite_target,
             opts.exit_after_load,
             opts.debug.convert_mouse_to_touch,
             panel_id,

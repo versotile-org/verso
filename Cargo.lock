@@ -5784,7 +5784,6 @@ dependencies = [
  "env_logger",
  "fnv",
  "getopts",
- "image 0.24.9",
  "ipc-channel",
  "libservo",
  "log",

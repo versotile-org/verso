@@ -8,10 +8,9 @@ use profile_traits::{mem, time};
 use servo::webrender_traits::RenderingContext;
 use webrender::{api::DocumentId, RenderApi};
 
-pub use compositor::{CompositeTarget, IOCompositor, ShutdownState};
+pub use compositor::{IOCompositor, ShutdownState};
 
 mod compositor;
-mod gl;
 mod touch;
 pub mod webview;
 pub mod windowing;
