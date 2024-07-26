@@ -4,7 +4,7 @@ use std::rc::Rc;
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
 use compositing_traits::{
-    CompositionPipeline, CompositorMsg, CompositorReceiver, ConstellationMsg,
+    CompositionPipeline, CompositorMsg, CompositorProxy, CompositorReceiver, ConstellationMsg,
     ForwardedToCompositorMsg, SendableFrameTree,
 };
 use crossbeam_channel::Sender;
@@ -42,11 +42,30 @@ use webrender::api::{
 };
 use webrender::{RenderApi, Transaction};
 
-use crate::webview::WebView as NWebView;
+use crate::touch::{TouchAction, TouchHandler};
+use crate::webview::WebView;
 use crate::window::Window;
 
-use super::touch::{TouchAction, TouchHandler};
-use super::InitialCompositorState;
+/// Data used to construct a compositor.
+pub struct InitialCompositorState {
+    /// A channel to the compositor.
+    pub sender: CompositorProxy,
+    /// A port on which messages inbound to the compositor can be received.
+    pub receiver: CompositorReceiver,
+    /// A channel to the constellation.
+    pub constellation_chan: Sender<ConstellationMsg>,
+    /// A channel to the time profiler thread.
+    pub time_profiler_chan: profile_traits::time::ProfilerChan,
+    /// A channel to the memory profiler thread.
+    pub mem_profiler_chan: profile_traits::mem::ProfilerChan,
+    /// Instance of webrender API
+    pub webrender: webrender::Renderer,
+    pub webrender_document: DocumentId,
+    pub webrender_api: RenderApi,
+    pub rendering_context: RenderingContext,
+    pub webrender_gl: Rc<dyn servo::gl::Gl>,
+    pub webxr_main_thread: webxr::MainThreadRegistry,
+}
 
 #[derive(Debug, PartialEq)]
 enum UnableToComposite {
@@ -192,7 +211,7 @@ pub struct IOCompositor {
     pub is_animating: bool,
 
     /// The order to paint webviews in, top most webview should be the last element.
-    painting_order: Vec<NWebView>,
+    painting_order: Vec<WebView>,
 }
 
 #[derive(Clone, Copy)]
@@ -2149,7 +2168,7 @@ impl IOCompositor {
             .send_transaction(self.webrender_document, txn);
     }
 
-    pub fn set_painting_order(&mut self, painting_order: Vec<NWebView>) {
+    pub fn set_painting_order(&mut self, painting_order: Vec<WebView>) {
         self.painting_order = painting_order;
     }
 }
