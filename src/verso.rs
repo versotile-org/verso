@@ -389,7 +389,7 @@ impl Verso {
         match event {
             Event::NewEvents(StartCause::Init) => {
                 // Send the constellation message to start Panel UI
-                let panel_id = self.window.panel.webview_id();
+                let panel_id = self.window.panel.webview_id;
                 let path = self.resource_dir.join("panel.html");
                 let url = ServoUrl::from_file_path(path.to_str().unwrap()).unwrap();
                 send_to_constellation(

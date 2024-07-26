@@ -204,7 +204,7 @@ impl Window {
     ) {
         match webview_id {
             // // Handle message in Verso Panel
-            Some(p) if p == self.panel.webview_id() => {
+            Some(p) if p == self.panel.webview_id => {
                 self.handle_servo_messages_with_panel(p, message, sender, clipboard);
             }
             // Handle message in Verso WebView
@@ -240,12 +240,12 @@ impl Window {
         let need_resize = compositor.on_resize_window_event(size);
 
         let rect = DeviceIntRect::from_size(size);
-        compositor.webview_resized(self.panel.webview_id(), rect);
+        compositor.on_resize_webview_event(self.panel.webview_id, rect);
 
         if let Some(w) = &self.webview {
             let mut rect = DeviceIntRect::from_size(size);
             rect.min.y = rect.max.y.min(76);
-            compositor.webview_resized(w.webview_id(), rect);
+            compositor.on_resize_webview_event(w.webview_id, rect);
         }
 
         if need_resize {
@@ -254,35 +254,41 @@ impl Window {
         }
     }
 
+    /// Size of the window that's used by webrender.
     pub fn size(&self) -> DeviceIntSize {
         let size = self.window.inner_size();
         Size2D::new(size.width as i32, size.height as i32)
     }
 
+    /// Scale factor of the window. This is also known as HIDPI.
     pub fn scale_factor(&self) -> f64 {
         self.window.scale_factor()
     }
 
+    /// Get the mutable reference of the webview in this window from provided webview ID.
     pub fn get_webview(&mut self, id: WebViewId) -> Option<&mut WebView> {
-        if self.panel.webview_id() == id {
+        if self.panel.webview_id == id {
             Some(&mut self.panel)
         } else {
-            self.webview.as_mut().filter(|w| w.webview_id() == id)
+            self.webview.as_mut().filter(|w| w.webview_id == id)
         }
     }
 
+    /// Set the webview to this window. It won't be updated if the exisitng webview and pipeline ID
+    /// are the same. This will also set the painting order of the compositor and tell
+    /// constellation to focus the webview.
     pub fn set_webview(
         &mut self,
         webview_id: WebViewId,
         pipline_id: PipelineId,
         compositor: &mut IOCompositor,
     ) {
-        if self.panel.webview_id() == webview_id {
+        if self.panel.webview_id == webview_id {
             if self.panel.pipeline_id != Some(pipline_id) {
                 self.panel.pipeline_id = Some(pipline_id);
             }
         } else if let Some(webview) = &mut self.webview {
-            if webview.webview_id() == webview_id && webview.pipeline_id != Some(pipline_id) {
+            if webview.webview_id == webview_id && webview.pipeline_id != Some(pipline_id) {
                 webview.pipeline_id = Some(pipline_id);
             }
         } else {
@@ -301,18 +307,20 @@ impl Window {
         );
     }
 
+    /// Remove the webview in this window by provided webview ID. If this is the panel, it will
+    /// shut down the compositor and then close whole application.
     pub fn remove_webview(
         &mut self,
         id: WebViewId,
         compositor: &mut IOCompositor,
     ) -> Option<WebView> {
-        if id == self.panel.webview_id() {
+        if id == self.panel.webview_id {
             compositor.maybe_start_shutting_down();
             None
         } else if self
             .webview
             .as_ref()
-            .filter(|w| w.webview_id() == id)
+            .filter(|w| w.webview_id == id)
             .is_some()
         {
             self.webview.take()
@@ -321,6 +329,7 @@ impl Window {
         }
     }
 
+    /// Get the painting order of this window.
     pub fn paiting_order(&self) -> Vec<WebView> {
         let mut order = vec![];
         if let Some(webview) = &self.webview {

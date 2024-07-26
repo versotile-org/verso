@@ -60,46 +60,43 @@ pub struct InitialCompositorState {
     pub mem_profiler_chan: profile_traits::mem::ProfilerChan,
     /// Instance of webrender API
     pub webrender: webrender::Renderer,
+    /// Webrender document ID
     pub webrender_document: DocumentId,
+    /// Webrender API
     pub webrender_api: RenderApi,
+    /// Servo's rendering context
     pub rendering_context: RenderingContext,
+    /// Webrender GL handle
     pub webrender_gl: Rc<dyn servo::gl::Gl>,
+    /// WebXR registry
     pub webxr_main_thread: webxr::MainThreadRegistry,
 }
 
-#[derive(Debug, PartialEq)]
-enum UnableToComposite {
-    NotReadyToPaintImage(NotReadyToPaint),
+/// Various debug and profiling flags that WebRender supports.
+#[derive(Clone)]
+pub enum WebRenderDebugOption {
+    /// Set profiler flags to webrender.
+    Profiler,
+    /// Set texture cache flags to webrender.
+    TextureCacheDebug,
+    /// Set render target flags to webrender.
+    RenderTargetDebug,
 }
 
-#[derive(Debug, PartialEq)]
-enum NotReadyToPaint {
-    AnimationsActive,
-    JustNotifiedConstellation,
-    WaitingOnConstellation,
+/// Mouse event for the compositor.
+#[derive(Clone)]
+pub enum MouseWindowEvent {
+    /// Mouse click event
+    Click(MouseButton, DevicePoint),
+    /// Mouse down event
+    MouseDown(MouseButton, DevicePoint),
+    /// Mouse up event
+    MouseUp(MouseButton, DevicePoint),
 }
 
 // Default viewport constraints
 const MAX_ZOOM: f32 = 8.0;
 const MIN_ZOOM: f32 = 0.1;
-
-/// Holds the state when running reftests that determines when it is
-/// safe to save the output image.
-#[derive(Clone, Copy, Debug, PartialEq)]
-enum ReadyState {
-    Unknown,
-    WaitingForConstellationReply,
-    ReadyToSaveImage,
-}
-
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-struct FrameTreeId(u32);
-
-impl FrameTreeId {
-    pub fn next(&mut self) {
-        self.0 += 1;
-    }
-}
 
 /// NB: Never block on the constellation, because sometimes the constellation blocks on us.
 pub struct IOCompositor {
@@ -256,10 +253,14 @@ enum CompositionRequest {
     CompositeNow(CompositingReason),
 }
 
+/// Shutdown State of the compositor
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub enum ShutdownState {
+    /// Compositor is still running.
     NotShuttingDown,
+    /// Compositor is shutting down.
     ShuttingDown,
+    /// Compositor has shut down.
     FinishedShuttingDown,
 }
 
@@ -331,6 +332,7 @@ impl PipelineDetails {
 }
 
 impl IOCompositor {
+    /// Create a new compositor.
     pub fn new(
         viewport: DeviceIntSize,
         scale_factor: Scale<f32, DeviceIndependentPixel, DevicePixel>,
@@ -380,7 +382,9 @@ impl IOCompositor {
         compositor
     }
 
+    /// Consume compositor itself and deinit webrender.
     pub fn deinit(self) {
+        // TODO: can we do this in drop?
         if let Err(err) = self.rendering_context.make_gl_context_current() {
             warn!("Failed to make GL context current: {:?}", err);
         }
@@ -400,6 +404,7 @@ impl IOCompositor {
         }
     }
 
+    /// Tell compositor to start shutting down.
     pub fn maybe_start_shutting_down(&mut self) {
         if self.shutdown_state == ShutdownState::NotShuttingDown {
             debug!("Shutting down the constellation for WindowEvent::Quit");
@@ -988,7 +993,7 @@ impl IOCompositor {
             .expect("Insert then get failed!")
     }
 
-    pub fn pipeline(&self, pipeline_id: PipelineId) -> Option<&CompositionPipeline> {
+    fn pipeline(&self, pipeline_id: PipelineId) -> Option<&CompositionPipeline> {
         match self.pipeline_details.get(&pipeline_id) {
             Some(details) => details.pipeline.as_ref(),
             None => {
@@ -1133,7 +1138,12 @@ impl IOCompositor {
         self.frame_tree_id.next();
     }
 
-    pub fn webview_resized(&mut self, webview_id: TopLevelBrowsingContextId, rect: DeviceIntRect) {
+    /// Notify compositor the provided webview is resized. The compositor will tell constellation and update the display list.
+    pub fn on_resize_webview_event(
+        &mut self,
+        webview_id: TopLevelBrowsingContextId,
+        rect: DeviceIntRect,
+    ) {
         self.send_window_size_message_for_top_level_browser_context(rect, webview_id);
         self.send_root_pipeline_display_list();
     }
@@ -1220,6 +1230,8 @@ impl IOCompositor {
         self.pipeline_details.remove(&pipeline_id);
     }
 
+    /// Handle the window resize event and return a boolean to tell embedder if it should further
+    /// handle the resize event.
     pub fn on_resize_window_event(&mut self, new_viewport: DeviceIntSize) -> bool {
         if self.shutdown_state != ShutdownState::NotShuttingDown {
             return false;
@@ -1236,6 +1248,7 @@ impl IOCompositor {
         true
     }
 
+    /// Handle the mouse event in the window.
     pub fn on_mouse_window_event_class(&mut self, mouse_window_event: MouseWindowEvent) {
         if self.shutdown_state != ShutdownState::NotShuttingDown {
             return;
@@ -1337,6 +1350,7 @@ impl IOCompositor {
             .collect()
     }
 
+    /// Handle mouse move event in the window.
     pub fn on_mouse_window_move_event_class(&mut self, cursor: DevicePoint) {
         if self.shutdown_state != ShutdownState::NotShuttingDown {
             return;
@@ -1385,7 +1399,7 @@ impl IOCompositor {
         }
     }
 
-    pub fn send_wheel_event(&mut self, delta: WheelDelta, point: DevicePoint) {
+    fn send_wheel_event(&mut self, delta: WheelDelta, point: DevicePoint) {
         if let Some(result) = self.hit_test_at_point(point) {
             let event = WheelEvent(delta, result.point_in_viewport, Some(result.node.into()));
             let msg = ConstellationMsg::ForwardEvent(result.pipeline_id, event);
@@ -1395,6 +1409,7 @@ impl IOCompositor {
         }
     }
 
+    /// Handle touch event.
     pub fn on_touch_event(
         &mut self,
         event_type: TouchEventType,
@@ -1471,6 +1486,7 @@ impl IOCompositor {
         self.dispatch_mouse_window_event_class(MouseWindowEvent::Click(button, p));
     }
 
+    /// Hit test and foward the wheel event to constellation.
     pub fn on_wheel_event(&mut self, delta: WheelDelta, p: DevicePoint) {
         if self.shutdown_state != ShutdownState::NotShuttingDown {
             return;
@@ -1479,6 +1495,7 @@ impl IOCompositor {
         self.send_wheel_event(delta, p);
     }
 
+    /// Handle scroll event.
     pub fn on_scroll_event(
         &mut self,
         scroll_location: ScrollLocation,
@@ -1709,6 +1726,7 @@ impl IOCompositor {
         self.page_zoom * self.scale_factor()
     }
 
+    /// Handle zoom reset event
     pub fn on_zoom_reset_window_event(&mut self) {
         if self.shutdown_state != ShutdownState::NotShuttingDown {
             return;
@@ -1718,6 +1736,7 @@ impl IOCompositor {
         self.update_after_zoom_or_hidpi_change();
     }
 
+    /// Handle zoom event in the window
     pub fn on_zoom_window_event(&mut self, magnification: f32) {
         if self.shutdown_state != ShutdownState::NotShuttingDown {
             return;
@@ -1735,7 +1754,7 @@ impl IOCompositor {
         for webview in &self.painting_order {
             self.send_window_size_message_for_top_level_browser_context(
                 webview.rect,
-                webview.webview_id(),
+                webview.webview_id,
             );
         }
 
@@ -1848,6 +1867,7 @@ impl IOCompositor {
         }
     }
 
+    /// Composite to the given target if any, or the current target otherwise.
     pub fn composite(&mut self) {
         match self.composite_specific_target() {
             Ok(_) => {
@@ -1863,9 +1883,6 @@ impl IOCompositor {
     }
 
     /// Composite to the given target if any, or the current target otherwise.
-    /// Returns Ok if composition was performed or Err if it was not possible to composite for some
-    /// reason. When the target is [CompositeTarget::SharedMemory], the image is read back from the
-    /// GPU and returned as Ok(Some(png::Image)), otherwise we return Ok(None).
     fn composite_specific_target(&mut self) -> Result<(), UnableToComposite> {
         if self.waiting_on_present {
             debug!("tried to composite while waiting on present");
@@ -1974,7 +1991,7 @@ impl IOCompositor {
         // Notify embedder that servo is ready to present.
         // Embedder should call `present` to tell compositor to continue rendering.
         self.waiting_on_present = true;
-        let webview_ids = self.painting_order.iter().map(|w| w.webview_id());
+        let webview_ids = self.painting_order.iter().map(|w| w.webview_id);
         let msg = ConstellationMsg::ReadyToPresent(webview_ids.collect());
         if let Err(e) = self.constellation_chan.send(msg) {
             warn!("Sending event to constellation failed ({:?}).", e);
@@ -1987,6 +2004,7 @@ impl IOCompositor {
         Ok(())
     }
 
+    /// Displays the contents of the surface on screen.
     pub fn present(&mut self) {
         if let Err(err) = self.rendering_context.present() {
             warn!("Failed to present surface: {:?}", err);
@@ -2057,6 +2075,7 @@ impl IOCompositor {
         );
     }
 
+    /// Receive and handle compositor messages.
     pub fn receive_messages(&mut self, window: &mut Window) -> bool {
         // Check for new messages coming from the other threads in the system.
         let mut compositor_messages = vec![];
@@ -2083,6 +2102,7 @@ impl IOCompositor {
         true
     }
 
+    /// Perform composition and related actions.
     pub fn perform_updates(&mut self) -> bool {
         if self.shutdown_state == ShutdownState::FinishedShuttingDown {
             return false;
@@ -2132,7 +2152,7 @@ impl IOCompositor {
         }
     }
 
-    pub fn pinch_zoom_level(&self) -> Scale<f32, DevicePixel, DevicePixel> {
+    fn pinch_zoom_level(&self) -> Scale<f32, DevicePixel, DevicePixel> {
         Scale::new(self.viewport_zoom.get())
     }
 
@@ -2148,6 +2168,7 @@ impl IOCompositor {
         old_zoom != self.viewport_zoom
     }
 
+    /// Update debug option of the webrender.
     pub fn toggle_webrender_debug(&mut self, option: WebRenderDebugOption) {
         let mut flags = self.webrender.get_debug_flags();
         let flag = match option {
@@ -2168,22 +2189,38 @@ impl IOCompositor {
             .send_transaction(self.webrender_document, txn);
     }
 
+    /// Update the painting order of the compositor.
     pub fn set_painting_order(&mut self, painting_order: Vec<WebView>) {
         self.painting_order = painting_order;
     }
 }
 
-/// Various debug and profiling flags that WebRender supports.
-#[derive(Clone)]
-pub enum WebRenderDebugOption {
-    Profiler,
-    TextureCacheDebug,
-    RenderTargetDebug,
+#[derive(Debug, PartialEq)]
+enum UnableToComposite {
+    NotReadyToPaintImage(NotReadyToPaint),
 }
 
-#[derive(Clone)]
-pub enum MouseWindowEvent {
-    Click(MouseButton, DevicePoint),
-    MouseDown(MouseButton, DevicePoint),
-    MouseUp(MouseButton, DevicePoint),
+#[derive(Debug, PartialEq)]
+enum NotReadyToPaint {
+    AnimationsActive,
+    JustNotifiedConstellation,
+    WaitingOnConstellation,
+}
+
+/// Holds the state when running reftests that determines when it is
+/// safe to save the output image.
+#[derive(Clone, Copy, Debug, PartialEq)]
+enum ReadyState {
+    Unknown,
+    WaitingForConstellationReply,
+    ReadyToSaveImage,
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+struct FrameTreeId(u32);
+
+impl FrameTreeId {
+    pub fn next(&mut self) {
+        self.0 += 1;
+    }
 }

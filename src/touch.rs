@@ -8,18 +8,25 @@ use self::TouchState::*;
 /// Minimum number of `DeviceIndependentPixel` to begin touch scrolling.
 const TOUCH_PAN_MIN_SCREEN_PX: f32 = 20.0;
 
+/// Handler of touch inputs and states.
 pub struct TouchHandler {
+    /// State of the touch handler
     pub state: TouchState,
+    /// Cerrent active touch points.
     pub active_touch_points: Vec<TouchPoint>,
 }
 
+/// The point of touch input
 #[derive(Clone, Copy, Debug)]
 pub struct TouchPoint {
+    /// ID of touch point
     pub id: TouchId,
+    /// The position of this point
     pub point: Point2D<f32, DevicePixel>,
 }
 
 impl TouchPoint {
+    /// Create a new touch point.
     pub fn new(id: TouchId, point: Point2D<f32, DevicePixel>) -> Self {
         TouchPoint { id, point }
     }
@@ -64,6 +71,7 @@ pub enum TouchAction {
 }
 
 impl TouchHandler {
+    /// Create a touch handler.
     pub fn new() -> Self {
         TouchHandler {
             state: Nothing,
@@ -71,6 +79,7 @@ impl TouchHandler {
         }
     }
 
+    /// Handle touch down input.
     pub fn on_touch_down(&mut self, id: TouchId, point: Point2D<f32, DevicePixel>) {
         let point = TouchPoint::new(id, point);
         self.active_touch_points.push(point);
@@ -84,6 +93,7 @@ impl TouchHandler {
         };
     }
 
+    /// Handle touch move input.
     pub fn on_touch_move(&mut self, id: TouchId, point: Point2D<f32, DevicePixel>) -> TouchAction {
         let idx = match self.active_touch_points.iter_mut().position(|t| t.id == id) {
             Some(i) => i,
@@ -135,6 +145,7 @@ impl TouchHandler {
         action
     }
 
+    /// Handle touch up input.
     pub fn on_touch_up(&mut self, id: TouchId, _point: Point2D<f32, DevicePixel>) -> TouchAction {
         match self.active_touch_points.iter().position(|t| t.id == id) {
             Some(i) => {
@@ -168,6 +179,7 @@ impl TouchHandler {
         }
     }
 
+    /// Handle touch cancel input.
     pub fn on_touch_cancel(&mut self, id: TouchId, _point: Point2D<f32, DevicePixel>) {
         match self.active_touch_points.iter().position(|t| t.id == id) {
             Some(i) => {
@@ -194,6 +206,7 @@ impl TouchHandler {
         }
     }
 
+    /// Handle event result.
     pub fn on_event_processed(&mut self, result: EventResult) {
         if let WaitingForScript = self.state {
             self.state = match result {

@@ -15,8 +15,11 @@ use crate::{verso::send_to_constellation, window::Window};
 /// A web view is an area to display web browsing context. It's what user will treat as a "web page".
 #[derive(Debug, Clone)]
 pub struct WebView {
-    webview_id: WebViewId,
+    /// Webview ID
+    pub webview_id: WebViewId,
+    /// Pipeline ID for webrender usage.
     pub pipeline_id: Option<PipelineId>,
+    /// The position and size of the webview.
     pub rect: DeviceIntRect,
 }
 
@@ -50,11 +53,6 @@ impl WebView {
             pipeline_id: None,
             rect,
         }
-    }
-
-    /// Get web view ID of this window.
-    pub fn webview_id(&self) -> WebViewId {
-        self.webview_id
     }
 }
 
@@ -154,7 +152,7 @@ impl Window {
                 match definition {
                     PromptDefinition::Input(msg, _, prompt_sender) => {
                         if let Some(webview) = &self.webview {
-                            let id = webview.webview_id();
+                            let id = webview.webview_id;
 
                             if msg.starts_with("NAVIGATE_TO:") {
                                 let url =
