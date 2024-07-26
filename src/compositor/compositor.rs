@@ -1,6 +1,5 @@
 use std::collections::{HashMap, HashSet};
 use std::ffi::c_void;
-use std::iter::once;
 use std::rc::Rc;
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
@@ -11,7 +10,7 @@ use compositing_traits::{
 use crossbeam_channel::Sender;
 use ipc_channel::ipc;
 use log::{debug, error, trace, warn};
-use servo::base::id::{PipelineId, TopLevelBrowsingContextId, WebViewId};
+use servo::base::id::{PipelineId, TopLevelBrowsingContextId};
 use servo::base::{Epoch, WebRenderEpochToU16};
 use servo::embedder_traits::Cursor;
 use servo::euclid::{Point2D, Scale, Transform3D, Vector2D};
@@ -43,10 +42,10 @@ use webrender::api::{
 };
 use webrender::{RenderApi, Transaction};
 
+use crate::webview::WebView as NWebView;
 use crate::window::Window;
 
 use super::touch::{TouchAction, TouchHandler};
-use super::webview::{UnknownWebView, WebView, WebViewAlreadyExists, WebViewManager};
 use super::InitialCompositorState;
 
 #[derive(Debug, PartialEq)]
@@ -91,9 +90,6 @@ pub struct IOCompositor {
     /// The port on which we receive messages.
     port: CompositorReceiver,
 
-    /// Our top-level browsing contexts.
-    webviews: WebViewManager<WebView>,
-
     /// Tracks details about each active pipeline that the compositor knows about.
     pipeline_details: HashMap<PipelineId, PipelineDetails>,
 
@@ -127,7 +123,7 @@ pub struct IOCompositor {
     frame_tree_id: FrameTreeId,
 
     /// The channel on which messages can be sent to the constellation.
-    constellation_chan: Sender<ConstellationMsg>,
+    pub constellation_chan: Sender<ConstellationMsg>,
 
     /// The channel on which messages can be sent to the time profiler.
     time_profiler_chan: profile_time::ProfilerChan,
@@ -194,6 +190,9 @@ pub struct IOCompositor {
     /// will want to avoid blocking on UI events, and just
     /// run the event loop at the vsync interval.
     pub is_animating: bool,
+
+    /// The order to paint webviews in, top most webview should be the last element.
+    painting_order: Vec<NWebView>,
 }
 
 #[derive(Clone, Copy)]
@@ -320,12 +319,9 @@ impl IOCompositor {
         exit_after_load: bool,
         convert_mouse_to_touch: bool,
     ) -> Self {
-        let webviews = WebViewManager::default();
-
         let compositor = IOCompositor {
             viewport,
             port: state.receiver,
-            webviews,
             pipeline_details: HashMap::new(),
             scale_factor,
             composition_request: CompositionRequest::NoCompositingNecessary,
@@ -357,6 +353,7 @@ impl IOCompositor {
             waiting_on_present: false,
             last_animation_tick: Instant::now(),
             is_animating: false,
+            painting_order: vec![],
         };
 
         // Make sure the GL state is OK
@@ -474,7 +471,7 @@ impl IOCompositor {
             }
 
             CompositorMsg::RemoveWebView(top_level_browsing_context_id) => {
-                self.remove_webview(top_level_browsing_context_id);
+                self.remove_webview(top_level_browsing_context_id, window);
             }
 
             CompositorMsg::MoveResizeWebView(_webview_id, _rect) => {
@@ -482,25 +479,16 @@ impl IOCompositor {
                 // self.move_resize_webview(webview_id, rect);
             }
 
-            CompositorMsg::ShowWebView(webview_id, hide_others) => {
-                if let Err(UnknownWebView(webview_id)) = self.show_webview(webview_id, hide_others)
-                {
-                    warn!("{webview_id}: ShowWebView on unknown webview id");
-                }
+            CompositorMsg::ShowWebView(_webview_id, _hide_others) => {
+                // TODO Remove this variant since it's no longer used.
             }
 
-            CompositorMsg::HideWebView(webview_id) => {
-                if let Err(UnknownWebView(webview_id)) = self.hide_webview(webview_id) {
-                    warn!("{webview_id}: HideWebView on unknown webview id");
-                }
+            CompositorMsg::HideWebView(_webview_id) => {
+                // TODO Remove this variant since it's no longer used.
             }
 
-            CompositorMsg::RaiseWebViewToTop(webview_id, hide_others) => {
-                if let Err(UnknownWebView(webview_id)) =
-                    self.raise_webview_to_top(webview_id, hide_others)
-                {
-                    warn!("{webview_id}: RaiseWebViewToTop on unknown webview id");
-                }
+            CompositorMsg::RaiseWebViewToTop(_webview_id, _hide_others) => {
+                // TODO Remove this variant since it's no longer used.
             }
 
             CompositorMsg::TouchEventProcessed(result) => {
@@ -1039,7 +1027,7 @@ impl IOCompositor {
 
         let root_clip_id = builder.define_clip_rect(zoom_reference_frame, scaled_viewport_rect);
         let clip_chain_id = builder.define_clip_chain(None, [root_clip_id]);
-        for (_, webview) in self.webviews.painting_order() {
+        for webview in &self.painting_order {
             if let Some(pipeline_id) = webview.pipeline_id {
                 let scaled_webview_rect = webview.rect.to_f32() / zoom_factor;
                 builder.push_iframe(
@@ -1094,39 +1082,11 @@ impl IOCompositor {
     fn set_frame_tree_for_webview(&mut self, frame_tree: &SendableFrameTree, window: &mut Window) {
         debug!("{}: Setting frame tree for webview", frame_tree.pipeline.id);
 
-        let top_level_browsing_context_id = frame_tree.pipeline.top_level_browsing_context_id;
-        if let Some(webview) = self.webviews.get_mut(top_level_browsing_context_id) {
-            let new_pipeline_id = Some(frame_tree.pipeline.id);
-            if new_pipeline_id != webview.pipeline_id {
-                debug!(
-                    "{:?}: Updating webview from pipeline {:?} to {:?}",
-                    top_level_browsing_context_id, webview.pipeline_id, new_pipeline_id
-                );
-            }
-            webview.pipeline_id = new_pipeline_id;
-        } else {
-            self.viewport = window.size();
-            let top_level_browsing_context_id = frame_tree.pipeline.top_level_browsing_context_id;
-            let pipeline_id = Some(frame_tree.pipeline.id);
-            debug!(
-                "{:?}: Creating new webview with pipeline {:?}",
-                top_level_browsing_context_id, pipeline_id
-            );
-            if let Err(WebViewAlreadyExists(webview_id)) = self.webviews.add(
-                top_level_browsing_context_id,
-                WebView {
-                    pipeline_id,
-                    rect: DeviceIntRect::from_size(self.viewport),
-                },
-            ) {
-                error!("{webview_id}: Creating webview that already exists");
-                return;
-            }
-            let msg = ConstellationMsg::WebViewOpened(top_level_browsing_context_id);
-            if let Err(e) = self.constellation_chan.send(msg) {
-                warn!("Sending event to constellation failed ({:?}).", e);
-            }
-        }
+        window.set_webview(
+            frame_tree.pipeline.top_level_browsing_context_id,
+            frame_tree.pipeline.id,
+            self,
+        );
 
         self.send_root_pipeline_display_list();
         self.create_or_update_pipeline_details_with_frame_tree(frame_tree, None);
@@ -1135,9 +1095,13 @@ impl IOCompositor {
         self.frame_tree_id.next();
     }
 
-    fn remove_webview(&mut self, top_level_browsing_context_id: TopLevelBrowsingContextId) {
+    fn remove_webview(
+        &mut self,
+        top_level_browsing_context_id: TopLevelBrowsingContextId,
+        window: &mut Window,
+    ) {
         debug!("{}: Removing", top_level_browsing_context_id);
-        let Ok(webview) = self.webviews.remove(top_level_browsing_context_id) else {
+        let Some(webview) = window.remove_webview(top_level_browsing_context_id, self) else {
             warn!("{top_level_browsing_context_id}: Removing unknown webview");
             return;
         };
@@ -1150,89 +1114,9 @@ impl IOCompositor {
         self.frame_tree_id.next();
     }
 
-    pub fn move_resize_webview(
-        &mut self,
-        webview_id: TopLevelBrowsingContextId,
-        rect: DeviceIntRect,
-    ) {
-        debug!("{webview_id}: Moving and/or resizing webview; rect={rect:?}");
-        let rect_changed;
-        let size_changed;
-        match self.webviews.get_mut(webview_id) {
-            Some(webview) => {
-                rect_changed = rect != webview.rect;
-                size_changed = rect.size() != webview.rect.size();
-                webview.rect = rect;
-            }
-            None => {
-                warn!("{webview_id}: MoveResizeWebView on unknown webview id");
-                return;
-            }
-        };
-
-        if rect_changed {
-            if size_changed {
-                self.send_window_size_message_for_top_level_browser_context(rect, webview_id);
-            }
-
-            self.send_root_pipeline_display_list();
-        }
-    }
-
-    pub fn show_webview(
-        &mut self,
-        webview_id: WebViewId,
-        hide_others: bool,
-    ) -> Result<(), UnknownWebView> {
-        debug!("{webview_id}: Showing webview; hide_others={hide_others}");
-        let painting_order_changed = if hide_others {
-            let result = self
-                .webviews
-                .painting_order()
-                .map(|(&id, _)| id)
-                .ne(once(webview_id));
-            self.webviews.hide_all();
-            self.webviews.show(webview_id)?;
-            result
-        } else {
-            self.webviews.show(webview_id)?
-        };
-        if painting_order_changed {
-            self.send_root_pipeline_display_list();
-        }
-        Ok(())
-    }
-
-    pub fn hide_webview(&mut self, webview_id: WebViewId) -> Result<(), UnknownWebView> {
-        debug!("{webview_id}: Hiding webview");
-        if self.webviews.hide(webview_id)? {
-            self.send_root_pipeline_display_list();
-        }
-        Ok(())
-    }
-
-    pub fn raise_webview_to_top(
-        &mut self,
-        webview_id: WebViewId,
-        hide_others: bool,
-    ) -> Result<(), UnknownWebView> {
-        debug!("{webview_id}: Raising webview to top; hide_others={hide_others}");
-        let painting_order_changed = if hide_others {
-            let result = self
-                .webviews
-                .painting_order()
-                .map(|(&id, _)| id)
-                .ne(once(webview_id));
-            self.webviews.hide_all();
-            self.webviews.raise_to_top(webview_id)?;
-            result
-        } else {
-            self.webviews.raise_to_top(webview_id)?
-        };
-        if painting_order_changed {
-            self.send_root_pipeline_display_list();
-        }
-        Ok(())
+    pub fn webview_resized(&mut self, webview_id: TopLevelBrowsingContextId, rect: DeviceIntRect) {
+        self.send_window_size_message_for_top_level_browser_context(rect, webview_id);
+        self.send_root_pipeline_display_list();
     }
 
     fn send_window_size_message_for_top_level_browser_context(
@@ -1829,10 +1713,10 @@ impl IOCompositor {
     }
 
     fn update_after_zoom_or_hidpi_change(&mut self) {
-        for (top_level_browsing_context_id, webview) in self.webviews.painting_order() {
+        for webview in &self.painting_order {
             self.send_window_size_message_for_top_level_browser_context(
                 webview.rect,
-                *top_level_browsing_context_id,
+                webview.webview_id(),
             );
         }
 
@@ -2071,7 +1955,7 @@ impl IOCompositor {
         // Notify embedder that servo is ready to present.
         // Embedder should call `present` to tell compositor to continue rendering.
         self.waiting_on_present = true;
-        let webview_ids = self.webviews.painting_order().map(|(&id, _)| id);
+        let webview_ids = self.painting_order.iter().map(|w| w.webview_id());
         let msg = ConstellationMsg::ReadyToPresent(webview_ids.collect());
         if let Err(e) = self.constellation_chan.send(msg) {
             warn!("Sending event to constellation failed ({:?}).", e);
@@ -2114,7 +1998,7 @@ impl IOCompositor {
 
         let framebuffer_height = self.viewport.height;
         // Clear the viewport rect of each top-level browsing context.
-        for (_, webview) in self.webviews.painting_order() {
+        for webview in &self.painting_order {
             // Flip the rectangle in the framebuffer
             let origin = webview.rect.to_i32();
             let mut rect = origin.clone();
@@ -2263,6 +2147,10 @@ impl IOCompositor {
         self.generate_frame(&mut txn, RenderReasons::TESTING);
         self.webrender_api
             .send_transaction(self.webrender_document, txn);
+    }
+
+    pub fn set_painting_order(&mut self, painting_order: Vec<NWebView>) {
+        self.painting_order = painting_order;
     }
 }
 

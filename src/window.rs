@@ -4,6 +4,7 @@ use compositing_traits::ConstellationMsg;
 use crossbeam_channel::Sender;
 use raw_window_handle::{HasRawDisplayHandle, HasRawWindowHandle};
 use servo::{
+    base::id::{PipelineId, WebViewId},
     embedder_traits::{Cursor, EmbedderMsg},
     euclid::{Point2D, Size2D},
     script_traits::{TouchEventType, WheelDelta, WheelMode},
@@ -66,10 +67,12 @@ impl Window {
             .expect("Failed to create rendering context");
         log::trace!("Created rendering context for window {:?}", window);
 
+        let size = window.inner_size();
+        let size = Size2D::new(size.width as i32, size.height as i32);
         (
             Self {
                 window,
-                panel: WebView::new_panel(),
+                panel: WebView::new_panel(DeviceIntRect::from_size(size)),
                 webview: None,
                 mouse_position: Cell::new(PhysicalPosition::default()),
                 modifiers_state: Cell::new(ModifiersState::default()),
@@ -197,17 +200,16 @@ impl Window {
         webview_id: Option<TopLevelBrowsingContextId>,
         message: EmbedderMsg,
         sender: &Sender<ConstellationMsg>,
-        compositor: &mut IOCompositor,
         clipboard: &mut Clipboard,
     ) {
         match webview_id {
             // // Handle message in Verso Panel
-            Some(p) if p == self.panel.id() => {
-                self.handle_servo_messages_with_panel(p, message, sender, compositor, clipboard);
+            Some(p) if p == self.panel.webview_id() => {
+                self.handle_servo_messages_with_panel(p, message, sender, clipboard);
             }
             // Handle message in Verso WebView
             Some(w) => {
-                self.handle_servo_messages_with_webview(w, message, sender, compositor, clipboard);
+                self.handle_servo_messages_with_webview(w, message, sender, clipboard);
             }
             // Handle message in Verso Window
             None => {
@@ -238,12 +240,12 @@ impl Window {
         let need_resize = compositor.on_resize_window_event(size);
 
         let rect = DeviceIntRect::from_size(size);
-        compositor.move_resize_webview(self.panel.id(), rect);
+        compositor.webview_resized(self.panel.webview_id(), rect);
 
         if let Some(w) = &self.webview {
             let mut rect = DeviceIntRect::from_size(size);
             rect.min.y = rect.max.y.min(76);
-            compositor.move_resize_webview(w.id(), rect);
+            compositor.webview_resized(w.webview_id(), rect);
         }
 
         if need_resize {
@@ -261,12 +263,71 @@ impl Window {
         self.window.scale_factor()
     }
 
-    pub fn get_webview(&mut self, id: TopLevelBrowsingContextId) -> Option<&mut WebView> {
-        if self.panel.id() == id {
+    pub fn get_webview(&mut self, id: WebViewId) -> Option<&mut WebView> {
+        if self.panel.webview_id() == id {
             Some(&mut self.panel)
         } else {
-            self.webview.as_mut().filter(|w| w.id() == id)
+            self.webview.as_mut().filter(|w| w.webview_id() == id)
         }
+    }
+
+    pub fn set_webview(
+        &mut self,
+        webview_id: WebViewId,
+        pipline_id: PipelineId,
+        compositor: &mut IOCompositor,
+    ) {
+        if self.panel.webview_id() == webview_id {
+            if self.panel.pipeline_id != Some(pipline_id) {
+                self.panel.pipeline_id = Some(pipline_id);
+            }
+        } else if let Some(webview) = &mut self.webview {
+            if webview.webview_id() == webview_id && webview.pipeline_id != Some(pipline_id) {
+                webview.pipeline_id = Some(pipline_id);
+            }
+        } else {
+            let size = self.size();
+            let mut rect = DeviceIntRect::from_size(size);
+            rect.min.y = rect.max.y.min(76);
+            self.webview = Some(WebView::new(webview_id, rect));
+        }
+
+        compositor.set_painting_order(self.paiting_order());
+        self.resize(self.size(), compositor);
+
+        send_to_constellation(
+            &compositor.constellation_chan,
+            ConstellationMsg::FocusWebView(webview_id),
+        );
+    }
+
+    pub fn remove_webview(
+        &mut self,
+        id: WebViewId,
+        compositor: &mut IOCompositor,
+    ) -> Option<WebView> {
+        if id == self.panel.webview_id() {
+            compositor.maybe_start_shutting_down();
+            None
+        } else if self
+            .webview
+            .as_ref()
+            .filter(|w| w.webview_id() == id)
+            .is_some()
+        {
+            self.webview.take()
+        } else {
+            None
+        }
+    }
+
+    pub fn paiting_order(&self) -> Vec<WebView> {
+        let mut order = vec![];
+        if let Some(webview) = &self.webview {
+            order.push(webview.clone());
+        }
+        order.push(self.panel.clone());
+        order
     }
 
     /// Set cursor icon of the window.

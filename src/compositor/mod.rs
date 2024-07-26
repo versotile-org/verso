@@ -12,7 +12,6 @@ pub use compositor::{IOCompositor, MouseWindowEvent, ShutdownState};
 
 mod compositor;
 mod touch;
-pub mod webview;
 
 /// Data used to construct a compositor.
 pub struct InitialCompositorState {

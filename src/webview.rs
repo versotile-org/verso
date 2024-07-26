@@ -1,38 +1,32 @@
-use std::cell::Cell;
-
 use arboard::Clipboard;
 use compositing_traits::ConstellationMsg;
 use crossbeam_channel::Sender;
 use servo::{
-    base::id::{PipelineNamespace, PipelineNamespaceId, WebViewId},
+    base::id::{PipelineId, PipelineNamespace, PipelineNamespaceId, WebViewId},
     embedder_traits::{CompositorEventVariant, EmbedderMsg, PromptDefinition},
-    euclid::Size2D,
     script_traits::TraversalDirection,
     url::ServoUrl,
     webrender_api::units::DeviceIntRect,
     TopLevelBrowsingContextId,
 };
 
-use crate::{
-    compositor::{webview::UnknownWebView, IOCompositor},
-    verso::send_to_constellation,
-    window::Window,
-};
+use crate::{verso::send_to_constellation, window::Window};
 
 /// A web view is an area to display web browsing context. It's what user will treat as a "web page".
+#[derive(Debug, Clone)]
 pub struct WebView {
-    id: WebViewId,
-    history: Cell<Vec<ServoUrl>>,
-    current: Cell<usize>,
+    webview_id: WebViewId,
+    pub pipeline_id: Option<PipelineId>,
+    pub rect: DeviceIntRect,
 }
 
 impl WebView {
     /// Create a web view from Winit window.
-    pub fn new(id: WebViewId) -> Self {
+    pub fn new(webview_id: WebViewId, rect: DeviceIntRect) -> Self {
         Self {
-            id,
-            history: Cell::new(vec![]),
-            current: Cell::new(0),
+            webview_id,
+            pipeline_id: None,
+            rect,
         }
     }
 
@@ -47,26 +41,20 @@ impl WebView {
     /// - Minimize the window: `window.prompt('MINIMIZE')`
     /// - Maximize the window: `window.prompt('MAXIMIZE')`
     /// - Navigate to a specific URL: `window.prompt('NAVIGATE_TO:${url}')`
-    pub fn new_panel() -> Self {
+    pub fn new_panel(rect: DeviceIntRect) -> Self {
         // Reserving a namespace to create TopLevelBrowsingContextId.
         PipelineNamespace::install(PipelineNamespaceId(0));
         let id = TopLevelBrowsingContextId::new();
         Self {
-            id,
-            history: Cell::new(vec![]),
-            current: Cell::new(0),
+            webview_id: id,
+            pipeline_id: None,
+            rect,
         }
     }
 
     /// Get web view ID of this window.
-    pub fn id(&self) -> WebViewId {
-        self.id
-    }
-
-    /// Set the history URLs and current index of the WebView
-    pub fn set_history(&self, history: Vec<ServoUrl>, current: usize) {
-        self.history.replace(history);
-        self.current.replace(current);
+    pub fn webview_id(&self) -> WebViewId {
+        self.webview_id
     }
 }
 
@@ -77,35 +65,24 @@ impl Window {
         webview_id: WebViewId,
         message: EmbedderMsg,
         sender: &Sender<ConstellationMsg>,
-        compositor: &mut IOCompositor,
         clipboard: &mut Clipboard,
     ) {
         log::trace!("Verso WebView {webview_id:?} is handling Embedder message: {message:?}",);
         match message {
-            EmbedderMsg::LoadStart | EmbedderMsg::HeadParsed => {}
+            EmbedderMsg::LoadStart
+            | EmbedderMsg::HeadParsed
+            | EmbedderMsg::WebViewOpened(_)
+            | EmbedderMsg::WebViewClosed(_)
+            | EmbedderMsg::WebViewFocused(_) => {
+                // Most WebView messages are ignored because it's done by compositor.
+                log::trace!("Verso WebView {webview_id:?} ignores this message: {message:?}")
+            }
             EmbedderMsg::LoadComplete => {
                 self.window.request_redraw();
-            }
-            EmbedderMsg::WebViewOpened(w) => {
-                let webview = WebView::new(w);
-                self.webview = Some(webview);
-
-                let size = self.window.inner_size();
-                let size = Size2D::new(size.width as i32, size.height as i32);
-                send_to_constellation(sender, ConstellationMsg::FocusWebView(w));
-                self.resize(size, compositor);
             }
             EmbedderMsg::AllowNavigationRequest(id, _url) => {
                 // TODO should provide a API for users to check url
                 send_to_constellation(sender, ConstellationMsg::AllowNavigationResponse(id, true));
-            }
-            EmbedderMsg::WebViewClosed(_w) => {
-                self.webview = None;
-            }
-            EmbedderMsg::WebViewFocused(w) => {
-                if let Err(UnknownWebView(webview_id)) = compositor.show_webview(w, false) {
-                    log::warn!("{webview_id}: ShowWebView on unknown webview id");
-                }
             }
             EmbedderMsg::GetClipboardContents(sender) => {
                 let contents = clipboard.get_text().unwrap_or_else(|e| {
@@ -132,11 +109,6 @@ impl Window {
             }
             EmbedderMsg::EventDelivered(event) => {
                 if let CompositorEventVariant::MouseButtonEvent = event {
-                    if let Err(UnknownWebView(webview_id)) =
-                        compositor.raise_webview_to_top(webview_id, false)
-                    {
-                        log::warn!("{webview_id}: RaiseWebViewToTop on unknown webview id");
-                    }
                     send_to_constellation(sender, ConstellationMsg::FocusWebView(webview_id));
                 }
             }
@@ -152,12 +124,18 @@ impl Window {
         panel_id: WebViewId,
         message: EmbedderMsg,
         sender: &Sender<ConstellationMsg>,
-        compositor: &mut IOCompositor,
         clipboard: &mut Clipboard,
     ) {
         log::trace!("Verso Panel {panel_id:?} is handling Embedder message: {message:?}",);
         match message {
-            EmbedderMsg::LoadStart | EmbedderMsg::HeadParsed => {}
+            EmbedderMsg::LoadStart
+            | EmbedderMsg::HeadParsed
+            | EmbedderMsg::WebViewOpened(_)
+            | EmbedderMsg::WebViewClosed(_)
+            | EmbedderMsg::WebViewFocused(_) => {
+                // Most WebView messages are ignored because it's done by compositor.
+                log::trace!("Verso Panel ignores this message: {message:?}")
+            }
             EmbedderMsg::LoadComplete => {
                 self.window.request_redraw();
                 // let demo_url = ServoUrl::parse("https://demo.versotile.org").unwrap();
@@ -169,20 +147,6 @@ impl Window {
                 // The panel shouldn't navigate to other pages.
                 send_to_constellation(sender, ConstellationMsg::AllowNavigationResponse(id, false));
             }
-            EmbedderMsg::WebViewOpened(w) => {
-                let size = self.window.inner_size();
-                let size = Size2D::new(size.width as i32, size.height as i32);
-                send_to_constellation(sender, ConstellationMsg::FocusWebView(w));
-                self.resize(size, compositor);
-            }
-            EmbedderMsg::WebViewClosed(_w) => {
-                compositor.maybe_start_shutting_down();
-            }
-            EmbedderMsg::WebViewFocused(w) => {
-                if let Err(UnknownWebView(webview_id)) = compositor.show_webview(w, false) {
-                    log::warn!("{webview_id}: ShowWebView on unknown webview id");
-                }
-            }
             EmbedderMsg::HistoryChanged(..) | EmbedderMsg::ChangePageTitle(..) => {
                 log::trace!("Verso Panel ignores this message: {message:?}")
             }
@@ -190,7 +154,7 @@ impl Window {
                 match definition {
                     PromptDefinition::Input(msg, _, prompt_sender) => {
                         if let Some(webview) = &self.webview {
-                            let id = webview.id();
+                            let id = webview.webview_id();
 
                             if msg.starts_with("NAVIGATE_TO:") {
                                 let url =
