@@ -124,6 +124,11 @@ jobs:
       - name: Install Rust
         uses: dsherret/rust-toolchain-file@v1
 
+      - name: Install Rust toolchain for packager
+        uses: actions-rust-lang/setup-rust-toolchain@v1
+        with:
+          toolchain: stable
+
       - name: Install scroop
         uses: MinoruSekine/setup-scoop@v3
 
@@ -133,6 +138,9 @@ jobs:
       - name: Run sccache-cache
         uses: Mozilla-Actions/sccache-action@v0.0.4
 
+      - name: Install Cargo Packager
+        run: cargo +stable install cargo-packager
+
       - name: Build
         run: |
           cargo build --release
@@ -141,16 +149,22 @@ jobs:
       #   run: |
       #     cargo test --release
 
-      - name: Tar Binary
+      - name: Bundle
         if: ${{ github.event_name == 'schedule' }}
-        run: tar -czvf verso-x86_64-pc-windows-msvc.tar.gz -C ./target/release/ verso.exe
+        run: |
+          cargo packager --release
+
+      - name: Fetch Verso version
+        if: ${{ github.event_name == 'schedule' }}
+        run: |
+          echo "VERSO_VERSION=$(cargo metadata --format-version=1 --no-deps | jq -r '.packages[] | select(.name == "verso") | .version')" >> $Env:GITHUB_ENV
 
       - name: Upload artifact
         if: ${{ github.event_name == 'schedule' }}
         uses: actions/upload-artifact@v4
         with:
-          name: verso-x86_64-pc-windows-msvc
-          path: verso-x86_64-pc-windows-msvc.tar.gz
+          name: verso_${{ env.VERSO_VERSION }}_x64-setup
+          path: target\release\verso_${{ env.VERSO_VERSION }}_x64-setup.exe
 
   build-macos:
     if: ${{ github.event_name != 'pull_request' }}
@@ -159,8 +173,8 @@ jobs:
       fail-fast: false
       matrix:
         platform:
-          - { target: aarch64-apple-darwin, os: macos-latest }
-          - { target: x86_64-apple-darwin, os: macos-13 }
+          - { target: aarch64-apple-darwin, os: macos-latest, arch: aarch64 }
+          - { target: x86_64-apple-darwin, os: macos-13, arch: x64 }
     runs-on: ${{ matrix.platform.os }}
     env:
       RUSTC_WRAPPER: sccache
@@ -221,41 +235,42 @@ jobs:
 
       - name: Fetch Verso version
         run: |
-          echo "VERSO_VERSION=$(cargo metadata --format-version=1 --no-deps | jq -r '.packages[] | select(.name == "verso") | .version')-$(date '+%Y%m%d')-nightly" >> $GITHUB_ENV
+          echo "VERSO_VERSION=$(cargo metadata --format-version=1 --no-deps | jq -r '.packages[] | select(.name == "verso") | .version')" >> $GITHUB_ENV
+          echo "VERSO_RELEASE_NAME=$(cargo metadata --format-version=1 --no-deps | jq -r '.packages[] | select(.name == "verso") | .version')-$(date '+%Y%m%d')-nightly" >> $GITHUB_ENV
 
       - name: Draft release
         uses: crabnebula-dev/cloud-release@v0.1.0
         id: draft
         with:
-          command: release draft ${{ env.CN_APP_SLUG }} $VERSO_VERSION
+          command: release draft ${{ env.CN_APP_SLUG }} $VERSO_RELEASE_NAME
           api-key: ${{ secrets.CN_API_KEY }}
 
       - name: Upload macOS binary (ARM)
         uses: crabnebula-dev/cloud-release@v0.1.0
         with:
-          command: release upload --file "verso-aarch64-apple-darwin/verso-aarch64-apple-darwin.tar.gz" ${{ env.CN_APP_SLUG }} $VERSO_VERSION
+          command: release upload --file "verso-aarch64-apple-darwin/verso-aarch64-apple-darwin.tar.gz" ${{ env.CN_APP_SLUG }} $VERSO_RELEASE_NAME
           api-key: ${{ secrets.CN_API_KEY }}
 
       - name: Upload macOS binary (Intel)
         uses: crabnebula-dev/cloud-release@v0.1.0
         with:
-          command: release upload --file "verso-x86_64-apple-darwin/verso-x86_64-apple-darwin.tar.gz" ${{ env.CN_APP_SLUG }} $VERSO_VERSION
+          command: release upload --file "verso-x86_64-apple-darwin/verso-x86_64-apple-darwin.tar.gz" ${{ env.CN_APP_SLUG }} $VERSO_RELEASE_NAME
           api-key: ${{ secrets.CN_API_KEY }}
 
       - name: Upload Windows binary
         uses: crabnebula-dev/cloud-release@v0.1.0
         with:
-          command: release upload --file "verso-x86_64-pc-windows-msvc/verso-x86_64-pc-windows-msvc.tar.gz" ${{ env.CN_APP_SLUG }} $VERSO_VERSION
+          command: release upload --file "verso_${{ env.VERSO_VERSION }}_x64-setup/verso_${{ env.VERSO_VERSION }}_x64-setup.exe" ${{ env.CN_APP_SLUG }} $VERSO_RELEASE_NAME
           api-key: ${{ secrets.CN_API_KEY }}
 
       - name: Upload Linux binary
         uses: crabnebula-dev/cloud-release@v0.1.0
         with:
-          command: release upload --file "verso-x86_64-unknown-linux-gnu/verso-x86_64-unknown-linux-gnu.tar.gz" ${{ env.CN_APP_SLUG }} $VERSO_VERSION
+          command: release upload --file "verso-x86_64-unknown-linux-gnu/verso-x86_64-unknown-linux-gnu.tar.gz" ${{ env.CN_APP_SLUG }} $VERSO_RELEASE_NAME
           api-key: ${{ secrets.CN_API_KEY }}
 
       - name: Publish release
         uses: crabnebula-dev/cloud-release@v0.1.0
         with:
-          command: release publish ${{ env.CN_APP_SLUG }} $VERSO_VERSION
+          command: release publish ${{ env.CN_APP_SLUG }} $VERSO_RELEASE_NAME
           api-key: ${{ secrets.CN_API_KEY }}
