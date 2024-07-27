@@ -34,10 +34,11 @@ use servo::{
     style,
     url::ServoUrl,
     webgpu,
+    webrender_api::*,
     webrender_traits::*,
 };
 use surfman::GLApi;
-use webrender::{api::*, ShaderPrecacheFlags};
+use webrender::{create_webrender_instance, ShaderPrecacheFlags, WebRenderOptions};
 use winit::{
     event::{Event, StartCause},
     event_loop::EventLoopProxy,
@@ -158,18 +159,15 @@ impl Verso {
 
         // Create Webrender threads
         let (mut webrender, webrender_api_sender) = {
-            let mut debug_flags = webrender::DebugFlags::empty();
-            debug_flags.set(
-                webrender::DebugFlags::PROFILER_DBG,
-                opts.debug.webrender_stats,
-            );
+            let mut debug_flags = DebugFlags::empty();
+            debug_flags.set(DebugFlags::PROFILER_DBG, opts.debug.webrender_stats);
 
             let render_notifier = Box::new(RenderNotifier::new(compositor_sender.clone()));
             let clear_color = ColorF::new(1., 1., 1., 0.);
-            webrender::create_webrender_instance(
+            create_webrender_instance(
                 webrender_gl.clone(),
                 render_notifier,
-                webrender::WebRenderOptions {
+                WebRenderOptions {
                     // We force the use of optimized shaders here because rendering is broken
                     // on Android emulators with unoptimized shaders. This is due to a known
                     // issue in the emulator's OpenGL emulation layer.

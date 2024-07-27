@@ -15,6 +15,7 @@ use servo::base::{Epoch, WebRenderEpochToU16};
 use servo::embedder_traits::Cursor;
 use servo::euclid::{Point2D, Scale, Transform3D, Vector2D};
 use servo::profile_traits::time::{self as profile_time, profile, ProfilerCategory};
+use servo::profile_traits::{mem, time};
 use servo::script_traits::CompositorEvent::{
     MouseButtonEvent, MouseMoveEvent, TouchEvent, WheelEvent,
 };
@@ -24,21 +25,21 @@ use servo::script_traits::{
 };
 use servo::servo_geometry::DeviceIndependentPixel;
 use servo::style_traits::{CSSPixel, DevicePixel, PinchZoomFactor};
+use servo::webrender_api::units::{
+    DeviceIntPoint, DeviceIntRect, DeviceIntSize, DevicePoint, LayoutPoint, LayoutRect, LayoutSize,
+    LayoutVector2D, WorldPoint,
+};
+use servo::webrender_api::{
+    BuiltDisplayList, DirtyRect, DisplayListPayload, DocumentId, Epoch as WebRenderEpoch,
+    ExternalScrollId, FontInstanceOptions, HitTestFlags, PipelineId as WebRenderPipelineId,
+    PropertyBinding, ReferenceFrameKind, RenderReasons, SampledScrollOffset, ScrollLocation,
+    SpaceAndClipInfo, SpatialId, SpatialTreeItemKey, TransformStyle,
+};
 use servo::webrender_traits::display_list::{HitTestInfo, ScrollTree};
 use servo::webrender_traits::{
     CanvasToCompositorMsg, CompositorHitTestResult, FontToCompositorMsg, ImageUpdate,
     NetToCompositorMsg, RenderingContext, ScriptToCompositorMsg, SerializedImageUpdate,
     UntrustedNodeAddress,
-};
-use webrender::api::units::{
-    DeviceIntPoint, DeviceIntRect, DeviceIntSize, DevicePoint, LayoutPoint, LayoutRect, LayoutSize,
-    LayoutVector2D, WorldPoint,
-};
-use webrender::api::{
-    BuiltDisplayList, DirtyRect, DisplayListPayload, DocumentId, Epoch as WebRenderEpoch,
-    ExternalScrollId, FontInstanceOptions, HitTestFlags, PipelineId as WebRenderPipelineId,
-    PropertyBinding, ReferenceFrameKind, RenderReasons, SampledScrollOffset, ScrollLocation,
-    SpaceAndClipInfo, SpatialId, SpatialTreeItemKey, TransformStyle,
 };
 use webrender::{RenderApi, Transaction};
 
@@ -55,9 +56,9 @@ pub struct InitialCompositorState {
     /// A channel to the constellation.
     pub constellation_chan: Sender<ConstellationMsg>,
     /// A channel to the time profiler thread.
-    pub time_profiler_chan: profile_traits::time::ProfilerChan,
+    pub time_profiler_chan: time::ProfilerChan,
     /// A channel to the memory profiler thread.
-    pub mem_profiler_chan: profile_traits::mem::ProfilerChan,
+    pub mem_profiler_chan: mem::ProfilerChan,
     /// Instance of webrender API
     pub webrender: webrender::Renderer,
     /// Webrender document ID

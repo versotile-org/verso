@@ -3,6 +3,7 @@ use std::cell::Cell;
 use compositing_traits::ConstellationMsg;
 use crossbeam_channel::Sender;
 use raw_window_handle::{HasRawDisplayHandle, HasRawWindowHandle};
+use servo::webrender_api::units::DeviceIntSize;
 use servo::{
     base::id::{PipelineId, WebViewId},
     embedder_traits::{Cursor, EmbedderMsg},
@@ -17,7 +18,6 @@ use servo::{
     TopLevelBrowsingContextId,
 };
 use surfman::{Connection, SurfaceType};
-use webrender::api::units::DeviceIntSize;
 use winit::{
     dpi::PhysicalPosition,
     event::{ElementState, TouchPhase, WindowEvent},
