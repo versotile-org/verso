@@ -3,3 +3,5 @@ Cargo.lock
 .DS_Store
 .vscode/
 resources/
+.flatpak-builder/
+libmozjs*
