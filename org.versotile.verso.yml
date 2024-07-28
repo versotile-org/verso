@@ -15,7 +15,8 @@ finish-args:
   - --share=network
   - --device=dri
 build-options:
-  append-path: /usr/lib/sdk/rust-stable/bin
+  append-path: /usr/lib/sdk/rust-stable/bin:/usr/lib/sdk/llvm18/bin
+  prepend-ld-library-path: /usr/lib/sdk/llvm18/lib
   env:
     CARGO_HOME: /run/build/verso/cargo
     MOZJS_ARCHIVE: /run/build/verso/libmozjs-x86_64-unknown-linux-gnu.tar.gz
@@ -24,8 +25,13 @@ modules:
   - name: verso
     buildsystem: simple
     build-commands:
+      # Install pyhton packages required by script crates
+      - pip3 install --prefix=/app --no-deps ./third_party/ply
+      - pip3 install --prefix=/app --no-deps ./third_party/WebIDL/
+      # Build Verso release profile
       - cargo --offline fetch --manifest-path Cargo.toml --verbose
       - cargo --offline build --release --verbose
+      # Install Verso
       - install -Dm755 ./target/release/verso -t /app/bin/
     sources:
       - cargo-sources.json
