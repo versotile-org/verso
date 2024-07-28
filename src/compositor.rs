@@ -491,7 +491,7 @@ impl IOCompositor {
             }
 
             CompositorMsg::CreateOrUpdateWebView(frame_tree) => {
-                self.set_frame_tree_for_webview(&frame_tree, window);
+                self.create_or_update_webview(&frame_tree, window);
                 self.send_scroll_positions_to_layout_for_pipeline(&frame_tree.pipeline.id);
             }
 
@@ -1104,7 +1104,7 @@ impl IOCompositor {
         }
     }
 
-    fn set_frame_tree_for_webview(&mut self, frame_tree: &SendableFrameTree, window: &mut Window) {
+    fn create_or_update_webview(&mut self, frame_tree: &SendableFrameTree, window: &mut Window) {
         debug!("{}: Setting frame tree for webview", frame_tree.pipeline.id);
 
         window.set_webview(
