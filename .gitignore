@@ -5,3 +5,4 @@ Cargo.lock
 resources/
 .flatpak-builder/
 libmozjs*
+cargo-sources.json
