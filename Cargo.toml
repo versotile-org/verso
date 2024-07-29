@@ -50,10 +50,10 @@ log = "0.4"
 thiserror = "1.0"
 raw-window-handle = { version = "0.5", features = ["std"] }
 arboard = "3.4.0"
-# Servo Embedder
-libservo = { git = "https://github.com/servo/servo.git", rev = "2a31e62", features = ["max_log_level", "native-bluetooth", "webdriver"] }
-compositing_traits = { git = "https://github.com/servo/servo.git", rev = "2a31e62" }
-webdriver_server = { git = "https://github.com/servo/servo.git", rev = "2a31e62" }
+# Servo
+libservo = { git = "https://github.com/servo/servo.git", rev = "ed8def2", features = ["max_log_level", "native-bluetooth", "webdriver"] }
+compositing_traits = { git = "https://github.com/servo/servo.git", rev = "ed8def2" }
+webdriver_server = { git = "https://github.com/servo/servo.git", rev = "ed8def2" }
 webrender = { git = "https://github.com/servo/webrender", branch = "0.64", features = ["capture"] }
 sparkle = "0.1.26"
 webxr = { git = "https://github.com/servo/webxr", features = ["headless"] }
@@ -72,7 +72,7 @@ cargo-packager-resource-resolver = { version = "0.1.1", features = [
 ], optional = true }
 
 [target.'cfg(target_os = "windows")'.dependencies]
-libservo = { git = "https://github.com/servo/servo.git", rev = "2a31e62", features = [
+libservo = { git = "https://github.com/servo/servo.git", rev = "ed8def2", features = [
   "no-wgl",
 ] }
 
