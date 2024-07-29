@@ -135,8 +135,9 @@ jobs:
         uses: MinoruSekine/setup-scoop@v3
 
       - name: Install dependencies
-        run: scoop install git python llvm cmake curl
-             pip install mako
+        run: |
+          scoop install git python llvm cmake curl
+          pip install mako
 
       - name: Run sccache-cache
         uses: Mozilla-Actions/sccache-action@v0.0.4
@@ -191,8 +192,9 @@ jobs:
         uses: dsherret/rust-toolchain-file@v1
 
       - name: Install dependencies
-        run: brew install cmake pkg-config
-             pip install mako
+        run: |
+          brew install cmake pkg-config
+          pip install mako
 
       - name: Run sccache-cache
         uses: Mozilla-Actions/sccache-action@v0.0.4
