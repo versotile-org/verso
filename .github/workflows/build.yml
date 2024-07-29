@@ -43,7 +43,8 @@ jobs:
             libgstrtspserver-1.0-dev gstreamer1.0-tools libges-1.0-dev \
             libharfbuzz-dev liblzma-dev libunwind-dev libunwind-dev libvulkan1 \
             libx11-dev libxcb-render0-dev libxcb-shape0-dev libxcb-xfixes0-dev \
-            libxmu-dev libxmu6 libegl1-mesa-dev llvm-dev m4 xorg-dev sway
+            libxmu-dev libxmu6 libegl1-mesa-dev llvm-dev m4 xorg-dev sway \
+            python3-mako
 
       - name: Check
         run: cargo check
@@ -84,7 +85,8 @@ jobs:
             libgstrtspserver-1.0-dev gstreamer1.0-tools libges-1.0-dev \
             libharfbuzz-dev liblzma-dev libunwind-dev libunwind-dev libvulkan1 \
             libx11-dev libxcb-render0-dev libxcb-shape0-dev libxcb-xfixes0-dev \
-            libxmu-dev libxmu6 libegl1-mesa-dev llvm-dev m4 xorg-dev sway
+            libxmu-dev libxmu6 libegl1-mesa-dev llvm-dev m4 xorg-dev sway \
+            python3-mako
 
       - name: Run sccache-cache
         uses: Mozilla-Actions/sccache-action@v0.0.4
@@ -134,6 +136,9 @@ jobs:
 
       - name: Install dependencies
         run: scoop install git python llvm cmake curl
+
+      - name: Install Mako
+        run: pip install mako
 
       - name: Run sccache-cache
         uses: Mozilla-Actions/sccache-action@v0.0.4
@@ -189,6 +194,9 @@ jobs:
 
       - name: Install dependencies
         run: brew install cmake pkg-config
+
+      - name: Install Mako
+        run: pip install mako
 
       - name: Run sccache-cache
         uses: Mozilla-Actions/sccache-action@v0.0.4
