@@ -13,6 +13,7 @@ concurrency:
   cancel-in-progress: true
 
 env:
+  PYTHON3: python
   CN_APP_SLUG: verso-nightly
 
 jobs:
