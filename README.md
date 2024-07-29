@@ -23,6 +23,7 @@ However, We plan to focus on Windows as main target support.
 
 ```sh
 scoop install git python llvm cmake curl
+pip install mako
 ```
 
 ### MacOS
@@ -32,6 +33,7 @@ scoop install git python llvm cmake curl
 
 ```sh
 brew install cmake pkg-config harfbuzz
+pip install mako
 ```
 
 ### Linux
@@ -49,7 +51,8 @@ libgstreamer-plugins-base1.0-dev gstreamer1.0-libav \
 libgstrtspserver-1.0-dev gstreamer1.0-tools libges-1.0-dev \
 libharfbuzz-dev liblzma-dev libunwind-dev libunwind-dev libvulkan1 \
 libx11-dev libxcb-render0-dev libxcb-shape0-dev libxcb-xfixes0-dev \
-libxmu-dev libxmu6 libegl1-mesa-dev llvm-dev m4 xorg-dev
+libxmu-dev libxmu6 libegl1-mesa-dev llvm-dev m4 xorg-dev \
+python3-mako
 ```
 
 For others, please follow the instructions in [Servo book](https://book.servo.org/hacking/setting-up-your-environment.html#tools-for-linux) to bootstrap first.
