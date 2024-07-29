@@ -23,11 +23,6 @@ However, We plan to focus on Windows as main target support.
 
 ```sh
 scoop install git python llvm cmake curl
-```
-
-- Install [Mako](https://www.makotemplates.org/):
-
-```sh
 pip install mako
 ```
 
@@ -38,11 +33,6 @@ pip install mako
 
 ```sh
 brew install cmake pkg-config harfbuzz
-```
-
-- Install [Mako](https://www.makotemplates.org/):
-
-```sh
 pip install mako
 ```
 

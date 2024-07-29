@@ -136,9 +136,7 @@ jobs:
 
       - name: Install dependencies
         run: scoop install git python llvm cmake curl
-
-      - name: Install Mako
-        run: pip install mako
+             pip install mako
 
       - name: Run sccache-cache
         uses: Mozilla-Actions/sccache-action@v0.0.4
@@ -194,9 +192,7 @@ jobs:
 
       - name: Install dependencies
         run: brew install cmake pkg-config
-
-      - name: Install Mako
-        run: pip install mako
+             pip install mako
 
       - name: Run sccache-cache
         uses: Mozilla-Actions/sccache-action@v0.0.4
