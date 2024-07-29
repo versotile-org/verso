@@ -50,7 +50,7 @@ pub struct Window {
 
 impl Window {
     /// Create a Verso window from Winit window and return the rendering context.
-    pub fn new_with_context(window: WinitWindow) -> (Self, RenderingContext) {
+    pub fn new(window: WinitWindow) -> (Self, RenderingContext) {
         let window_size = window.inner_size();
         let window_size = Size2D::new(window_size.width as i32, window_size.height as i32);
         let display_handle = window.raw_display_handle();

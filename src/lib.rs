@@ -13,7 +13,7 @@ pub mod config;
 pub mod errors;
 /// Utilities to handle keyboard inputs and states.
 pub mod keyboard;
-/// Utilities to handle keyboard inputs and states.
+/// Utilities to handle touch inputs and states.
 pub mod touch;
 /// Main entry types and functions.
 pub mod verso;

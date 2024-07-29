@@ -85,7 +85,7 @@ impl Verso {
         // Initialize configurations and Verso window
         let resource_dir = config.resource_dir.clone();
         config.init();
-        let (window, rendering_context) = Window::new_with_context(window);
+        let (window, rendering_context) = Window::new(window);
         let event_loop_waker = Box::new(Waker(proxy));
         let opts = opts::get();
 
