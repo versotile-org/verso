@@ -13,6 +13,23 @@ repository = "https://github.com/versotile-org/verso"
 documentation = "https://docs.versotile.org/verso"
 categories = ["web-programming"]
 
+[package.metadata.packager]
+name = "verso"
+product-name = "verso"
+identifier = "org.versotile.verso"
+version = "0.0.1"
+before-each-package-command = "cargo build --release --features packager"
+resources = [
+  "resources",
+  "icons",
+  "target/release/build/**/libEGL.dll",
+  "target/release/build/**/libGLESv2.dll",
+]
+icons = ["icons/icon256x256.png", "icons/icon.ico"]
+
+[package.metadata.packager.nsis]
+appdata-paths = ["$LOCALAPPDATA/$IDENTIFIER"]
+
 [package.metadata.docs.rs]
 targets = [
   "x86_64-unknown-linux-gnu",
@@ -22,6 +39,7 @@ targets = [
 
 [features]
 default = []
+packager = ["dep:cargo-packager-resource-resolver"]
 
 [build-dependencies]
 cfg_aliases = "0.2"
@@ -49,6 +67,9 @@ crossbeam-channel = "0.5"
 getopts = "0.2.17"
 surfman = { version = "0.9", features = ["chains", "sm-raw-window-handle"] }
 winit = { version = "0.29", features = ["rwh_05"] }
+cargo-packager-resource-resolver = { version = "0.1.1", features = [
+  "auto-detect-format",
+], optional = true }
 
 [target.'cfg(target_os = "windows")'.dependencies]
 libservo = { git = "https://github.com/servo/servo.git", rev = "2a31e62", features = [

@@ -1,4 +1,5 @@
-use std::env::current_dir;
+// Prevent console window from appearing on Windows
+#![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
 use verso::config::Config;
 use verso::{Result, Verso};
@@ -30,7 +31,7 @@ fn main() -> Result<()> {
         }
     }
 
-    let config = Config::new(current_dir().unwrap().join("resources"));
+    let config = Config::new(resources_dir_path().unwrap());
     let mut verso = Verso::new(window, event_loop.create_proxy(), config);
     event_loop.run(move |event, evl| {
         verso.run(event);
@@ -58,4 +59,16 @@ pub unsafe fn decorate_window(window: *mut Object, _position: LogicalPosition<f6
             | NSWindowStyleMask::NSResizableWindowMask
             | NSWindowStyleMask::NSMiniaturizableWindowMask,
     );
+}
+
+fn resources_dir_path() -> Option<std::path::PathBuf> {
+    #[cfg(feature = "packager")]
+    let root_dir = {
+        use cargo_packager_resource_resolver::{current_format, resources_dir};
+        current_format().and_then(|format| resources_dir(format))
+    };
+    #[cfg(not(feature = "packager"))]
+    let root_dir = std::env::current_dir();
+
+    root_dir.ok().map(|dir| dir.join("resources"))
 }
