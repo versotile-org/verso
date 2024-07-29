@@ -5830,6 +5830,7 @@ dependencies = [
  "crossbeam-channel",
  "env_logger",
  "getopts",
+ "ipc-channel",
  "libservo",
  "log",
  "objc",

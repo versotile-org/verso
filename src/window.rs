@@ -1,16 +1,13 @@
-use std::{cell::Cell, ops::Deref, rc::Rc};
+use std::cell::Cell;
 
 use compositing_traits::ConstellationMsg;
 use crossbeam_channel::Sender;
 use raw_window_handle::{HasRawDisplayHandle, HasRawWindowHandle};
+use servo::webrender_api::units::DeviceIntSize;
 use servo::{
-    compositing::{
-        windowing::{AnimationState, EmbedderCoordinates, MouseWindowEvent, WindowMethods},
-        IOCompositor,
-    },
+    base::id::{PipelineId, WebViewId},
     embedder_traits::{Cursor, EmbedderMsg},
-    euclid::{Point2D, Scale, Size2D},
-    gl,
+    euclid::{Point2D, Size2D},
     script_traits::{TouchEventType, WheelDelta, WheelMode},
     style_traits::DevicePixel,
     webrender_api::{
@@ -18,9 +15,9 @@ use servo::{
         ScrollLocation,
     },
     webrender_traits::RenderingContext,
-    Servo, TopLevelBrowsingContextId,
+    TopLevelBrowsingContextId,
 };
-use surfman::{Connection, GLApi, SurfaceType};
+use surfman::{Connection, SurfaceType};
 use winit::{
     dpi::PhysicalPosition,
     event::{ElementState, TouchPhase, WindowEvent},
@@ -29,23 +26,22 @@ use winit::{
 };
 
 use crate::{
+    compositor::{IOCompositor, MouseWindowEvent},
     keyboard::keyboard_event_from_winit,
     verso::send_to_constellation,
-    webview::{Panel, WebView},
+    webview::WebView,
 };
 
 use arboard::Clipboard;
 
 /// A Verso window is a Winit window containing several web views.
 pub struct Window {
-    /// Access to Winit window with webrender context.
-    pub(crate) gl_window: Rc<GLWindow>,
+    /// Access to Winit window
+    pub(crate) window: WinitWindow,
     /// The main control panel of this window.
-    pub(crate) panel: Panel,
+    pub(crate) panel: WebView,
     /// The WebView of this window.
     pub(crate) webview: Option<WebView>,
-    /// Access to webrender GL
-    pub(crate) webrender_gl: Rc<dyn gl::Gl>,
     /// The mouse physical position in the web view.
     mouse_position: Cell<PhysicalPosition<f64>>,
     /// Modifiers state of the keyboard.
@@ -53,8 +49,8 @@ pub struct Window {
 }
 
 impl Window {
-    /// Create a Verso window from Winit window.
-    pub fn new(window: WinitWindow) -> Self {
+    /// Create a Verso window from Winit window and return the rendering context.
+    pub fn new(window: WinitWindow) -> (Self, RenderingContext) {
         let window_size = window.inner_size();
         let window_size = Size2D::new(window_size.width as i32, window_size.height as i32);
         let display_handle = window.raw_display_handle();
@@ -70,34 +66,26 @@ impl Window {
         let rendering_context = RenderingContext::create(&connection, &adapter, surface_type)
             .expect("Failed to create rendering context");
         log::trace!("Created rendering context for window {:?}", window);
-        let webrender_gl = match rendering_context.connection().gl_api() {
-            GLApi::GL => unsafe { gl::GlFns::load_with(|s| rendering_context.get_proc_address(s)) },
-            GLApi::GLES => unsafe {
-                gl::GlesFns::load_with(|s| rendering_context.get_proc_address(s))
+
+        let size = window.inner_size();
+        let size = Size2D::new(size.width as i32, size.height as i32);
+        (
+            Self {
+                window,
+                panel: WebView::new_panel(DeviceIntRect::from_size(size)),
+                webview: None,
+                mouse_position: Cell::new(PhysicalPosition::default()),
+                modifiers_state: Cell::new(ModifiersState::default()),
             },
-        };
-        debug_assert_eq!(webrender_gl.get_error(), gl::NO_ERROR);
-
-        Self {
-            gl_window: Rc::new(GLWindow::new(window, rendering_context)),
-            panel: Panel::new(),
-            webview: None,
-            webrender_gl,
-            mouse_position: Cell::new(PhysicalPosition::default()),
-            modifiers_state: Cell::new(ModifiersState::default()),
-        }
-    }
-
-    /// Return the reference counted `GLWindow`.
-    pub fn gl_window(&self) -> Rc<GLWindow> {
-        return self.gl_window.clone();
+            rendering_context,
+        )
     }
 
     /// Handle Winit window event.
     pub fn handle_winit_window_event(
-        &self,
+        &mut self,
         sender: &Sender<ConstellationMsg>,
-        compositor: &mut IOCompositor<GLWindow>,
+        compositor: &mut IOCompositor,
         event: &winit::event::WindowEvent,
     ) {
         match event {
@@ -212,17 +200,16 @@ impl Window {
         webview_id: Option<TopLevelBrowsingContextId>,
         message: EmbedderMsg,
         sender: &Sender<ConstellationMsg>,
-        compositor: &mut IOCompositor<GLWindow>,
         clipboard: &mut Clipboard,
     ) {
         match webview_id {
             // // Handle message in Verso Panel
-            Some(p) if p == self.panel.id() => {
-                self.handle_servo_messages_with_panel(p, message, sender, compositor, clipboard);
+            Some(p) if p == self.panel.webview_id => {
+                self.handle_servo_messages_with_panel(p, message, sender, clipboard);
             }
             // Handle message in Verso WebView
             Some(w) => {
-                self.handle_servo_messages_with_webview(w, message, sender, compositor, clipboard);
+                self.handle_servo_messages_with_webview(w, message, sender, clipboard);
             }
             // Handle message in Verso Window
             None => {
@@ -243,80 +230,113 @@ impl Window {
         }
     }
 
-    /// Paint offscreen framebuffer to Winit window.
-    pub fn paint(&self, servo: &mut Servo<GLWindow>) {
-        if let Some(fbo) = servo.offscreen_framebuffer_id() {
-            let viewport = self.gl_window.get_coordinates().get_flipped_viewport();
-            let webrender_gl = &self.webrender_gl;
-
-            let target_fbo = self
-                .gl_window
-                .rendering_context
-                .context_surface_info()
-                .unwrap_or(None)
-                .map(|info| info.framebuffer_object)
-                .unwrap_or(0);
-
-            webrender_gl.bind_framebuffer(gl::READ_FRAMEBUFFER, fbo);
-            webrender_gl.bind_framebuffer(gl::DRAW_FRAMEBUFFER, target_fbo);
-
-            let x = viewport.min.x;
-            let y = viewport.min.y;
-            let width = viewport.size().width;
-            let height = viewport.size().height;
-            webrender_gl.blit_framebuffer(
-                x,
-                y,
-                x + width,
-                y + height,
-                x,
-                y,
-                x + width,
-                y + height,
-                gl::COLOR_BUFFER_BIT,
-                gl::NEAREST,
-            );
-
-            debug_assert_eq!(
-                (
-                    self.webrender_gl.get_error(),
-                    self.webrender_gl.check_frame_buffer_status(gl::FRAMEBUFFER)
-                ),
-                (gl::NO_ERROR, gl::FRAMEBUFFER_COMPLETE)
-            );
-
-            servo.present();
-        }
-    }
-
     /// Queues a Winit `WindowEvent::RedrawRequested` event to be emitted that aligns with the windowing system drawing loop.
     pub fn request_redraw(&self) {
         self.window.request_redraw()
     }
 
-    /// Check if WebView (`GLWindow`) is animating.
-    pub fn is_animating(&self) -> bool {
-        self.gl_window.is_animating()
-    }
-
     /// Resize the rendering context and all web views.
-    pub fn resize(&self, size: Size2D<i32, DevicePixel>, compositor: &mut IOCompositor<GLWindow>) {
-        let _ = self.gl_window.rendering_context.resize(size.to_untyped());
-        let need_resize = compositor.on_resize_window_event();
+    pub fn resize(&mut self, size: Size2D<i32, DevicePixel>, compositor: &mut IOCompositor) {
+        let need_resize = compositor.on_resize_window_event(size);
 
-        let rect = DeviceIntRect::from_size(size).to_f32();
-        compositor.move_resize_webview(self.panel.id(), rect);
+        let rect = DeviceIntRect::from_size(size);
+        compositor.on_resize_webview_event(self.panel.webview_id, rect);
 
         if let Some(w) = &self.webview {
-            let mut rect = DeviceIntRect::from_size(size).to_f32();
-            rect.min.y = rect.max.y.min(76.);
-            compositor.move_resize_webview(w.id(), rect);
+            let mut rect = DeviceIntRect::from_size(size);
+            rect.min.y = rect.max.y.min(76);
+            compositor.on_resize_webview_event(w.webview_id, rect);
         }
 
         if need_resize {
-            compositor.repaint_synchronously();
+            compositor.repaint_synchronously(self);
             compositor.present();
         }
+    }
+
+    /// Size of the window that's used by webrender.
+    pub fn size(&self) -> DeviceIntSize {
+        let size = self.window.inner_size();
+        Size2D::new(size.width as i32, size.height as i32)
+    }
+
+    /// Scale factor of the window. This is also known as HIDPI.
+    pub fn scale_factor(&self) -> f64 {
+        self.window.scale_factor()
+    }
+
+    /// Get the mutable reference of the webview in this window from provided webview ID.
+    pub fn get_webview(&mut self, id: WebViewId) -> Option<&mut WebView> {
+        if self.panel.webview_id == id {
+            Some(&mut self.panel)
+        } else {
+            self.webview.as_mut().filter(|w| w.webview_id == id)
+        }
+    }
+
+    /// Set the webview to this window. It won't be updated if the exisitng webview and pipeline ID
+    /// are the same. This will also set the painting order of the compositor and tell
+    /// constellation to focus the webview.
+    pub fn set_webview(
+        &mut self,
+        webview_id: WebViewId,
+        pipline_id: PipelineId,
+        compositor: &mut IOCompositor,
+    ) {
+        if self.panel.webview_id == webview_id {
+            if self.panel.pipeline_id != Some(pipline_id) {
+                self.panel.pipeline_id = Some(pipline_id);
+            }
+        } else if let Some(webview) = &mut self.webview {
+            if webview.webview_id == webview_id && webview.pipeline_id != Some(pipline_id) {
+                webview.pipeline_id = Some(pipline_id);
+            }
+        } else {
+            let size = self.size();
+            let mut rect = DeviceIntRect::from_size(size);
+            rect.min.y = rect.max.y.min(76);
+            self.webview = Some(WebView::new(webview_id, rect));
+        }
+
+        compositor.set_painting_order(self.paiting_order());
+        self.resize(self.size(), compositor);
+
+        send_to_constellation(
+            &compositor.constellation_chan,
+            ConstellationMsg::FocusWebView(webview_id),
+        );
+    }
+
+    /// Remove the webview in this window by provided webview ID. If this is the panel, it will
+    /// shut down the compositor and then close whole application.
+    pub fn remove_webview(
+        &mut self,
+        id: WebViewId,
+        compositor: &mut IOCompositor,
+    ) -> Option<WebView> {
+        if id == self.panel.webview_id {
+            compositor.maybe_start_shutting_down();
+            None
+        } else if self
+            .webview
+            .as_ref()
+            .filter(|w| w.webview_id == id)
+            .is_some()
+        {
+            self.webview.take()
+        } else {
+            None
+        }
+    }
+
+    /// Get the painting order of this window.
+    pub fn paiting_order(&self) -> Vec<WebView> {
+        let mut order = vec![];
+        if let Some(webview) = &self.webview {
+            order.push(webview.clone());
+        }
+        order.push(self.panel.clone());
+        order
     }
 
     /// Set cursor icon of the window.
@@ -359,66 +379,5 @@ impl Window {
             _ => CursorIcon::Default,
         };
         self.window.set_cursor_icon(winit_cursor);
-    }
-}
-
-/// A Winit window with webrender rendering context.
-pub struct GLWindow {
-    /// Access to webrender rendering context
-    rendering_context: RenderingContext,
-    /// Animation state set by Servo to indicate if the webview is still rendering.
-    animation_state: Cell<AnimationState>,
-    /// Access to Winit window
-    pub(crate) window: WinitWindow,
-}
-
-impl GLWindow {
-    /// Create a web view from Winit window.
-    pub fn new(window: WinitWindow, rendering_context: RenderingContext) -> Self {
-        Self {
-            rendering_context,
-            animation_state: Cell::new(AnimationState::Idle),
-            window,
-        }
-    }
-
-    /// Check if WebView (`GLWindow`) is animating.
-    pub fn is_animating(&self) -> bool {
-        self.animation_state.get() == AnimationState::Animating
-    }
-}
-
-impl WindowMethods for GLWindow {
-    fn get_coordinates(&self) -> EmbedderCoordinates {
-        let size = self.window.inner_size();
-        let pos = Point2D::new(0, 0);
-        let viewport = Size2D::new(size.width as i32, size.height as i32);
-
-        let size = self.window.available_monitors().nth(0).unwrap().size();
-        let screen = Size2D::new(size.width as i32, size.height as i32);
-        EmbedderCoordinates {
-            hidpi_factor: Scale::new(self.window.scale_factor() as f32),
-            screen,
-            screen_avail: screen,
-            window: (viewport, pos),
-            framebuffer: viewport,
-            viewport: DeviceIntRect::from_origin_and_size(pos, viewport),
-        }
-    }
-
-    fn set_animation_state(&self, state: AnimationState) {
-        self.animation_state.set(state);
-    }
-
-    fn rendering_context(&self) -> RenderingContext {
-        self.rendering_context.clone()
-    }
-}
-
-impl Deref for Window {
-    type Target = GLWindow;
-
-    fn deref(&self) -> &Self::Target {
-        &self.gl_window
     }
 }

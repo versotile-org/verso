@@ -20,7 +20,7 @@ fn main() -> Result<()> {
     let event_loop = EventLoop::new()?;
     event_loop.listen_device_events(DeviceEvents::Never);
     let window = WindowBuilder::new()
-        .with_decorations(false)
+        // .with_decorations(false)
         .build(&event_loop)?;
 
     #[cfg(macos)]
