@@ -138,6 +138,7 @@ jobs:
       - name: Install dependencies
         run: |
           scoop install git python llvm cmake curl
+          python -m pip install mako
 
       - name: Run sccache-cache
         uses: Mozilla-Actions/sccache-action@v0.0.4
@@ -147,7 +148,6 @@ jobs:
 
       - name: Build
         run: |
-          python -m pip install mako
           cargo build --release
 
       # - name: Test
@@ -195,13 +195,13 @@ jobs:
       - name: Install dependencies
         run: |
           brew install cmake pkg-config
+          python -m pip install mako
 
       - name: Run sccache-cache
         uses: Mozilla-Actions/sccache-action@v0.0.4
 
       - name: Build
         run: |
-          python -m pip install mako
           cargo build --release
 
       # - name: Test
