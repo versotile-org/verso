@@ -39,6 +39,7 @@ stdenv.mkDerivation {
     mold
     wayland
     nixgl.auto.nixGLDefault
+    (python3.withPackages (ps: with ps; [pip dbus mako]))
   ];
   LD_LIBRARY_PATH = lib.makeLibraryPath [
     zlib
