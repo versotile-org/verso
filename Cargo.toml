@@ -51,15 +51,18 @@ thiserror = "1.0"
 raw-window-handle = { version = "0.5", features = ["std"] }
 arboard = "3.4.0"
 # Servo
-libservo = { git = "https://github.com/servo/servo.git", rev = "2a31e62", features = ["max_log_level", "native-bluetooth", "webdriver"] }
-compositing_traits = { git = "https://github.com/servo/servo.git", rev = "2a31e62" }
-webdriver_server = { git = "https://github.com/servo/servo.git", rev = "2a31e62" }
+libservo = { git = "https://github.com/servo/servo.git", rev = "ed8def2", features = ["max_log_level", "native-bluetooth", "webdriver"] }
+compositing_traits = { git = "https://github.com/servo/servo.git", rev = "ed8def2" }
+webdriver_server = { git = "https://github.com/servo/servo.git", rev = "ed8def2" }
 webrender = { git = "https://github.com/servo/webrender", branch = "0.64", features = ["capture"] }
 sparkle = "0.1.26"
 webxr = { git = "https://github.com/servo/webxr", features = ["headless"] }
 env_logger = "0.10"
 servo-media = { git = "https://github.com/servo/media" }
 servo-media-dummy = { git = "https://github.com/servo/media" }
+# Servo Compositor
+ipc-channel = "0.18"
+# Servo
 crossbeam-channel = "0.5"
 getopts = "0.2.17"
 surfman = { version = "0.9", features = ["chains", "sm-raw-window-handle"] }
@@ -69,7 +72,7 @@ cargo-packager-resource-resolver = { version = "0.1.1", features = [
 ], optional = true }
 
 [target.'cfg(target_os = "windows")'.dependencies]
-libservo = { git = "https://github.com/servo/servo.git", rev = "2a31e62", features = [
+libservo = { git = "https://github.com/servo/servo.git", rev = "ed8def2", features = [
   "no-wgl",
 ] }
 

@@ -1,5 +1,6 @@
 use std::{
     borrow::Cow,
+    path::PathBuf,
     sync::{atomic::Ordering, Arc},
 };
 
@@ -15,10 +16,6 @@ use servo::{
     canvas::{
         canvas_paint_thread::{self, CanvasPaintThread},
         WebGLComm,
-    },
-    compositing::{
-        windowing::WindowMethods, CompositeTarget, IOCompositor, InitialCompositorState,
-        ShutdownState,
     },
     config::{opts, pref},
     constellation::{Constellation, FromCompositorLogger, InitialConstellationState},
@@ -37,20 +34,27 @@ use servo::{
     style,
     url::ServoUrl,
     webgpu,
+    webrender_api::*,
     webrender_traits::*,
 };
-use webrender::{api::*, ShaderPrecacheFlags};
-use winit::{event::Event, event_loop::EventLoopProxy, window::Window as WinitWindow};
+use surfman::GLApi;
+use webrender::{create_webrender_instance, ShaderPrecacheFlags, WebRenderOptions};
+use winit::{
+    event::{Event, StartCause},
+    event_loop::EventLoopProxy,
+    window::Window as WinitWindow,
+};
 
 use crate::{
+    compositor::{IOCompositor, InitialCompositorState, ShutdownState},
     config::Config,
-    window::{GLWindow, Window},
+    window::Window,
 };
 
 /// Main entry point of Verso browser.
 pub struct Verso {
     window: Window,
-    compositor: Option<IOCompositor<GLWindow>>,
+    compositor: Option<IOCompositor>,
     constellation_sender: Sender<ConstellationMsg>,
     embedder_receiver: EmbedderReceiver,
     /// For single-process Servo instances, this field controls the initialization
@@ -58,6 +62,7 @@ pub struct Verso {
     /// own instance that exists in the content process instead.
     _js_engine_setup: Option<JSEngineSetup>,
     clipboard: Clipboard,
+    resource_dir: PathBuf,
 }
 
 impl Verso {
@@ -78,10 +83,9 @@ impl Verso {
     /// - Constellation
     pub fn new(window: WinitWindow, proxy: EventLoopProxy<()>, config: Config) -> Self {
         // Initialize configurations and Verso window
-        let path = config.resource_dir.join("panel.html");
-        let url = ServoUrl::from_file_path(path.to_str().unwrap()).unwrap();
+        let resource_dir = config.resource_dir.clone();
         config.init();
-        let window = Window::new(window);
+        let (window, rendering_context) = Window::new(window);
         let event_loop_waker = Box::new(Waker(proxy));
         let opts = opts::get();
 
@@ -97,8 +101,12 @@ impl Verso {
         servo_media::ServoMedia::init::<servo_media_dummy::DummyBackend>();
 
         // Initialize surfman & get GL bindings
-        let rendering_context = window.rendering_context();
-        let webrender_gl = window.webrender_gl.clone();
+        let webrender_gl = match rendering_context.connection().gl_api() {
+            GLApi::GL => unsafe { gl::GlFns::load_with(|s| rendering_context.get_proc_address(s)) },
+            GLApi::GLES => unsafe {
+                gl::GlesFns::load_with(|s| rendering_context.get_proc_address(s))
+            },
+        };
         // Make sure the gl context is made current.
         rendering_context.make_gl_context_current().unwrap();
         debug_assert_eq!(webrender_gl.get_error(), gl::NO_ERROR,);
@@ -150,22 +158,16 @@ impl Verso {
         };
 
         // Create Webrender threads
-        let coordinates = window.get_coordinates();
-        let device_pixel_ratio = coordinates.hidpi_factor.get();
-        let viewport_size = coordinates.viewport.size().to_f32() / device_pixel_ratio;
         let (mut webrender, webrender_api_sender) = {
-            let mut debug_flags = webrender::DebugFlags::empty();
-            debug_flags.set(
-                webrender::DebugFlags::PROFILER_DBG,
-                opts.debug.webrender_stats,
-            );
+            let mut debug_flags = DebugFlags::empty();
+            debug_flags.set(DebugFlags::PROFILER_DBG, opts.debug.webrender_stats);
 
             let render_notifier = Box::new(RenderNotifier::new(compositor_sender.clone()));
             let clear_color = ColorF::new(1., 1., 1., 0.);
-            webrender::create_webrender_instance(
+            create_webrender_instance(
                 webrender_gl.clone(),
                 render_notifier,
-                webrender::WebRenderOptions {
+                WebRenderOptions {
                     // We force the use of optimized shaders here because rendering is broken
                     // on Android emulators with unoptimized shaders. This is due to a known
                     // issue in the emulator's OpenGL emulation layer.
@@ -190,7 +192,7 @@ impl Verso {
             .expect("Unable to initialize webrender!")
         };
         let webrender_api = webrender_api_sender.create_api();
-        let webrender_document = webrender_api.add_document(coordinates.get_viewport().size());
+        let webrender_document = webrender_api.add_document(window.size());
 
         // Initialize js engine if it's single process mode
         let js_engine_setup = if !opts.multiprocess {
@@ -307,8 +309,8 @@ impl Verso {
         // The division by 1 represents the page's default zoom of 100%,
         // and gives us the appropriate CSSPixel type for the viewport.
         let window_size = WindowSizeData {
-            initial_viewport: viewport_size / Scale::new(1.0),
-            device_pixel_ratio: Scale::new(device_pixel_ratio),
+            initial_viewport: window.size().to_f32() / Scale::new(1.0),
+            device_pixel_ratio: Scale::new(window.scale_factor() as f32),
         };
 
         // Create constellation thread
@@ -332,17 +334,11 @@ impl Verso {
             webdriver_server::start_server(port, constellation_sender.clone());
         }
 
-        let composite_target = if let Some(path) = opts.output_file.clone() {
-            CompositeTarget::PngFile(path.into())
-        } else {
-            CompositeTarget::Window
-        };
-
         // The compositor coordinates with the client window to create the final
         // rendered page and display it somewhere.
-        let panel_id = window.panel.id();
-        let compositor = IOCompositor::create(
-            window.gl_window(),
+        let compositor = IOCompositor::new(
+            window.size(),
+            Scale::new(window.scale_factor() as f32),
             InitialCompositorState {
                 sender: compositor_sender,
                 receiver: compositor_receiver,
@@ -356,10 +352,8 @@ impl Verso {
                 webrender_gl,
                 webxr_main_thread: webxr_registry,
             },
-            composite_target,
             opts.exit_after_load,
             opts.debug.convert_mouse_to_touch,
-            panel_id,
         );
 
         // Create Verso instance
@@ -371,15 +365,10 @@ impl Verso {
             _js_engine_setup: js_engine_setup,
             clipboard: Clipboard::new()
                 .expect("Clipboard isn't supported in this platform or desktop environment."),
+            resource_dir,
         };
 
-        // Send the constellation message to start Panel UI
-        send_to_constellation(
-            &verso.constellation_sender,
-            ConstellationMsg::NewWebView(url, panel_id),
-        );
         verso.setup_logging();
-
         verso
     }
 
@@ -396,6 +385,16 @@ impl Verso {
     fn handle_winit_event(&mut self, event: Event<()>) {
         log::trace!("Verso is handling Winit event: {event:?}");
         match event {
+            Event::NewEvents(StartCause::Init) => {
+                // Send the constellation message to start Panel UI
+                let panel_id = self.window.panel.webview_id;
+                let path = self.resource_dir.join("panel.html");
+                let url = ServoUrl::from_file_path(path.to_str().unwrap()).unwrap();
+                send_to_constellation(
+                    &self.constellation_sender,
+                    ConstellationMsg::NewWebView(url, panel_id),
+                );
+            }
             Event::Suspended | Event::Resumed | Event::UserEvent(()) => {}
             Event::WindowEvent {
                 window_id: _,
@@ -419,7 +418,7 @@ impl Verso {
         if let Some(compositor) = &mut self.compositor {
             // Handle Compositor's messages first
             log::trace!("Verso is handling Compositor messages");
-            if compositor.receive_messages() {
+            if compositor.receive_messages(&mut self.window) {
                 // And then handle Embedder messages
                 log::trace!(
                     "Verso is handling Embedder messages when shutdown state is set to {:?}",
@@ -436,7 +435,6 @@ impl Verso {
                                 top_level_browsing_context,
                                 msg,
                                 &self.constellation_sender,
-                                compositor,
                                 &mut self.clipboard,
                             );
                         }
@@ -464,7 +462,10 @@ impl Verso {
 
     /// Return true if one of the Verso windows is animating.
     pub fn is_animating(&self) -> bool {
-        self.window.is_animating()
+        self.compositor
+            .as_ref()
+            .map(|c| c.is_animating)
+            .unwrap_or(false)
     }
 
     /// Return true if Verso has shut down and hence there's no compositor.
