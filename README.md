@@ -11,11 +11,7 @@ But if you are interested, feel free to help test it.
 
 # Usage
 
-The current demo works best on macOS at the moment, since it tries to customize its traffic light buttons to be seamless in the window.
-
-However, We plan to focus on Windows as main target support.
-
-## Prerequisites
+## Getting Started
 
 ### Windows
 
@@ -24,6 +20,14 @@ However, We plan to focus on Windows as main target support.
 ```sh
 scoop install git python llvm cmake curl
 pip install mako
+```
+
+> You can also use chocolatey to install if you prefer it.
+
+- Build & run:
+
+```sh
+cargo run
 ```
 
 ### MacOS
@@ -36,7 +40,28 @@ brew install cmake pkg-config harfbuzz
 pip install mako
 ```
 
+- Build & run:
+
+```sh
+cargo run
+```
+
 ### Linux
+
+
+#### Nix
+
+- For NixOS:
+
+```sh
+nix-shell shell.nix --run 'cargo r'
+```
+
+- For non-NixOS distributions:
+
+```sh
+nix-shell shell.nix --run 'nixGL cargo r'
+```
 
 #### Debian-based Distributions
 
@@ -57,21 +82,13 @@ python3-mako
 
 For others, please follow the instructions in [Servo book](https://book.servo.org/hacking/setting-up-your-environment.html#tools-for-linux) to bootstrap first.
 
-## Build
-
-- Run demo
-
-```sh
-cargo run
-```
-
 ## Nightly Release
 
 Nightly releases built with CrabNebula Cloud can be found at [releases](https://web.crabnebula.cloud/verso/verso-nightly/releases).
 
 ## Future Work
 
-- Add more window and servo features to make it feel more like a general web browser.
-- Improve development experience.
-- Multi webviews and multi browsing contexts in the same window.
+- Multiwindow support.
+- Enable multiprocess mode.
+- Enable sandobx in all platforms.
 - Enable `Gstreamer` feature and remove `brew install harfbuzz` in README.
