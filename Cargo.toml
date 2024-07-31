@@ -96,10 +96,8 @@ cargo-packager-resource-resolver = { version = "0.1.1", features = [
   "auto-detect-format",
 ], optional = true }
 
-# [target.'cfg(target_os = "windows")'.dependencies]
-# libservo = { git = "https://github.com/servo/servo.git", rev = "ed8def2", features = [
-#   "no-wgl",
-# ] }
+[target.'cfg(target_os = "windows")'.dependencies]
+surfman = { version = "0.9", features = ["sm-angle-default", "sm-angle-builtin"] }
 
 [target.'cfg(any(target_os = "ios", target_os = "macos"))'.dependencies]
 block = "0.1"
