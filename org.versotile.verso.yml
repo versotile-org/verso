@@ -14,6 +14,7 @@ finish-args:
   - --socket=session-bus
   - --share=network
   - --device=dri
+  - --filesystem=home
 build-options:
   append-path: /usr/lib/sdk/rust-stable/bin:/usr/lib/sdk/llvm18/bin
   prepend-ld-library-path: /usr/lib/sdk/llvm18/lib
@@ -32,6 +33,8 @@ modules:
       - cargo --offline build --release
       # Install Verso
       - install -Dm755 ./target/release/verso -t /app/bin/
+      - mkdir /app/resources
+      - cp -r ./resources/* /app/resources
     sources:
       - cargo-sources.json
       - type: dir

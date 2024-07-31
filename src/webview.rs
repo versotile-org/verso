@@ -60,7 +60,7 @@ impl Window {
         webview_id: WebViewId,
         message: EmbedderMsg,
         sender: &Sender<ConstellationMsg>,
-        clipboard: &mut Clipboard,
+        clipboard: Option<&mut Clipboard>,
     ) {
         log::trace!("Verso WebView {webview_id:?} is handling Embedder message: {message:?}",);
         match message {
@@ -80,13 +80,17 @@ impl Window {
                 send_to_constellation(sender, ConstellationMsg::AllowNavigationResponse(id, true));
             }
             EmbedderMsg::GetClipboardContents(sender) => {
-                let contents = clipboard.get_text().unwrap_or_else(|e| {
-                    log::warn!(
-                        "Verso WebView {webview_id:?} failed to get clipboard content: {}",
-                        e
-                    );
-                    String::new()
-                });
+                let contents = clipboard
+                    .map(|c| {
+                        c.get_text().unwrap_or_else(|e| {
+                            log::warn!(
+                                "Verso WebView {webview_id:?} failed to get clipboard content: {}",
+                                e
+                            );
+                            String::new()
+                        })
+                    })
+                    .unwrap_or_default();
                 if let Err(e) = sender.send(contents) {
                     log::warn!(
                         "Verso WebView {webview_id:?} failed to send clipboard content: {}",
@@ -95,12 +99,14 @@ impl Window {
                 }
             }
             EmbedderMsg::SetClipboardContents(text) => {
-                if let Err(e) = clipboard.set_text(text) {
-                    log::warn!(
-                        "Verso WebView {webview_id:?} failed to set clipboard contents: {}",
-                        e
-                    );
-                }
+                clipboard.map(|c| {
+                    if let Err(e) = c.set_text(text) {
+                        log::warn!(
+                            "Verso WebView {webview_id:?} failed to set clipboard contents: {}",
+                            e
+                        );
+                    }
+                });
             }
             EmbedderMsg::EventDelivered(event) => {
                 if let CompositorEventVariant::MouseButtonEvent = event {
@@ -119,7 +125,7 @@ impl Window {
         panel_id: WebViewId,
         message: EmbedderMsg,
         sender: &Sender<ConstellationMsg>,
-        clipboard: &mut Clipboard,
+        clipboard: Option<&mut Clipboard>,
     ) {
         log::trace!("Verso Panel {panel_id:?} is handling Embedder message: {message:?}",);
         match message {
@@ -200,18 +206,24 @@ impl Window {
                 }
             }
             EmbedderMsg::GetClipboardContents(sender) => {
-                let contents = clipboard.get_text().unwrap_or_else(|e| {
-                    log::warn!("Verso Panel failed to get clipboard content: {}", e);
-                    String::new()
-                });
+                let contents = clipboard
+                    .map(|c| {
+                        c.get_text().unwrap_or_else(|e| {
+                            log::warn!("Verso Panel failed to get clipboard content: {}", e);
+                            String::new()
+                        })
+                    })
+                    .unwrap_or_default();
                 if let Err(e) = sender.send(contents) {
                     log::warn!("Verso Panel failed to send clipboard content: {}", e);
                 }
             }
             EmbedderMsg::SetClipboardContents(text) => {
-                if let Err(e) = clipboard.set_text(text) {
-                    log::warn!("Verso Panel failed to set clipboard contents: {}", e);
-                }
+                clipboard.map(|c| {
+                    if let Err(e) = c.set_text(text) {
+                        log::warn!("Verso Panel failed to set clipboard contents: {}", e);
+                    }
+                });
             }
             e => {
                 log::warn!("Verso Panel isn't supporting this message yet: {e:?}")

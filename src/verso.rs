@@ -59,7 +59,8 @@ pub struct Verso {
     /// and deinitialization of the JS Engine. Multiprocess Servo instances have their
     /// own instance that exists in the content process instead.
     _js_engine_setup: Option<JSEngineSetup>,
-    clipboard: Clipboard,
+    /// FIXME: It's None on wayland in Flatpak. Find a way to support this.
+    clipboard: Option<Clipboard>,
     resource_dir: PathBuf,
 }
 
@@ -361,8 +362,7 @@ impl Verso {
             constellation_sender,
             embedder_receiver,
             _js_engine_setup: js_engine_setup,
-            clipboard: Clipboard::new()
-                .expect("Clipboard isn't supported in this platform or desktop environment."),
+            clipboard: Clipboard::new().ok(),
             resource_dir,
         };
 
@@ -433,7 +433,7 @@ impl Verso {
                                 top_level_browsing_context,
                                 msg,
                                 &self.constellation_sender,
-                                &mut self.clipboard,
+                                self.clipboard.as_mut(),
                             );
                         }
                         ShutdownState::FinishedShuttingDown => {

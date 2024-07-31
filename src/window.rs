@@ -197,7 +197,7 @@ impl Window {
         webview_id: Option<WebViewId>,
         message: EmbedderMsg,
         sender: &Sender<ConstellationMsg>,
-        clipboard: &mut Clipboard,
+        clipboard: Option<&mut Clipboard>,
     ) {
         match webview_id {
             // // Handle message in Verso Panel
