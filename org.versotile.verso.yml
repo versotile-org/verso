@@ -21,6 +21,7 @@ build-options:
   env:
     CARGO_HOME: /run/build/verso/cargo
     MOZJS_ARCHIVE: /run/build/verso/libmozjs-x86_64-unknown-linux-gnu.tar.gz
+command: verso
 modules:
   - name: verso
     buildsystem: simple
@@ -28,9 +29,13 @@ modules:
       # Install pyhton packages required by script crates
       - pip3 install --prefix=/app --no-deps ./third_party/ply
       - pip3 install --prefix=/app --no-deps ./third_party/WebIDL/
+      # Desktop file
+      - install -d /app/share/applications
+      - install -Dm755 ./org.versotile.verso.desktop /app/share/applications/${FLATPAK_ID}.desktop
+      - install -Dm644 ./icons/icon256x256.png /app/share/icons/hicolor/256x256/apps/${FLATPAK_ID}.png
       # Build Verso release profile
       - cargo --offline fetch --manifest-path Cargo.toml
-      - cargo --offline build --release
+      - cargo --offline build --release --features flatpak
       # Install Verso
       - install -Dm755 ./target/release/verso -t /app/bin/
       - mkdir /app/resources
