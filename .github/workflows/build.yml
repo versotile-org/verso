@@ -13,6 +13,7 @@ concurrency:
   cancel-in-progress: true
 
 env:
+  PYTHON3: python
   CN_APP_SLUG: verso-nightly
 
 jobs:
@@ -43,7 +44,8 @@ jobs:
             libgstrtspserver-1.0-dev gstreamer1.0-tools libges-1.0-dev \
             libharfbuzz-dev liblzma-dev libunwind-dev libunwind-dev libvulkan1 \
             libx11-dev libxcb-render0-dev libxcb-shape0-dev libxcb-xfixes0-dev \
-            libxmu-dev libxmu6 libegl1-mesa-dev llvm-dev m4 xorg-dev sway
+            libxmu-dev libxmu6 libegl1-mesa-dev llvm-dev m4 xorg-dev sway \
+            python3-mako
 
       - name: Check
         run: cargo check
@@ -84,7 +86,8 @@ jobs:
             libgstrtspserver-1.0-dev gstreamer1.0-tools libges-1.0-dev \
             libharfbuzz-dev liblzma-dev libunwind-dev libunwind-dev libvulkan1 \
             libx11-dev libxcb-render0-dev libxcb-shape0-dev libxcb-xfixes0-dev \
-            libxmu-dev libxmu6 libegl1-mesa-dev llvm-dev m4 xorg-dev sway
+            libxmu-dev libxmu6 libegl1-mesa-dev llvm-dev m4 xorg-dev sway \
+            python3-mako
 
       - name: Run sccache-cache
         uses: Mozilla-Actions/sccache-action@v0.0.4
@@ -133,7 +136,9 @@ jobs:
         uses: MinoruSekine/setup-scoop@v3
 
       - name: Install dependencies
-        run: scoop install git python llvm cmake curl
+        run: |
+          scoop install git python llvm cmake curl
+          python -m pip install mako
 
       - name: Run sccache-cache
         uses: Mozilla-Actions/sccache-action@v0.0.4
@@ -188,7 +193,9 @@ jobs:
         uses: dsherret/rust-toolchain-file@v1
 
       - name: Install dependencies
-        run: brew install cmake pkg-config
+        run: |
+          brew install cmake pkg-config
+          python -m pip install mako
 
       - name: Run sccache-cache
         uses: Mozilla-Actions/sccache-action@v0.0.4

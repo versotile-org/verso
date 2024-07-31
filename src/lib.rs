@@ -5,12 +5,16 @@
 
 #![deny(missing_docs)]
 
+/// Verso's compositor component to handle webrender.
+pub mod compositor;
 /// Utilities to read options and preferences.
 pub mod config;
 /// Error and result types.
 pub mod errors;
 /// Utilities to handle keyboard inputs and states.
 pub mod keyboard;
+/// Utilities to handle touch inputs and states.
+pub mod touch;
 /// Main entry types and functions.
 pub mod verso;
 /// Web view types to handle web browsing contexts.

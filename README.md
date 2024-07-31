@@ -11,7 +11,7 @@ But if you are interested, feel free to help test it.
 
 # Usage
 
-## Prerequisites
+## Getting Started
 
 ### Windows
 
@@ -19,9 +19,16 @@ But if you are interested, feel free to help test it.
 
 ```sh
 scoop install git python llvm cmake curl
+pip install mako
 ```
 
 > You can also use chocolatey to install if you prefer it.
+
+- Build & run:
+
+```sh
+cargo run
+```
 
 ### MacOS
 
@@ -30,16 +37,21 @@ scoop install git python llvm cmake curl
 
 ```sh
 brew install cmake pkg-config harfbuzz
+pip install mako
+```
+
+- Build & run:
+
+```sh
+cargo run
 ```
 
 ### Linux
 
+#### Flatpak
+
 For unified environment setup and package experience, we choose Flatpak to build the project from the start.
 Please follow [Flatpack Setup](https://flatpak.org/setup/) page to install Flakpak based on your distribution.
-If you prefer to build the project without any sandbox, please follow the instructions in [Servo book](https://book.servo.org/hacking/setting-up-your-environment.html#tools-for-linux) to bootstrap.
-But please understand we don't triage any build issue without flatpak setup.
-
-#### Flatpak
 
 - Install flatpak runtimes and extensions:
 
@@ -59,13 +71,24 @@ flatpak-builder --user --install --force-clean target org.versotile.verso.yml
 flatpak run org.versotile.verso
 ```
 
-## Build
+#### Nix
 
-- Run demo
+We also support building Verso in nix shell. But we don't bundle it in nix at the moment.
+
+- For NixOS:
 
 ```sh
-cargo run
+nix-shell shell.nix --run 'cargo r'
 ```
+
+- For non-NixOS distributions:
+
+```sh
+nix-shell shell.nix --run 'nixGL cargo r'
+```
+
+If you prefer to build the project without any sandbox, please follow the instructions in [Servo book](https://book.servo.org/hacking/setting-up-your-environment.html#tools-for-linux) to bootstrap.
+But please understand we don't triage any build issue without flatpak or nix setup.
 
 ## Nightly Release
 
