@@ -97,7 +97,8 @@ cargo-packager-resource-resolver = { version = "0.1.1", features = [
 ], optional = true }
 
 [target.'cfg(target_os = "windows")'.dependencies]
-surfman = { version = "0.9", features = ["sm-angle-default", "sm-angle-builtin"] }
+surfman = { version = "0.9", features = ["sm-angle-default"] }
+mozangle = { version = "0.5.1", features = ["egl", "build_dlls"] }
 
 [target.'cfg(any(target_os = "ios", target_os = "macos"))'.dependencies]
 block = "0.1"

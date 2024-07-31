@@ -318,27 +318,6 @@ dependencies = [
 
 [[package]]
 name = "bindgen"
-version = "0.68.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "726e4313eb6ec35d2730258ad4e15b547ee75d6afaa1361a922e78e59b7d8078"
-dependencies = [
- "bitflags 2.6.0",
- "cexpr",
- "clang-sys",
- "lazy_static",
- "lazycell",
- "peeking_take_while",
- "proc-macro2",
- "quote",
- "regex",
- "rustc-hash",
- "shlex",
- "syn 2.0.72",
- "which",
-]
-
-[[package]]
-name = "bindgen"
 version = "0.69.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "a00dc851838a2120612785d195287475a3ac45514741da670b735818822129a0"
@@ -3086,26 +3065,15 @@ dependencies = [
 
 [[package]]
 name = "mozangle"
-version = "0.4.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "50520878a0ee7a06b007711e568749a3b3979defa6aaf40dd69651cfe377ca35"
-dependencies = [
- "bindgen 0.68.1",
- "cc",
- "gl_generator",
- "lazy_static",
- "walkdir",
-]
-
-[[package]]
-name = "mozangle"
 version = "0.5.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "b14af7d1a65278923835af94ac23d4c3662478001ac6e78075fe1210a7067e4b"
 dependencies = [
- "bindgen 0.69.4",
+ "bindgen",
  "cc",
+ "gl_generator",
  "lazy_static",
+ "libz-sys",
  "walkdir",
 ]
 
@@ -3114,7 +3082,7 @@ name = "mozjs"
 version = "0.14.1"
 source = "git+https://github.com/servo/mozjs#6e4e55a002f493739c8dbe0f2d2b29b0017d5dd2"
 dependencies = [
- "bindgen 0.69.4",
+ "bindgen",
  "cc",
  "lazy_static",
  "libc",
@@ -3128,7 +3096,7 @@ name = "mozjs_sys"
 version = "0.115.13-2"
 source = "git+https://github.com/servo/mozjs#fb8225ed5eb87c0d6d0b4d6126c11f5bc98687ce"
 dependencies = [
- "bindgen 0.69.4",
+ "bindgen",
  "cc",
  "encoding_c",
  "encoding_c_mem",
@@ -3653,12 +3621,6 @@ dependencies = [
  "synstructure 0.13.1",
  "unicode-xid",
 ]
-
-[[package]]
-name = "peeking_take_while"
-version = "0.1.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "19b17cddbe7ec3f8bc800887bab5e717348c95ea2ca0b1bf0837fb964dc67099"
 
 [[package]]
 name = "percent-encoding"
@@ -4321,7 +4283,7 @@ dependencies = [
  "metrics",
  "mime",
  "mime_guess",
- "mozangle 0.5.1",
+ "mozangle",
  "mozjs",
  "net_traits",
  "num-traits",
@@ -5095,7 +5057,6 @@ dependencies = [
  "log",
  "mach2",
  "metal 0.24.0",
- "mozangle 0.4.0",
  "objc",
  "raw-window-handle 0.5.2",
  "servo-display-link",
@@ -5729,6 +5690,7 @@ dependencies = [
  "layout_thread_2020",
  "log",
  "media",
+ "mozangle",
  "net",
  "objc",
  "objc_id",
@@ -6189,7 +6151,7 @@ name = "webxr"
 version = "0.0.1"
 source = "git+https://github.com/servo/webxr#bacb22faec8aa469ff6454bf0434d3b89fe419a3"
 dependencies = [
- "bindgen 0.69.4",
+ "bindgen",
  "crossbeam-channel",
  "euclid",
  "gl_generator",
