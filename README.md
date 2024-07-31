@@ -55,7 +55,7 @@ flatpak install flathub org.freedesktop.Sdk.Extension.llvm18//23.08
 
 ```sh
 python3 ./flatpak-cargo-generator.py ./Cargo.lock -o cargo-sources.json
-flatpak-builder --user --install --force-clean target org.versotile.vero.yml
+flatpak-builder --user --install --force-clean target org.versotile.verso.yml
 flatpak run org.versotile.verso
 ```
 
