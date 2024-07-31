@@ -5,40 +5,38 @@ use std::{
 };
 
 use arboard::Clipboard;
+use bluetooth::BluetoothThreadFactory;
+use bluetooth_traits::BluetoothRequest;
+use canvas::{
+    canvas_paint_thread::{self, CanvasPaintThread},
+    WebGLComm,
+};
 use compositing_traits::{
     CompositorMsg, CompositorProxy, CompositorReceiver, ConstellationMsg, ForwardedToCompositorMsg,
 };
+use constellation::{Constellation, FromCompositorLogger, InitialConstellationState};
 use crossbeam_channel::{unbounded, Sender};
+use devtools;
+use embedder_traits::{EmbedderProxy, EmbedderReceiver, EventLoopWaker};
+use euclid::Scale;
+use fonts::FontCacheThread;
+use gleam::gl;
+use ipc_channel::ipc::{self, IpcSender};
+use layout_thread_2020;
 use log::{Log, Metadata, Record};
-use servo::{
-    bluetooth::BluetoothThreadFactory,
-    bluetooth_traits::BluetoothRequest,
-    canvas::{
-        canvas_paint_thread::{self, CanvasPaintThread},
-        WebGLComm,
-    },
-    config::{opts, pref},
-    constellation::{Constellation, FromCompositorLogger, InitialConstellationState},
-    devtools,
-    embedder_traits::{EmbedderProxy, EmbedderReceiver, EventLoopWaker},
-    euclid::Scale,
-    fonts::FontCacheThread,
-    gl,
-    ipc_channel::ipc::{self, IpcSender},
-    layout_thread_2020,
-    media::{GlApi, GlContext, NativeDisplay, WindowGLContext},
-    net::resource_thread,
-    profile,
-    script::{self, JSEngineSetup},
-    script_traits::WindowSizeData,
-    style,
-    url::ServoUrl,
-    webgpu,
-    webrender_api::*,
-    webrender_traits::*,
-};
+use media::{GlApi, GlContext, NativeDisplay, WindowGLContext};
+use net::resource_thread;
+use profile;
+use script::{self, JSEngineSetup};
+use script_traits::WindowSizeData;
+use servo_config::{opts, pref};
+use servo_url::ServoUrl;
+use style;
 use surfman::GLApi;
+use webgpu;
 use webrender::{create_webrender_instance, ShaderPrecacheFlags, WebRenderOptions};
+use webrender_api::*;
+use webrender_traits::*;
 use winit::{
     event::{Event, StartCause},
     event_loop::EventLoopProxy,

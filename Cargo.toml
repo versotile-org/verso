@@ -45,36 +45,61 @@ packager = ["dep:cargo-packager-resource-resolver"]
 cfg_aliases = "0.2"
 
 [dependencies]
-owo-colors = "4.0"
-log = "0.4"
-thiserror = "1.0"
-raw-window-handle = { version = "0.5", features = ["std"] }
 arboard = "3.4.0"
-# Servo
-libservo = { git = "https://github.com/servo/servo.git", rev = "ed8def2", features = ["max_log_level", "native-bluetooth", "webdriver"] }
-compositing_traits = { git = "https://github.com/servo/servo.git", rev = "ed8def2" }
-webdriver_server = { git = "https://github.com/servo/servo.git", rev = "ed8def2" }
-webrender = { git = "https://github.com/servo/webrender", branch = "0.64", features = ["capture"] }
-sparkle = "0.1.26"
-webxr = { git = "https://github.com/servo/webxr", features = ["headless"] }
+crossbeam-channel = "0.5"
 env_logger = "0.10"
+euclid = "0.22"
+getopts = "0.2.17"
+gleam = "0.15"
+ipc-channel = "0.18"
+keyboard-types = "0.7"
+log = "0.4"
+raw-window-handle = { version = "0.5", features = ["std"] }
+sparkle = "0.1.26"
+surfman = { version = "0.9", features = ["chains", "sm-raw-window-handle"] }
+thiserror = "1.0"
+winit = { version = "0.29", features = ["rwh_05"] }
+# Servo repo crates
+# libservo = { git = "https://github.com/servo/servo.git", rev = "ed8def2", features = ["max_log_level", "native-bluetooth", "webdriver"] }
+base = { git = "https://github.com/servo/servo.git", rev = "ed8def2" }
+bluetooth = { git = "https://github.com/servo/servo.git", rev = "ed8def2" }
+bluetooth_traits = { git = "https://github.com/servo/servo.git", rev = "ed8def2" }
+canvas = { git = "https://github.com/servo/servo.git", rev = "ed8def2" }
+compositing_traits = { git = "https://github.com/servo/servo.git", rev = "ed8def2" }
+constellation = { git = "https://github.com/servo/servo.git", rev = "ed8def2" }
+devtools = { git = "https://github.com/servo/servo.git", rev = "ed8def2" }
+embedder_traits = { git = "https://github.com/servo/servo.git", rev = "ed8def2" }
+fonts = { git = "https://github.com/servo/servo.git", rev = "ed8def2" }
+layout_thread_2020 = { git = "https://github.com/servo/servo.git", rev = "ed8def2" }
+media = { git = "https://github.com/servo/servo.git", rev = "ed8def2" }
+net = { git = "https://github.com/servo/servo.git", rev = "ed8def2" }
+profile = { git = "https://github.com/servo/servo.git", rev = "ed8def2" }
+profile_traits = { git = "https://github.com/servo/servo.git", rev = "ed8def2" }
+script = { git = "https://github.com/servo/servo.git", rev = "ed8def2" }
+script_traits = { git = "https://github.com/servo/servo.git", rev = "ed8def2" }
+servo_config = { git = "https://github.com/servo/servo.git", rev = "ed8def2" }
+servo_geometry = { git = "https://github.com/servo/servo.git", rev = "ed8def2" }
+servo_url = { git = "https://github.com/servo/servo.git", rev = "ed8def2" }
+webdriver_server = { git = "https://github.com/servo/servo.git", rev = "ed8def2" }
+webrender_traits = { git = "https://github.com/servo/servo.git", rev = "ed8def2" }
+webgpu = { git = "https://github.com/servo/servo.git", rev = "ed8def2" }
+# Servo org crates
 servo-media = { git = "https://github.com/servo/media" }
 servo-media-dummy = { git = "https://github.com/servo/media" }
-# Servo Compositor
-ipc-channel = "0.18"
-# Servo
-crossbeam-channel = "0.5"
-getopts = "0.2.17"
-surfman = { version = "0.9", features = ["chains", "sm-raw-window-handle"] }
-winit = { version = "0.29", features = ["rwh_05"] }
+style = { git = "https://github.com/servo/stylo", branch = "2024-07-16", features = ["servo"] }
+style_traits = { git = "https://github.com/servo/stylo", branch = "2024-07-16", features = ["servo"] }
+webrender = { git = "https://github.com/servo/webrender", branch = "0.64", features = ["capture"] }
+webrender_api = { git = "https://github.com/servo/webrender", branch = "0.64" }
+webxr = { git = "https://github.com/servo/webxr", features = ["headless"] }
+# Packager feature
 cargo-packager-resource-resolver = { version = "0.1.1", features = [
   "auto-detect-format",
 ], optional = true }
 
-[target.'cfg(target_os = "windows")'.dependencies]
-libservo = { git = "https://github.com/servo/servo.git", rev = "ed8def2", features = [
-  "no-wgl",
-] }
+# [target.'cfg(target_os = "windows")'.dependencies]
+# libservo = { git = "https://github.com/servo/servo.git", rev = "ed8def2", features = [
+#   "no-wgl",
+# ] }
 
 [target.'cfg(any(target_os = "ios", target_os = "macos"))'.dependencies]
 block = "0.1"

@@ -20,7 +20,6 @@ build-options:
   env:
     CARGO_HOME: /run/build/verso/cargo
     MOZJS_ARCHIVE: /run/build/verso/libmozjs-x86_64-unknown-linux-gnu.tar.gz
-command: run.sh
 modules:
   - name: verso
     buildsystem: simple
@@ -29,8 +28,8 @@ modules:
       - pip3 install --prefix=/app --no-deps ./third_party/ply
       - pip3 install --prefix=/app --no-deps ./third_party/WebIDL/
       # Build Verso release profile
-      - cargo --offline fetch --manifest-path Cargo.toml --verbose
-      - cargo --offline build --release --verbose
+      - cargo --offline fetch --manifest-path Cargo.toml
+      - cargo --offline build --release
       # Install Verso
       - install -Dm755 ./target/release/verso -t /app/bin/
     sources:

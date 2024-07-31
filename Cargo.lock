@@ -425,10 +425,7 @@ source = "git+https://github.com/servo/servo.git?rev=ed8def2#ed8def28960fd64fa0d
 dependencies = [
  "bitflags 2.6.0",
  "bluetooth_traits",
- "blurdroid",
- "blurmac",
  "blurmock",
- "blurz",
  "embedder_traits",
  "ipc-channel",
  "log",
@@ -449,36 +446,11 @@ dependencies = [
 ]
 
 [[package]]
-name = "blurdroid"
-version = "0.1.6"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "19b23557dd27704797128f9db2816416bef20dad62d4a9768714eeb65f07d296"
-
-[[package]]
-name = "blurmac"
-version = "0.1.0"
-source = "git+https://github.com/servo/servo.git?rev=ed8def2#ed8def28960fd64fa0d00bd67731d594c1042747"
-dependencies = [
- "log",
- "objc",
-]
-
-[[package]]
 name = "blurmock"
 version = "0.1.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "9c150fd617830fd121919bbd500a784507e8af1bae744efcf587591c65c375d4"
 dependencies = [
- "hex",
-]
-
-[[package]]
-name = "blurz"
-version = "0.3.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f6dae8337ff67fe8ead29a28a0115605753e6a5205d4b6017e9f42f198c3c50a"
-dependencies = [
- "dbus",
  "hex",
 ]
 
@@ -814,43 +786,6 @@ checksum = "ba5a308b75df32fe02788e748662718f03fde005016435c444eea572398219fd"
 dependencies = [
  "bytes",
  "memchr",
-]
-
-[[package]]
-name = "compositing"
-version = "0.0.1"
-source = "git+https://github.com/servo/servo.git?rev=ed8def2#ed8def28960fd64fa0d00bd67731d594c1042747"
-dependencies = [
- "base",
- "canvas",
- "compositing_traits",
- "crossbeam-channel",
- "embedder_traits",
- "euclid",
- "fnv",
- "fonts",
- "fonts_traits",
- "gleam",
- "image 0.24.9",
- "ipc-channel",
- "keyboard-types",
- "libc",
- "log",
- "net_traits",
- "pixels",
- "profile_traits",
- "script_traits",
- "servo-media",
- "servo_config",
- "servo_geometry",
- "servo_url",
- "style_traits",
- "time 0.1.45",
- "toml",
- "webrender",
- "webrender_api",
- "webrender_traits",
- "webxr",
 ]
 
 [[package]]
@@ -1210,16 +1145,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "3a30bfce702bcfa94e906ef82421f2c0e61c076ad76030c16ee5d2e9a32fe193"
 dependencies = [
  "matches",
-]
-
-[[package]]
-name = "dbus"
-version = "0.6.5"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "48b5f0f36f1eebe901b0e6bee369a77ed3396334bf3f09abd46454a576f71819"
-dependencies = [
- "libc",
- "libdbus-sys",
 ]
 
 [[package]]
@@ -2824,15 +2749,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "97b3888a4aecf77e811145cadf6eef5901f4782c53886191b2f693f24761847c"
 
 [[package]]
-name = "libdbus-sys"
-version = "0.2.5"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "06085512b750d640299b79be4bad3d2fa90a9c00b1fd9e1b46364f66f0485c72"
-dependencies = [
- "pkg-config",
-]
-
-[[package]]
 name = "libflate"
 version = "0.1.27"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2869,62 +2785,6 @@ dependencies = [
  "bitflags 2.6.0",
  "libc",
  "redox_syscall 0.4.1",
-]
-
-[[package]]
-name = "libservo"
-version = "0.0.1"
-source = "git+https://github.com/servo/servo.git?rev=ed8def2#ed8def28960fd64fa0d00bd67731d594c1042747"
-dependencies = [
- "background_hang_monitor",
- "base",
- "bluetooth",
- "bluetooth_traits",
- "canvas",
- "canvas_traits",
- "cfg-if",
- "compositing",
- "compositing_traits",
- "constellation",
- "crossbeam-channel",
- "devtools",
- "devtools_traits",
- "embedder_traits",
- "env_logger",
- "euclid",
- "fonts",
- "fonts_traits",
- "gaol",
- "gleam",
- "ipc-channel",
- "keyboard-types",
- "layout_thread_2020",
- "log",
- "media",
- "mozangle",
- "net",
- "net_traits",
- "profile",
- "profile_traits",
- "script",
- "script_layout_interface",
- "script_traits",
- "servo-media",
- "servo-media-dummy",
- "servo_config",
- "servo_geometry",
- "servo_url",
- "sparkle",
- "style",
- "style_traits",
- "surfman",
- "webdriver_server",
- "webgpu",
- "webrender",
- "webrender_api",
- "webrender_traits",
- "webxr",
- "webxr-api",
 ]
 
 [[package]]
@@ -3211,9 +3071,7 @@ checksum = "b14af7d1a65278923835af94ac23d4c3662478001ac6e78075fe1210a7067e4b"
 dependencies = [
  "bindgen",
  "cc",
- "gl_generator",
  "lazy_static",
- "libz-sys",
  "walkdir",
 ]
 
@@ -3692,12 +3550,6 @@ checksum = "490d3a563d3122bf7c911a59b0add9389e5ec0f5f0c3ac6b91ff235a0e6a7f90"
 dependencies = [
  "ttf-parser",
 ]
-
-[[package]]
-name = "owo-colors"
-version = "4.0.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "caff54706df99d2a78a5a4e3455ff45448d81ef1bb63c22cd14052ca0e993a3f"
 
 [[package]]
 name = "parking_lot"
@@ -5563,15 +5415,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "toml"
-version = "0.5.11"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f4f7f0dd8d50a853a531c426359045b1998f04219d88799810762cd4ad314234"
-dependencies = [
- "serde",
-]
-
-[[package]]
 name = "toml_datetime"
 version = "0.6.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -5821,29 +5664,53 @@ name = "verso"
 version = "0.0.1"
 dependencies = [
  "arboard",
+ "base",
  "block",
+ "bluetooth",
+ "bluetooth_traits",
+ "canvas",
  "cargo-packager-resource-resolver",
  "cfg_aliases 0.2.1",
  "cocoa 0.25.0",
  "compositing_traits",
+ "constellation",
  "core-graphics 0.23.2",
  "crossbeam-channel",
+ "devtools",
+ "embedder_traits",
  "env_logger",
+ "euclid",
+ "fonts",
  "getopts",
+ "gleam",
  "ipc-channel",
- "libservo",
+ "keyboard-types",
+ "layout_thread_2020",
  "log",
+ "media",
+ "net",
  "objc",
  "objc_id",
- "owo-colors",
+ "profile",
+ "profile_traits",
  "raw-window-handle 0.5.2",
+ "script",
+ "script_traits",
  "servo-media",
  "servo-media-dummy",
+ "servo_config",
+ "servo_geometry",
+ "servo_url",
  "sparkle",
+ "style",
+ "style_traits",
  "surfman",
  "thiserror",
  "webdriver_server",
+ "webgpu",
  "webrender",
+ "webrender_api",
+ "webrender_traits",
  "webxr",
  "winit",
 ]

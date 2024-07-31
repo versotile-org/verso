@@ -1,14 +1,11 @@
 use arboard::Clipboard;
+use base::id::{PipelineId, PipelineNamespace, PipelineNamespaceId, WebViewId};
 use compositing_traits::ConstellationMsg;
 use crossbeam_channel::Sender;
-use servo::{
-    base::id::{PipelineId, PipelineNamespace, PipelineNamespaceId, WebViewId},
-    embedder_traits::{CompositorEventVariant, EmbedderMsg, PromptDefinition},
-    script_traits::TraversalDirection,
-    url::ServoUrl,
-    webrender_api::units::DeviceIntRect,
-    TopLevelBrowsingContextId,
-};
+use embedder_traits::{CompositorEventVariant, EmbedderMsg, PromptDefinition};
+use script_traits::TraversalDirection;
+use servo_url::ServoUrl;
+use webrender_api::units::DeviceIntRect;
 
 use crate::{verso::send_to_constellation, window::Window};
 
@@ -47,7 +44,7 @@ impl WebView {
     pub fn new_panel(rect: DeviceIntRect) -> Self {
         // Reserving a namespace to create TopLevelBrowsingContextId.
         PipelineNamespace::install(PipelineNamespaceId(0));
-        let id = TopLevelBrowsingContextId::new();
+        let id = WebViewId::new();
         Self {
             webview_id: id,
             pipeline_id: None,
@@ -138,7 +135,7 @@ impl Window {
                 self.window.request_redraw();
                 // let demo_url = ServoUrl::parse("https://demo.versotile.org").unwrap();
                 let demo_url = ServoUrl::parse("https://keyboard-test.space").unwrap();
-                let demo_id = TopLevelBrowsingContextId::new();
+                let demo_id = WebViewId::new();
                 send_to_constellation(sender, ConstellationMsg::NewWebView(demo_url, demo_id));
             }
             EmbedderMsg::AllowNavigationRequest(id, _url) => {

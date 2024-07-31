@@ -1,5 +1,5 @@
+use keyboard_types::{Code, Key, KeyState, KeyboardEvent, Location, Modifiers};
 use log::info;
-use servo::keyboard_types::{Code, Key, KeyState, KeyboardEvent, Location, Modifiers};
 use winit::event::{ElementState, KeyEvent};
 use winit::keyboard::{Key as LogicalKey, KeyCode, ModifiersState, NamedKey, PhysicalKey};
 

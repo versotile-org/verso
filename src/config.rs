@@ -1,9 +1,7 @@
 use std::{fs, path::PathBuf};
 
-use servo::{
-    config::opts::{default_opts, set_options, Opts},
-    embedder_traits::resources::{self, Resource, ResourceReaderMethods},
-};
+use embedder_traits::resources::{self, Resource, ResourceReaderMethods};
+use servo_config::opts::{default_opts, set_options, Opts};
 
 /// Configuration of Verso instance.
 #[derive(Clone, Debug)]

@@ -3,45 +3,44 @@ use std::ffi::c_void;
 use std::rc::Rc;
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
+use base::id::{PipelineId, TopLevelBrowsingContextId};
+use base::{Epoch, WebRenderEpochToU16};
 use compositing_traits::{
     CompositionPipeline, CompositorMsg, CompositorProxy, CompositorReceiver, ConstellationMsg,
     ForwardedToCompositorMsg, SendableFrameTree,
 };
 use crossbeam_channel::Sender;
+use embedder_traits::Cursor;
+use euclid::{Point2D, Scale, Transform3D, Vector2D};
+use gleam::gl;
 use ipc_channel::ipc;
 use log::{debug, error, trace, warn};
-use servo::base::id::{PipelineId, TopLevelBrowsingContextId};
-use servo::base::{Epoch, WebRenderEpochToU16};
-use servo::embedder_traits::Cursor;
-use servo::euclid::{Point2D, Scale, Transform3D, Vector2D};
-use servo::profile_traits::time::{self as profile_time, profile, ProfilerCategory};
-use servo::profile_traits::{mem, time};
-use servo::script_traits::CompositorEvent::{
-    MouseButtonEvent, MouseMoveEvent, TouchEvent, WheelEvent,
-};
-use servo::script_traits::{
+use profile_traits::time::{self as profile_time, profile, ProfilerCategory};
+use profile_traits::{mem, time};
+use script_traits::CompositorEvent::{MouseButtonEvent, MouseMoveEvent, TouchEvent, WheelEvent};
+use script_traits::{
     AnimationState, AnimationTickType, ConstellationControlMsg, MouseButton, MouseEventType,
     ScrollState, TouchEventType, TouchId, WheelDelta, WindowSizeData, WindowSizeType,
 };
-use servo::servo_geometry::DeviceIndependentPixel;
-use servo::style_traits::{CSSPixel, DevicePixel, PinchZoomFactor};
-use servo::webrender_api::units::{
+use servo_geometry::DeviceIndependentPixel;
+use style_traits::{CSSPixel, DevicePixel, PinchZoomFactor};
+use webrender::{RenderApi, Transaction};
+use webrender_api::units::{
     DeviceIntPoint, DeviceIntRect, DeviceIntSize, DevicePoint, LayoutPoint, LayoutRect, LayoutSize,
     LayoutVector2D, WorldPoint,
 };
-use servo::webrender_api::{
+use webrender_api::{
     BuiltDisplayList, DirtyRect, DisplayListPayload, DocumentId, Epoch as WebRenderEpoch,
     ExternalScrollId, FontInstanceOptions, HitTestFlags, PipelineId as WebRenderPipelineId,
     PropertyBinding, ReferenceFrameKind, RenderReasons, SampledScrollOffset, ScrollLocation,
     SpaceAndClipInfo, SpatialId, SpatialTreeItemKey, TransformStyle,
 };
-use servo::webrender_traits::display_list::{HitTestInfo, ScrollTree};
-use servo::webrender_traits::{
+use webrender_traits::display_list::{HitTestInfo, ScrollTree};
+use webrender_traits::{
     CanvasToCompositorMsg, CompositorHitTestResult, FontToCompositorMsg, ImageUpdate,
     NetToCompositorMsg, RenderingContext, ScriptToCompositorMsg, SerializedImageUpdate,
     UntrustedNodeAddress,
 };
-use webrender::{RenderApi, Transaction};
 
 use crate::touch::{TouchAction, TouchHandler};
 use crate::webview::WebView;
@@ -68,7 +67,7 @@ pub struct InitialCompositorState {
     /// Servo's rendering context
     pub rendering_context: RenderingContext,
     /// Webrender GL handle
-    pub webrender_gl: Rc<dyn servo::gl::Gl>,
+    pub webrender_gl: Rc<dyn gl::Gl>,
     /// WebXR registry
     pub webxr_main_thread: webxr::MainThreadRegistry,
 }
@@ -168,7 +167,7 @@ pub struct IOCompositor {
     rendering_context: RenderingContext,
 
     /// The GL bindings for webrender
-    webrender_gl: Rc<dyn servo::gl::Gl>,
+    webrender_gl: Rc<dyn gl::Gl>,
 
     /// Some XR devices want to run on the main thread.
     pub webxr_main_thread: webxr::MainThreadRegistry,
@@ -1924,7 +1923,7 @@ impl IOCompositor {
             .map(|info| info.framebuffer_object)
             .unwrap_or(0);
         self.webrender_gl
-            .bind_framebuffer(servo::gl::FRAMEBUFFER, framebuffer_object);
+            .bind_framebuffer(gl::FRAMEBUFFER, framebuffer_object);
         self.assert_gl_framebuffer_complete();
 
         profile(
@@ -2026,7 +2025,7 @@ impl IOCompositor {
         self.assert_gl_framebuffer_complete();
 
         // Set the viewport background based on prefs.
-        let color = servo::config::pref!(shell.background_color.rgba);
+        let color = servo_config::pref!(shell.background_color.rgba);
         gl.clear_color(
             color[0] as f32,
             color[1] as f32,
@@ -2051,9 +2050,9 @@ impl IOCompositor {
                 rect.size().width,
                 rect.size().height,
             );
-            gl.enable(servo::gl::SCISSOR_TEST);
-            gl.clear(servo::gl::COLOR_BUFFER_BIT);
-            gl.disable(servo::gl::SCISSOR_TEST);
+            gl.enable(gl::SCISSOR_TEST);
+            gl.clear(gl::COLOR_BUFFER_BIT);
+            gl.disable(gl::SCISSOR_TEST);
         }
 
         self.assert_gl_framebuffer_complete();
@@ -2061,7 +2060,7 @@ impl IOCompositor {
 
     #[track_caller]
     fn assert_no_gl_error(&self) {
-        debug_assert_eq!(self.webrender_gl.get_error(), servo::gl::NO_ERROR);
+        debug_assert_eq!(self.webrender_gl.get_error(), gl::NO_ERROR);
     }
 
     #[track_caller]
@@ -2069,10 +2068,9 @@ impl IOCompositor {
         debug_assert_eq!(
             (
                 self.webrender_gl.get_error(),
-                self.webrender_gl
-                    .check_frame_buffer_status(servo::gl::FRAMEBUFFER)
+                self.webrender_gl.check_frame_buffer_status(gl::FRAMEBUFFER)
             ),
-            (servo::gl::NO_ERROR, servo::gl::FRAMEBUFFER_COMPLETE)
+            (gl::NO_ERROR, gl::FRAMEBUFFER_COMPLETE)
         );
     }
 
