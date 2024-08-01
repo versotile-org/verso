@@ -1,7 +1,7 @@
+use euclid::{Point2D, Scale, Vector2D};
 use log::warn;
-use servo::euclid::{Point2D, Scale, Vector2D};
-use servo::script_traits::{EventResult, TouchId};
-use servo::style_traits::DevicePixel;
+use script_traits::{EventResult, TouchId};
+use webrender_api::units::DevicePixel;
 
 use self::TouchState::*;
 

@@ -1,0 +1,9 @@
+[Desktop Entry]
+Name=Verso
+StartupWMClass=verso
+Comment=A web browser that plays old world blues to build new world hope.
+GenericName=Web Browser
+Type=Application
+Categories=Network
+Icon=org.versotile.verso
+Exec=verso

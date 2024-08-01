@@ -1,23 +1,20 @@
 use std::cell::Cell;
 
+use base::id::{PipelineId, WebViewId};
 use compositing_traits::ConstellationMsg;
 use crossbeam_channel::Sender;
+use embedder_traits::{Cursor, EmbedderMsg};
+use euclid::{Point2D, Size2D};
 use raw_window_handle::{HasRawDisplayHandle, HasRawWindowHandle};
-use servo::webrender_api::units::DeviceIntSize;
-use servo::{
-    base::id::{PipelineId, WebViewId},
-    embedder_traits::{Cursor, EmbedderMsg},
-    euclid::{Point2D, Size2D},
-    script_traits::{TouchEventType, WheelDelta, WheelMode},
-    style_traits::DevicePixel,
-    webrender_api::{
-        units::{DeviceIntPoint, DeviceIntRect, DevicePoint, LayoutVector2D},
-        ScrollLocation,
-    },
-    webrender_traits::RenderingContext,
-    TopLevelBrowsingContextId,
-};
+use script_traits::{TouchEventType, WheelDelta, WheelMode};
 use surfman::{Connection, SurfaceType};
+use webrender_api::{
+    units::{
+        DeviceIntPoint, DeviceIntRect, DeviceIntSize, DevicePixel, DevicePoint, LayoutVector2D,
+    },
+    ScrollLocation,
+};
+use webrender_traits::RenderingContext;
 use winit::{
     dpi::PhysicalPosition,
     event::{ElementState, TouchPhase, WindowEvent},
@@ -102,10 +99,10 @@ impl Window {
                 compositor.on_mouse_window_move_event_class(cursor);
             }
             WindowEvent::MouseInput { state, button, .. } => {
-                let button: servo::script_traits::MouseButton = match button {
-                    winit::event::MouseButton::Left => servo::script_traits::MouseButton::Left,
-                    winit::event::MouseButton::Right => servo::script_traits::MouseButton::Right,
-                    winit::event::MouseButton::Middle => servo::script_traits::MouseButton::Middle,
+                let button: script_traits::MouseButton = match button {
+                    winit::event::MouseButton::Left => script_traits::MouseButton::Left,
+                    winit::event::MouseButton::Right => script_traits::MouseButton::Right,
+                    winit::event::MouseButton::Middle => script_traits::MouseButton::Middle,
                     _ => {
                         log::warn!(
                             "Verso Window isn't supporting this mouse button yet: {button:?}"
@@ -197,10 +194,10 @@ impl Window {
     /// Handle servo messages.
     pub fn handle_servo_message(
         &mut self,
-        webview_id: Option<TopLevelBrowsingContextId>,
+        webview_id: Option<WebViewId>,
         message: EmbedderMsg,
         sender: &Sender<ConstellationMsg>,
-        clipboard: &mut Clipboard,
+        clipboard: Option<&mut Clipboard>,
     ) {
         match webview_id {
             // // Handle message in Verso Panel

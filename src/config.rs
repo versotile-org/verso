@@ -1,9 +1,7 @@
 use std::{fs, path::PathBuf};
 
-use servo::{
-    config::opts::{default_opts, set_options, Opts},
-    embedder_traits::resources::{self, Resource, ResourceReaderMethods},
-};
+use embedder_traits::resources::{self, Resource, ResourceReaderMethods};
+use servo_config::opts::{default_opts, set_options, Opts};
 
 /// Configuration of Verso instance.
 #[derive(Clone, Debug)]
@@ -29,21 +27,6 @@ impl Config {
 
         // Set the global options of Servo.
         set_options(self.opts);
-    }
-}
-
-impl Config {
-    /// Returns the path to the resources directory.
-    pub fn resources_dir_path() -> Option<std::path::PathBuf> {
-        #[cfg(feature = "packager")]
-        let root_dir = {
-            use cargo_packager_resource_resolver::{current_format, resources_dir};
-            current_format().and_then(|format| resources_dir(format))
-        };
-        #[cfg(not(feature = "packager"))]
-        let root_dir = std::env::current_dir();
-
-        root_dir.ok().map(|dir| dir.join("resources"))
     }
 }
 

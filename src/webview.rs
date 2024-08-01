@@ -1,14 +1,11 @@
 use arboard::Clipboard;
+use base::id::{PipelineId, PipelineNamespace, PipelineNamespaceId, WebViewId};
 use compositing_traits::ConstellationMsg;
 use crossbeam_channel::Sender;
-use servo::{
-    base::id::{PipelineId, PipelineNamespace, PipelineNamespaceId, WebViewId},
-    embedder_traits::{CompositorEventVariant, EmbedderMsg, PromptDefinition},
-    script_traits::TraversalDirection,
-    url::ServoUrl,
-    webrender_api::units::DeviceIntRect,
-    TopLevelBrowsingContextId,
-};
+use embedder_traits::{CompositorEventVariant, EmbedderMsg, PromptDefinition};
+use script_traits::TraversalDirection;
+use servo_url::ServoUrl;
+use webrender_api::units::DeviceIntRect;
 
 use crate::{verso::send_to_constellation, window::Window};
 
@@ -47,7 +44,7 @@ impl WebView {
     pub fn new_panel(rect: DeviceIntRect) -> Self {
         // Reserving a namespace to create TopLevelBrowsingContextId.
         PipelineNamespace::install(PipelineNamespaceId(0));
-        let id = TopLevelBrowsingContextId::new();
+        let id = WebViewId::new();
         Self {
             webview_id: id,
             pipeline_id: None,
@@ -63,7 +60,7 @@ impl Window {
         webview_id: WebViewId,
         message: EmbedderMsg,
         sender: &Sender<ConstellationMsg>,
-        clipboard: &mut Clipboard,
+        clipboard: Option<&mut Clipboard>,
     ) {
         log::trace!("Verso WebView {webview_id:?} is handling Embedder message: {message:?}",);
         match message {
@@ -83,13 +80,17 @@ impl Window {
                 send_to_constellation(sender, ConstellationMsg::AllowNavigationResponse(id, true));
             }
             EmbedderMsg::GetClipboardContents(sender) => {
-                let contents = clipboard.get_text().unwrap_or_else(|e| {
-                    log::warn!(
-                        "Verso WebView {webview_id:?} failed to get clipboard content: {}",
-                        e
-                    );
-                    String::new()
-                });
+                let contents = clipboard
+                    .map(|c| {
+                        c.get_text().unwrap_or_else(|e| {
+                            log::warn!(
+                                "Verso WebView {webview_id:?} failed to get clipboard content: {}",
+                                e
+                            );
+                            String::new()
+                        })
+                    })
+                    .unwrap_or_default();
                 if let Err(e) = sender.send(contents) {
                     log::warn!(
                         "Verso WebView {webview_id:?} failed to send clipboard content: {}",
@@ -98,12 +99,14 @@ impl Window {
                 }
             }
             EmbedderMsg::SetClipboardContents(text) => {
-                if let Err(e) = clipboard.set_text(text) {
-                    log::warn!(
-                        "Verso WebView {webview_id:?} failed to set clipboard contents: {}",
-                        e
-                    );
-                }
+                clipboard.map(|c| {
+                    if let Err(e) = c.set_text(text) {
+                        log::warn!(
+                            "Verso WebView {webview_id:?} failed to set clipboard contents: {}",
+                            e
+                        );
+                    }
+                });
             }
             EmbedderMsg::EventDelivered(event) => {
                 if let CompositorEventVariant::MouseButtonEvent = event {
@@ -122,7 +125,7 @@ impl Window {
         panel_id: WebViewId,
         message: EmbedderMsg,
         sender: &Sender<ConstellationMsg>,
-        clipboard: &mut Clipboard,
+        clipboard: Option<&mut Clipboard>,
     ) {
         log::trace!("Verso Panel {panel_id:?} is handling Embedder message: {message:?}",);
         match message {
@@ -138,7 +141,7 @@ impl Window {
                 self.window.request_redraw();
                 // let demo_url = ServoUrl::parse("https://demo.versotile.org").unwrap();
                 let demo_url = ServoUrl::parse("https://keyboard-test.space").unwrap();
-                let demo_id = TopLevelBrowsingContextId::new();
+                let demo_id = WebViewId::new();
                 send_to_constellation(sender, ConstellationMsg::NewWebView(demo_url, demo_id));
             }
             EmbedderMsg::AllowNavigationRequest(id, _url) => {
@@ -203,18 +206,24 @@ impl Window {
                 }
             }
             EmbedderMsg::GetClipboardContents(sender) => {
-                let contents = clipboard.get_text().unwrap_or_else(|e| {
-                    log::warn!("Verso Panel failed to get clipboard content: {}", e);
-                    String::new()
-                });
+                let contents = clipboard
+                    .map(|c| {
+                        c.get_text().unwrap_or_else(|e| {
+                            log::warn!("Verso Panel failed to get clipboard content: {}", e);
+                            String::new()
+                        })
+                    })
+                    .unwrap_or_default();
                 if let Err(e) = sender.send(contents) {
                     log::warn!("Verso Panel failed to send clipboard content: {}", e);
                 }
             }
             EmbedderMsg::SetClipboardContents(text) => {
-                if let Err(e) = clipboard.set_text(text) {
-                    log::warn!("Verso Panel failed to set clipboard contents: {}", e);
-                }
+                clipboard.map(|c| {
+                    if let Err(e) = c.set_text(text) {
+                        log::warn!("Verso Panel failed to set clipboard contents: {}", e);
+                    }
+                });
             }
             e => {
                 log::warn!("Verso Panel isn't supporting this message yet: {e:?}")
