@@ -19,7 +19,7 @@ But if you are interested, feel free to help test it.
 
 ```sh
 scoop install git python llvm cmake curl
-pip install mako
+python3 -m pip install mako
 ```
 
 > You can also use chocolatey to install if you prefer it.
@@ -33,17 +33,18 @@ cargo run
 ### MacOS
 
 - Install [Xcode](https://developer.apple.com/xcode/)
-- Install [Homebrew](https://brew.sh/) and then install other tools:
+- Install cmake and mako:
 
 ```sh
-brew install cmake pkg-config
-pip install mako
+brew install cmake
+python3 -m pip install mako
 ```
 
-- Install current stable version of [Gstreamer](https://gstreamer.freedesktop.org/download/#macos). You need both "runtime" and "development" installers. After installation, you also need to set the `PATH` environment variable as below. Note that the `pkg-config` from GStreamer should be the first one in the `PATH` as other versions have all kinds of quirks that will cause problems.
+- Install current stable version of [Gstreamer](https://gstreamer.freedesktop.org/download/#macos). You need both "runtime" and "development" installers. After installation, you also need to set the `PATH` and `DYLD_FALLBACK_LIBRARY_PATH` environment variables as below. Note that the `pkg-config` from GStreamer should be the first one in the `PATH` as other versions have all kinds of quirks that will cause problems.
 
 ```sh
 export PATH="/Library/Frameworks/GStreamer.framework/Versions/1.0/bin${PATH:+:$PATH}"
+export DYLD_FALLBACK_LIBRARY_PATH="$DYLD_FALLBACK_LIBRARY_PATH:/Library/Frameworks/GStreamer.framework/Versions/1.0/lib"
 ```
 
 - Build & run:
