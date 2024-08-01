@@ -47,7 +47,7 @@ jobs:
         run: cargo clean --doc
 
       - name: Build docs
-        run: cargo doc -p verso -p libservo --no-deps
+        run: cargo doc -p verso --no-deps
 
       - name: Remove lock file
         run: rm target/doc/.lock
