@@ -40,6 +40,7 @@ targets = [
 [features]
 default = []
 packager = ["dep:cargo-packager-resource-resolver"]
+flatpak = []
 
 [build-dependencies]
 cfg_aliases = "0.2"
