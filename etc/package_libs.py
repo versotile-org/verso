@@ -83,6 +83,20 @@ def copy_dependencies(binary_path, lib_path, gst_lib_dir):
         checked.update(checking)
         need_checked.difference_update(checked)
 
+def package_gstreamer_dylibs(bin):
+    gst_root = "/Library/Frameworks/GStreamer.framework/Versions/1.0"
+    lib_dir = path.join(path.dirname(bin), "lib")
+    if os.path.exists(lib_dir):
+        shutil.rmtree(lib_dir)
+    os.mkdir(lib_dir)
+    try:
+        copy_dependencies(bin, lib_dir, path.join(gst_root, 'lib', ''))
+    except Exception as e:
+        print("ERROR: could not package required dylibs")
+        print(e)
+        return False
+    return True
+
 def remove_readonly(func, path, _):
     "Clear the readonly bit and reattempt the removal"
     os.chmod(path, stat.S_IWRITE)
@@ -172,4 +186,4 @@ if __name__ == '__main__':
     
     if sys.platform == "darwin":
         binary = "./target/release/verso"
-        package(binary)
+        package_gstreamer_dylibs(binary)

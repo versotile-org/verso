@@ -18,7 +18,7 @@ name = "verso"
 product-name = "verso"
 identifier = "org.versotile.verso"
 version = "0.0.1"
-before-each-package-command = "python3 etc/package_libs.py"
+before-each-package-command = "python etc/package_libs.py"
 resources = [
   "resources",
   "icons",
@@ -28,7 +28,7 @@ resources = [
 icons = ["icons/icon256x256.png", "icons/icon.ico"]
 
 [package.metadata.packager.macos]
-signing-identity = "-"
+# signing-identity = "-"
 frameworks = [
   "target/release/lib/libbz2.1.dylib",
   "target/release/lib/libfreetype.6.dylib",
