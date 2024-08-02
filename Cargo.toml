@@ -18,27 +18,31 @@ name = "verso"
 product-name = "verso"
 identifier = "org.versotile.verso"
 version = "0.0.1"
-before-each-package-command = "python etc/package_libs.py"
+before-each-package-command = "python3 etc/package_libs.py"
 resources = [
   "resources",
   "icons",
   "target/release/build/**/libEGL.dll",
   "target/release/build/**/libGLESv2.dll",
+  "target/release/lib",
 ]
 icons = ["icons/icon256x256.png", "icons/icon.ico"]
 
+
 [package.metadata.packager.macos]
 # signing-identity = "-"
-frameworks = [
-  "target/release/lib/libbz2.1.dylib",
-  "target/release/lib/libfreetype.6.dylib",
-  "target/release/lib/libglib-2.0.0.dylib",
-  "target/release/lib/libharfbuzz.0.dylib",
-  "target/release/lib/libintl.8.dylib",
-  "target/release/lib/libpcre2-8.0.dylib",
-  "target/release/lib/libpng16.16.dylib",
-  "target/release/lib/libz.1.dylib",
-]
+entitlements = "etc/verso.entitlements"
+# frameworks = [
+#   "GStreamer",
+  # "target/release/lib/libbz2.1.dylib",
+  # "target/release/lib/libfreetype.6.dylib",
+  # "target/release/lib/libglib-2.0.0.dylib",
+  # "target/release/lib/libharfbuzz.0.dylib",
+  # "target/release/lib/libintl.8.dylib",
+  # "target/release/lib/libpcre2-8.0.dylib",
+  # "target/release/lib/libpng16.16.dylib",
+  # "target/release/lib/libz.1.dylib",
+# ]
 
 [package.metadata.packager.nsis]
 appdata-paths = ["$LOCALAPPDATA/$IDENTIFIER"]

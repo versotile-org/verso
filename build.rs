@@ -10,5 +10,5 @@ fn main() {
     }
 
     #[cfg(all(feature = "packager", target_os = "macos"))]
-    println!("cargo:rustc-link-arg=-Wl,-rpath,@executable_path/../Frameworks");
+    println!("cargo:rustc-link-arg=-Wl,-rpath,@executable_path/../Resources/lib");
 }
