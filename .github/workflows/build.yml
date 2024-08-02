@@ -213,11 +213,11 @@ jobs:
           curl https://gstreamer.freedesktop.org/data/pkg/osx/1.24.6/gstreamer-1.0-1.24.6-universal.pkg -o gstreamer.pkg
           sudo installer -pkg gstreamer.pkg -target /
 
-      - name: Install Cargo Packager
-        run: cargo +stable install cargo-packager
-
       - name: Run sccache-cache
         uses: Mozilla-Actions/sccache-action@v0.0.4
+
+      - name: Install Cargo Packager
+        run: cargo +stable install cargo-packager
 
       - name: Build
         run: |
