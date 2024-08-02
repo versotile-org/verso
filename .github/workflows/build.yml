@@ -222,10 +222,9 @@ jobs:
         run: cargo +stable install cargo-packager
 
       - name: Build
-        env:
-          PATH: "/Library/Frameworks/GStreamer.framework/Versions/1.0/bin${PATH:+:$PATH}"
-          DYLD_LIBRARY_PATH: "/Library/Frameworks/GStreamer.framework/Versions/1.0/lib${DYLD_LIBRARY_PATH:+:$DYLD_LIBRARY_PATH}"
         run: |
+          export PATH="/Library/Frameworks/GStreamer.framework/Versions/1.0/bin${PATH:+:$PATH}"
+          export DYLD_LIBRARY_PATH="/Library/Frameworks/GStreamer.framework/Versions/1.0/lib${DYLD_LIBRARY_PATH:+:$DYLD_LIBRARY_PATH}"
           cargo build --release
 
       # - name: Test
@@ -234,10 +233,9 @@ jobs:
 
       - name: Bundle
         # if: ${{ github.event_name == 'schedule' }}
-        env:
-          PATH: "/Library/Frameworks/GStreamer.framework/Versions/1.0/bin${PATH:+:$PATH}"
-          DYLD_LIBRARY_PATH: "/Library/Frameworks/GStreamer.framework/Versions/1.0/lib${DYLD_LIBRARY_PATH:+:$DYLD_LIBRARY_PATH}"
         run: |
+          export PATH="/Library/Frameworks/GStreamer.framework/Versions/1.0/bin${PATH:+:$PATH}"
+          export DYLD_LIBRARY_PATH="/Library/Frameworks/GStreamer.framework/Versions/1.0/lib${DYLD_LIBRARY_PATH:+:$DYLD_LIBRARY_PATH}"
           cargo packager --release
 
       - name: Fetch Verso version
