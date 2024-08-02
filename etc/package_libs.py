@@ -110,4 +110,4 @@ if __name__ == '__main__':
     if sys.platform == "darwin":
         binary = "./target/release/verso"
         package_gstreamer_dylibs(binary)
-        install_name_tool(binary, '-add_rpath', "@executable_path/../Frameworks/")
+        install_name_tool(binary, '-add_rpath', "@executable_path/../Resources/lib")
