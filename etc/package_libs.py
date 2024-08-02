@@ -141,7 +141,7 @@ def package(binary_path):
 
     print("Creating dmg")
     os.symlink('/Applications', path.join(dir_to_dmg, 'Applications'))
-    dmg_path = path.join(target_dir, "verso.dmg")
+    dmg_path = path.join(target_dir, "verso_0.0.1_aarch64.dmg")
 
     if path.exists(dmg_path):
         print("Deleting existing dmg")
