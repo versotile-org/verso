@@ -226,7 +226,7 @@ jobs:
       - name: Fetch Verso version
         # if: ${{ github.event_name == 'schedule' }}
         run: |
-          echo "VERSO_VERSION=$(cargo metadata --format-version=1 --no-deps | jq -r '.packages[] | select(.name == "verso") | .version')" >> $Env:GITHUB_ENV
+          echo "VERSO_VERSION=$(cargo metadata --format-version=1 --no-deps | jq -r '.packages[] | select(.name == "verso") | .version')" >> $GITHUB_ENV
 
       - name: Upload artifact
         # if: ${{ github.event_name == 'schedule' }}
