@@ -210,16 +210,22 @@ jobs:
       #   run: |
       #     cargo test --release
 
-      - name: Tar Binary
-        if: ${{ github.event_name == 'schedule' }}
-        run: tar -czvf verso-${{ matrix.platform.target }}.tar.gz -C ./target/release/ verso
+      - name: Bundle
+        # if: ${{ github.event_name == 'schedule' }}
+        run: |
+          cargo packager --release
+
+      - name: Fetch Verso version
+        # if: ${{ github.event_name == 'schedule' }}
+        run: |
+          echo "VERSO_VERSION=$(cargo metadata --format-version=1 --no-deps | jq -r '.packages[] | select(.name == "verso") | .version')" >> $Env:GITHUB_ENV
 
       - name: Upload artifact
-        if: ${{ github.event_name == 'schedule' }}
+        # if: ${{ github.event_name == 'schedule' }}
         uses: actions/upload-artifact@v4
         with:
-          name: verso-${{ matrix.platform.target }}
-          path: verso-${{ matrix.platform.target }}.tar.gz
+          name: verso_${{ env.VERSO_VERSION }}_${{ matrix.platform.arch }}
+          path: verso_${{ env.VERSO_VERSION }}_${{ matrix.platform.arch }}.dmg
 
   build-result:
     name: Build Result
