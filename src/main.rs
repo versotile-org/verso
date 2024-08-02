@@ -72,8 +72,10 @@ fn resources_dir_path() -> Option<std::path::PathBuf> {
         use std::str::FromStr;
         std::path::PathBuf::from_str("/app")
     };
-    #[cfg(not(any(feature = "packager", feature = "flatpak")))]
-    let root_dir = std::env::current_dir();
-
-    root_dir.ok().map(|dir| dir.join("resources"))
+    // #[cfg(not(any(feature = "packager", feature = "flatpak")))]
+    // let root_dir = std::env::current_dir();
+    //
+    // root_dir.ok().map(|dir| dir.join("resources"))
+    use std::str::FromStr;
+    std::path::PathBuf::from_str("/Applications/verso.app/Contents/Resources/").ok()
 }

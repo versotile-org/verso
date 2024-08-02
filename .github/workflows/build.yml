@@ -236,7 +236,7 @@ jobs:
         run: |
           export PATH="/Library/Frameworks/GStreamer.framework/Versions/1.0/bin${PATH:+:$PATH}"
           export DYLD_LIBRARY_PATH="/Library/Frameworks/GStreamer.framework/Versions/1.0/lib${DYLD_LIBRARY_PATH:+:$DYLD_LIBRARY_PATH}"
-          cargo packager --release
+          python etc/package_libs.py
 
       - name: Fetch Verso version
         # if: ${{ github.event_name == 'schedule' }}
