@@ -242,7 +242,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: verso_${{ env.VERSO_VERSION }}_${{ matrix.platform.arch }}
-          path: verso_${{ env.VERSO_VERSION }}_${{ matrix.platform.arch }}.dmg
+          path: target/release/verso_${{ env.VERSO_VERSION }}_${{ matrix.platform.arch }}.dmg
 
   build-result:
     name: Build Result
