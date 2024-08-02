@@ -172,7 +172,7 @@ jobs:
           path: target\release\verso_${{ env.VERSO_VERSION }}_x64-setup.exe
 
   build-macos:
-    if: ${{ github.event_name != 'pull_request' }}
+    # if: ${{ github.event_name != 'pull_request' }}
     name: Build [macOS]
     strategy:
       fail-fast: false
@@ -194,8 +194,10 @@ jobs:
 
       - name: Install dependencies
         run: |
-          brew install cmake pkg-config
+          brew install cmake
           python -m pip install mako
+          curl https://gstreamer.freedesktop.org/data/pkg/osx/1.24.6/gstreamer-1.0-1.24.6-universal.pkg -o gstreamer.pkg
+          sudo installer -pkg gstreamer.pkg -target /
 
       - name: Run sccache-cache
         uses: Mozilla-Actions/sccache-action@v0.0.4
