@@ -18,12 +18,13 @@ name = "verso"
 product-name = "verso"
 identifier = "org.versotile.verso"
 version = "0.0.1"
-before-each-package-command = "cargo build --release --features packager"
+before-each-package-command = "python etc/package_libs.py"
 resources = [
   "resources",
   "icons",
   "target/release/build/**/libEGL.dll",
   "target/release/build/**/libGLESv2.dll",
+  "target/release/lib",
 ]
 icons = ["icons/icon256x256.png", "icons/icon.ico"]
 
