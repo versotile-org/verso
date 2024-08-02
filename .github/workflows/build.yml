@@ -189,6 +189,8 @@ jobs:
       RUSTC_WRAPPER: sccache
       CCACHE: sccache
       SCCACHE_GHA_ENABLED: 'true'
+      PATH: "/Library/Frameworks/GStreamer.framework/Versions/1.0/bin${PATH:+:$PATH}"
+      DYLD_LIBRARY_PATH: "/Library/Frameworks/GStreamer.framework/Versions/1.0/lib${DYLD_LIBRARY_PATH:+:$DYLD_LIBRARY_PATH}"
     steps:
       - name: Checkout the repository
         uses: actions/checkout@v4
@@ -210,8 +212,10 @@ jobs:
         run: |
           brew install cmake
           python -m pip install mako
-          curl https://gstreamer.freedesktop.org/data/pkg/osx/1.24.6/gstreamer-1.0-1.24.6-universal.pkg -o gstreamer.pkg
-          sudo installer -pkg gstreamer.pkg -target /
+          curl https://gstreamer.freedesktop.org/data/pkg/osx/1.24.6/gstreamer-1.0-1.24.6-universal.pkg -o runtime.pkg
+          sudo installer -pkg runtime.pkg -target /
+          curl https://gstreamer.freedesktop.org/data/pkg/osx/1.24.6/gstreamer-1.0-devel-1.24.6-universal.pkg -o develop.pkg
+          sudo installer -pkg develop.pkg -target /
 
       - name: Run sccache-cache
         uses: Mozilla-Actions/sccache-action@v0.0.4
