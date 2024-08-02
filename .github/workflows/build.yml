@@ -13,7 +13,6 @@ concurrency:
   cancel-in-progress: true
 
 env:
-  PYTHON3: python
   CN_APP_SLUG: verso-nightly
 
 jobs:
@@ -132,12 +131,17 @@ jobs:
         with:
           toolchain: stable
 
+      - name: Install Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
       - name: Install scroop
         uses: MinoruSekine/setup-scoop@v3
 
       - name: Install dependencies
         run: |
-          scoop install git python llvm cmake curl
+          scoop install git llvm cmake curl
           python -m pip install mako
 
       - name: Run sccache-cache
@@ -191,6 +195,11 @@ jobs:
 
       - name: Install Rust
         uses: dsherret/rust-toolchain-file@v1
+
+      - name: Install Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
 
       - name: Install dependencies
         run: |
