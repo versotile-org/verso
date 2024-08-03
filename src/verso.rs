@@ -37,11 +37,7 @@ use webgpu;
 use webrender::{create_webrender_instance, ShaderPrecacheFlags, WebRenderOptions};
 use webrender_api::*;
 use webrender_traits::*;
-use winit::{
-    event::{Event, StartCause},
-    event_loop::EventLoopProxy,
-    window::Window as WinitWindow,
-};
+use winit::{event::Event, event_loop::EventLoopProxy, window::Window as WinitWindow};
 
 use crate::{
     compositor::{IOCompositor, InitialCompositorState, ShutdownState},
@@ -367,6 +363,15 @@ impl Verso {
         };
 
         verso.setup_logging();
+        // Send the constellation message to start Panel UI
+        // NB: Should become a window method
+        let panel_id = verso.window.panel.webview_id;
+        let path = verso.resource_dir.join("panel.html");
+        let url = ServoUrl::from_file_path(path.to_str().unwrap()).unwrap();
+        send_to_constellation(
+            &verso.constellation_sender,
+            ConstellationMsg::NewWebView(url, panel_id),
+        );
         verso
     }
 
@@ -383,17 +388,7 @@ impl Verso {
     fn handle_winit_event(&mut self, event: Event<()>) {
         log::trace!("Verso is handling Winit event: {event:?}");
         match event {
-            Event::NewEvents(StartCause::Init) => {
-                // Send the constellation message to start Panel UI
-                let panel_id = self.window.panel.webview_id;
-                let path = self.resource_dir.join("panel.html");
-                let url = ServoUrl::from_file_path(path.to_str().unwrap()).unwrap();
-                send_to_constellation(
-                    &self.constellation_sender,
-                    ConstellationMsg::NewWebView(url, panel_id),
-                );
-            }
-            Event::Suspended | Event::Resumed | Event::UserEvent(()) => {}
+            Event::NewEvents(_) | Event::Suspended | Event::Resumed | Event::UserEvent(()) => {}
             Event::WindowEvent {
                 window_id: _,
                 event,

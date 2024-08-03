@@ -3,6 +3,7 @@
 
 use verso::config::Config;
 use verso::{Result, Verso};
+use winit::event::{Event, StartCause};
 use winit::event_loop::{ControlFlow, DeviceEvents};
 use winit::{event_loop::EventLoop, window::WindowBuilder};
 
@@ -19,28 +20,36 @@ use winit::dpi::LogicalPosition;
 fn main() -> Result<()> {
     let event_loop = EventLoop::new()?;
     event_loop.listen_device_events(DeviceEvents::Never);
-    let window = WindowBuilder::new()
-        // .with_decorations(false)
-        .build(&event_loop)?;
-
-    #[cfg(macos)]
-    unsafe {
-        let rwh = window.raw_window_handle();
-        if let RawWindowHandle::AppKit(AppKitWindowHandle { ns_window, .. }) = rwh {
-            decorate_window(ns_window as *mut Object, LogicalPosition::new(8.0, 40.0));
-        }
-    }
-
-    let config = Config::new(resources_dir_path().unwrap());
-    let mut verso = Verso::new(window, event_loop.create_proxy(), config);
+    let proxy = event_loop.create_proxy();
+    let mut verso = None;
     event_loop.run(move |event, evl| {
-        verso.run(event);
-        if verso.finished_shutting_down() {
-            evl.exit();
-        } else if verso.is_animating() {
-            evl.set_control_flow(ControlFlow::Poll);
+        if let Event::NewEvents(StartCause::Init) = event {
+            let window = WindowBuilder::new()
+                // .with_decorations(false)
+                .build(&evl)
+                .expect("Failed to initialize Winit window");
+
+            #[cfg(macos)]
+            unsafe {
+                let rwh = window.raw_window_handle();
+                if let RawWindowHandle::AppKit(AppKitWindowHandle { ns_window, .. }) = rwh {
+                    decorate_window(ns_window as *mut Object, LogicalPosition::new(8.0, 40.0));
+                }
+            }
+
+            let config = Config::new(resources_dir_path().unwrap());
+            verso = Some(Verso::new(window, proxy.clone(), config));
         } else {
-            evl.set_control_flow(ControlFlow::Wait);
+            if let Some(v) = &mut verso {
+                v.run(event);
+                if v.finished_shutting_down() {
+                    evl.exit();
+                } else if v.is_animating() {
+                    evl.set_control_flow(ControlFlow::Poll);
+                } else {
+                    evl.set_control_flow(ControlFlow::Wait);
+                }
+            }
         }
     })?;
 
