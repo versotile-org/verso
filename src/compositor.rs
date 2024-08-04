@@ -1934,7 +1934,6 @@ impl IOCompositor {
                 trace!("Compositing");
                 // Paint the scene.
                 // TODO(gw): Take notice of any errors the renderer returns!
-                self.clear_background();
                 self.webrender
                     // TODO to untyped?
                     .render(self.viewport, 0 /* buffer_age */)
@@ -2018,44 +2017,6 @@ impl IOCompositor {
             self.composition_request
         );
         self.composition_request = CompositionRequest::CompositeNow(reason)
-    }
-
-    fn clear_background(&self) {
-        let gl = &self.webrender_gl;
-        self.assert_gl_framebuffer_complete();
-
-        // Set the viewport background based on prefs.
-        let color = servo_config::pref!(shell.background_color.rgba);
-        gl.clear_color(
-            color[0] as f32,
-            color[1] as f32,
-            color[2] as f32,
-            color[3] as f32,
-        );
-
-        let framebuffer_height = self.viewport.height;
-        // Clear the viewport rect of each top-level browsing context.
-        for webview in &self.painting_order {
-            // Flip the rectangle in the framebuffer
-            let origin = webview.rect.to_i32();
-            let mut rect = origin.clone();
-            let min_y = framebuffer_height - rect.max.y;
-            let max_y = framebuffer_height - rect.min.y;
-            rect.min.y = min_y;
-            rect.max.y = max_y;
-
-            gl.scissor(
-                rect.min.x,
-                rect.min.y,
-                rect.size().width,
-                rect.size().height,
-            );
-            gl.enable(gl::SCISSOR_TEST);
-            gl.clear(gl::COLOR_BUFFER_BIT);
-            gl.disable(gl::SCISSOR_TEST);
-        }
-
-        self.assert_gl_framebuffer_complete();
     }
 
     #[track_caller]

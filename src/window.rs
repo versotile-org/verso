@@ -237,13 +237,17 @@ impl Window {
         let need_resize = compositor.on_resize_window_event(size);
 
         let rect = DeviceIntRect::from_size(size);
+        self.panel.rect = rect;
         compositor.on_resize_webview_event(self.panel.webview_id, rect);
 
-        if let Some(w) = &self.webview {
+        if let Some(w) = &mut self.webview {
             let mut rect = DeviceIntRect::from_size(size);
             rect.min.y = rect.max.y.min(76);
+            w.rect = rect;
             compositor.on_resize_webview_event(w.webview_id, rect);
         }
+
+        compositor.set_painting_order(self.painting_order());
 
         if need_resize {
             compositor.repaint_synchronously(self);
@@ -295,7 +299,6 @@ impl Window {
             self.webview = Some(WebView::new(webview_id, rect));
         }
 
-        compositor.set_painting_order(self.painting_order());
         self.resize(self.size(), compositor);
 
         send_to_constellation(

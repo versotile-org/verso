@@ -26,6 +26,7 @@ fn main() -> Result<()> {
         if let Event::NewEvents(StartCause::Init) = event {
             let window = WindowBuilder::new()
                 // .with_decorations(false)
+                .with_transparent(true)
                 .build(&evl)
                 .expect("Failed to initialize Winit window");
 
