@@ -1275,6 +1275,19 @@ impl IOCompositor {
         true
     }
 
+    /// Handle the window resize event and return a boolean to tell embedder if it should further
+    /// handle the resize event.
+    pub fn on_scale_factor_event(&mut self, scale_factor: f32) -> bool {
+        if self.shutdown_state != ShutdownState::NotShuttingDown {
+            return false;
+        }
+
+        self.scale_factor = Scale::new(scale_factor);
+        self.update_after_zoom_or_hidpi_change();
+        self.composite_if_necessary(CompositingReason::Resize);
+        true
+    }
+
     /// Handle the mouse event in the window.
     pub fn on_mouse_window_event_class(&mut self, mouse_window_event: MouseWindowEvent) {
         if self.shutdown_state != ShutdownState::NotShuttingDown {
