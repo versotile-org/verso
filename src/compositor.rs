@@ -1140,18 +1140,29 @@ impl IOCompositor {
         windows: &mut HashMap<WindowId, Window>,
     ) {
         debug!("{}: Removing", top_level_browsing_context_id);
+        let mut window_id = None;
         for window in windows.values_mut() {
-            if let Some(webview) = window.remove_webview(top_level_browsing_context_id, self) {
+            let (webview, close_window) =
+                window.remove_webview(top_level_browsing_context_id, self);
+            if let Some(webview) = webview {
+                self.set_painting_order(window.painting_order());
                 self.send_root_pipeline_display_list();
                 if let Some(pipeline_id) = webview.pipeline_id {
                     self.remove_pipeline_details_recursively(pipeline_id);
                 }
 
+                if close_window {
+                    window_id = Some(window.id());
+                }
+
                 self.frame_tree_id.next();
-                return;
+                break;
             }
         }
-        warn!("{top_level_browsing_context_id}: Removing unknown webview");
+
+        if let Some(id) = window_id {
+            windows.remove(&id);
+        }
     }
 
     /// Notify compositor the provided webview is resized. The compositor will tell constellation and update the display list.

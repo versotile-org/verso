@@ -38,7 +38,7 @@ use webrender::{create_webrender_instance, ShaderPrecacheFlags, WebRenderOptions
 use webrender_api::*;
 use webrender_traits::*;
 use winit::{
-    event::Event,
+    event::{Event, WindowEvent},
     event_loop::EventLoopProxy,
     window::{Window as WinitWindow, WindowId},
 };
@@ -356,7 +356,7 @@ impl Verso {
 
         // Send the constellation message to start Panel UI
         // NB: Should become a window method
-        let panel_id = window.panel.webview_id;
+        let panel_id = window.panel.as_ref().unwrap().webview_id;
         let path = resource_dir.join("panel.html");
         let url = ServoUrl::from_file_path(path.to_str().unwrap()).unwrap();
         send_to_constellation(
@@ -388,6 +388,11 @@ impl Verso {
     pub fn run(&mut self, event: Event<()>) {
         self.handle_winit_event(event);
         self.handle_servo_messages();
+        if self.windows.is_empty() {
+            self.compositor
+                .as_mut()
+                .map(IOCompositor::maybe_start_shutting_down);
+        }
     }
 
     /// Handle Winit events
@@ -397,20 +402,24 @@ impl Verso {
             Event::NewEvents(_) | Event::Suspended | Event::Resumed | Event::UserEvent(()) => {}
             Event::WindowEvent { window_id, event } => {
                 if let Some(compositor) = &mut self.compositor {
-                    let mut need_repaint = false;
-                    for (id, window) in &mut self.windows {
-                        if window_id == *id {
-                            need_repaint = window.handle_winit_window_event(
-                                &self.constellation_sender,
-                                compositor,
-                                &event,
-                            );
+                    if let WindowEvent::CloseRequested = event {
+                        self.windows.remove(&window_id);
+                    } else {
+                        let mut need_repaint = false;
+                        for (id, window) in &mut self.windows {
+                            if window_id == *id {
+                                need_repaint = window.handle_winit_window_event(
+                                    &self.constellation_sender,
+                                    compositor,
+                                    &event,
+                                );
+                            }
                         }
-                    }
 
-                    if need_repaint {
-                        compositor.repaint_synchronously(&mut self.windows);
-                        compositor.present();
+                        if need_repaint {
+                            compositor.repaint_synchronously(&mut self.windows);
+                            compositor.present();
+                        }
                     }
                 }
             }

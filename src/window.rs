@@ -36,7 +36,7 @@ pub struct Window {
     /// Access to Winit window
     pub(crate) window: WinitWindow,
     /// The main control panel of this window.
-    pub(crate) panel: WebView,
+    pub(crate) panel: Option<WebView>,
     /// The WebView of this window.
     pub(crate) webview: Option<WebView>,
     /// The mouse physical position in the web view.
@@ -69,7 +69,7 @@ impl Window {
         (
             Self {
                 window,
-                panel: WebView::new_panel(DeviceIntRect::from_size(size)),
+                panel: Some(WebView::new_panel(DeviceIntRect::from_size(size))),
                 webview: None,
                 mouse_position: Cell::new(PhysicalPosition::default()),
                 modifiers_state: Cell::new(ModifiersState::default()),
@@ -177,9 +177,6 @@ impl Window {
                     phase,
                 );
             }
-            WindowEvent::CloseRequested => {
-                compositor.maybe_start_shutting_down();
-            }
             WindowEvent::ModifiersChanged(modifier) => self.modifiers_state.set(modifier.state()),
             WindowEvent::KeyboardInput { event, .. } => {
                 let event = keyboard_event_from_winit(&event, self.modifiers_state.get());
@@ -201,7 +198,12 @@ impl Window {
         clipboard: Option<&mut Clipboard>,
     ) {
         // // Handle message in Verso Panel
-        if webview_id == self.panel.webview_id {
+        if self
+            .panel
+            .as_ref()
+            .filter(|p| p.webview_id == webview_id)
+            .is_some()
+        {
             self.handle_servo_messages_with_panel(webview_id, message, sender, clipboard);
         }
         // Handle message in Verso WebView
@@ -224,9 +226,11 @@ impl Window {
     ) -> bool {
         let need_resize = compositor.on_resize_window_event(size);
 
-        let rect = DeviceIntRect::from_size(size);
-        self.panel.rect = rect;
-        compositor.on_resize_webview_event(self.panel.webview_id, rect);
+        if let Some(panel) = &mut self.panel {
+            let rect = DeviceIntRect::from_size(size);
+            panel.rect = rect;
+            compositor.on_resize_webview_event(panel.webview_id, rect);
+        }
 
         if let Some(w) = &mut self.webview {
             let mut rect = DeviceIntRect::from_size(size);
@@ -258,7 +262,7 @@ impl Window {
 
     /// Check if the window has such webview.
     pub fn has_webview(&mut self, id: WebViewId) -> bool {
-        if self.panel.webview_id == id {
+        if self.panel.as_ref().filter(|w| w.webview_id == id).is_some() {
             true
         } else {
             self.webview
@@ -277,28 +281,30 @@ impl Window {
         pipeline_id: PipelineId,
         compositor: &mut IOCompositor,
     ) {
-        if self.panel.webview_id == webview_id {
-            if self.panel.pipeline_id != Some(pipeline_id) {
-                self.panel.pipeline_id = Some(pipeline_id);
+        if let Some(panel) = &mut self.panel {
+            if panel.webview_id == webview_id {
+                if panel.pipeline_id != Some(pipeline_id) {
+                    panel.pipeline_id = Some(pipeline_id);
+                }
+            } else if let Some(webview) = &mut self.webview {
+                if webview.webview_id == webview_id && webview.pipeline_id != Some(pipeline_id) {
+                    webview.pipeline_id = Some(pipeline_id);
+                }
+            } else {
+                let size = self.size();
+                let mut rect = DeviceIntRect::from_size(size);
+                rect.min.y = rect.max.y.min(76);
+                self.webview = Some(WebView::new(webview_id, rect));
             }
-        } else if let Some(webview) = &mut self.webview {
-            if webview.webview_id == webview_id && webview.pipeline_id != Some(pipeline_id) {
-                webview.pipeline_id = Some(pipeline_id);
-            }
-        } else {
-            let size = self.size();
-            let mut rect = DeviceIntRect::from_size(size);
-            rect.min.y = rect.max.y.min(76);
-            self.webview = Some(WebView::new(webview_id, rect));
+
+            // Ignore the return boolean since the webview will present eventually.
+            self.resize(self.size(), compositor);
+
+            send_to_constellation(
+                &compositor.constellation_chan,
+                ConstellationMsg::FocusWebView(webview_id),
+            );
         }
-
-        // Ignore the return boolean since the webview will present eventually.
-        self.resize(self.size(), compositor);
-
-        send_to_constellation(
-            &compositor.constellation_chan,
-            ConstellationMsg::FocusWebView(webview_id),
-        );
     }
 
     /// Remove the webview in this window by provided webview ID. If this is the panel, it will
@@ -307,19 +313,24 @@ impl Window {
         &mut self,
         id: WebViewId,
         compositor: &mut IOCompositor,
-    ) -> Option<WebView> {
-        if id == self.panel.webview_id {
-            compositor.maybe_start_shutting_down();
-            None
+    ) -> (Option<WebView>, bool) {
+        if self.panel.as_ref().filter(|w| w.webview_id == id).is_some() {
+            self.webview.as_ref().map(|w| {
+                send_to_constellation(
+                    &compositor.constellation_chan,
+                    ConstellationMsg::CloseWebView(w.webview_id),
+                )
+            });
+            (self.panel.take(), false)
         } else if self
             .webview
             .as_ref()
             .filter(|w| w.webview_id == id)
             .is_some()
         {
-            self.webview.take()
+            (self.webview.take(), self.panel.is_none())
         } else {
-            None
+            (None, false)
         }
     }
 
@@ -329,7 +340,9 @@ impl Window {
         if let Some(webview) = &self.webview {
             order.push(webview.clone());
         }
-        order.push(self.panel.clone());
+        if let Some(panel) = &self.panel {
+            order.push(panel.clone());
+        }
         order
     }
 
