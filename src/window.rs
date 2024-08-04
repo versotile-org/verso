@@ -78,20 +78,20 @@ impl Window {
         )
     }
 
-    /// Handle Winit window event.
+    /// Handle Winit window event and return a boolean to indicate if the compositor should repaint immediately.
     pub fn handle_winit_window_event(
         &mut self,
         sender: &Sender<ConstellationMsg>,
         compositor: &mut IOCompositor,
         event: &winit::event::WindowEvent,
-    ) {
+    ) -> bool {
         match event {
             WindowEvent::RedrawRequested => {
                 compositor.present();
             }
             WindowEvent::Resized(size) => {
                 let size = Size2D::new(size.width, size.height);
-                let _ = self.resize(size.to_i32(), compositor);
+                return self.resize(size.to_i32(), compositor);
             }
             WindowEvent::CursorMoved { position, .. } => {
                 let cursor: DevicePoint = DevicePoint::new(position.x as f32, position.y as f32);
@@ -107,7 +107,7 @@ impl Window {
                         log::warn!(
                             "Verso Window isn't supporting this mouse button yet: {button:?}"
                         );
-                        return;
+                        return false;
                     }
                 };
                 let position = Point2D::new(
@@ -189,6 +189,7 @@ impl Window {
             }
             e => log::warn!("Verso Window isn't supporting this window event yet: {e:?}"),
         }
+        false
     }
 
     /// Handle servo messages.
@@ -232,8 +233,13 @@ impl Window {
         self.window.request_redraw()
     }
 
-    /// Resize the rendering context and all web views.
-    pub fn resize(&mut self, size: Size2D<i32, DevicePixel>, compositor: &mut IOCompositor) {
+    /// Resize the rendering context and all web views. Return true if the compositor should repaint and present
+    /// after this.
+    pub fn resize(
+        &mut self,
+        size: Size2D<i32, DevicePixel>,
+        compositor: &mut IOCompositor,
+    ) -> bool {
         let need_resize = compositor.on_resize_window_event(size);
 
         let rect = DeviceIntRect::from_size(size);
@@ -249,10 +255,7 @@ impl Window {
 
         compositor.set_painting_order(self.painting_order());
 
-        if need_resize {
-            compositor.repaint_synchronously(self);
-            compositor.present();
-        }
+        need_resize
     }
 
     /// Size of the window that's used by webrender.
@@ -299,6 +302,7 @@ impl Window {
             self.webview = Some(WebView::new(webview_id, rect));
         }
 
+        // Ignore the return boolean since the webview will present eventually.
         self.resize(self.size(), compositor);
 
         send_to_constellation(
