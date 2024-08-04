@@ -1486,7 +1486,7 @@ impl IOCompositor {
         self.dispatch_mouse_window_event_class(MouseWindowEvent::Click(button, p));
     }
 
-    /// Hit test and foward the wheel event to constellation.
+    /// Hit test and forward the wheel event to constellation.
     pub fn on_wheel_event(&mut self, delta: WheelDelta, p: DevicePoint) {
         if self.shutdown_state != ShutdownState::NotShuttingDown {
             return;

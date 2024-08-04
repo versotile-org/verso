@@ -271,22 +271,22 @@ impl Window {
         }
     }
 
-    /// Set the webview to this window. It won't be updated if the exisitng webview and pipeline ID
+    /// Set the webview to this window. It won't be updated if the existing webview and pipeline ID
     /// are the same. This will also set the painting order of the compositor and tell
     /// constellation to focus the webview.
     pub fn set_webview(
         &mut self,
         webview_id: WebViewId,
-        pipline_id: PipelineId,
+        pipeline_id: PipelineId,
         compositor: &mut IOCompositor,
     ) {
         if self.panel.webview_id == webview_id {
-            if self.panel.pipeline_id != Some(pipline_id) {
-                self.panel.pipeline_id = Some(pipline_id);
+            if self.panel.pipeline_id != Some(pipeline_id) {
+                self.panel.pipeline_id = Some(pipeline_id);
             }
         } else if let Some(webview) = &mut self.webview {
-            if webview.webview_id == webview_id && webview.pipeline_id != Some(pipline_id) {
-                webview.pipeline_id = Some(pipline_id);
+            if webview.webview_id == webview_id && webview.pipeline_id != Some(pipeline_id) {
+                webview.pipeline_id = Some(pipeline_id);
             }
         } else {
             let size = self.size();
@@ -295,7 +295,7 @@ impl Window {
             self.webview = Some(WebView::new(webview_id, rect));
         }
 
-        compositor.set_painting_order(self.paiting_order());
+        compositor.set_painting_order(self.painting_order());
         self.resize(self.size(), compositor);
 
         send_to_constellation(
@@ -327,7 +327,7 @@ impl Window {
     }
 
     /// Get the painting order of this window.
-    pub fn paiting_order(&self) -> Vec<WebView> {
+    pub fn painting_order(&self) -> Vec<WebView> {
         let mut order = vec![];
         if let Some(webview) = &self.webview {
             order.push(webview.clone());
