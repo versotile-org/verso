@@ -19,7 +19,7 @@ use winit::{
     dpi::PhysicalPosition,
     event::{ElementState, TouchPhase, WindowEvent},
     keyboard::ModifiersState,
-    window::{CursorIcon, Window as WinitWindow},
+    window::{CursorIcon, Window as WinitWindow, WindowId},
 };
 
 use crate::{
@@ -195,36 +195,18 @@ impl Window {
     /// Handle servo messages.
     pub fn handle_servo_message(
         &mut self,
-        webview_id: Option<WebViewId>,
+        webview_id: WebViewId,
         message: EmbedderMsg,
         sender: &Sender<ConstellationMsg>,
         clipboard: Option<&mut Clipboard>,
     ) {
-        match webview_id {
-            // // Handle message in Verso Panel
-            Some(p) if p == self.panel.webview_id => {
-                self.handle_servo_messages_with_panel(p, message, sender, clipboard);
-            }
-            // Handle message in Verso WebView
-            Some(w) => {
-                self.handle_servo_messages_with_webview(w, message, sender, clipboard);
-            }
-            // Handle message in Verso Window
-            None => {
-                log::trace!("Verso Window is handling Embedder message: {message:?}");
-                match message {
-                    EmbedderMsg::ReadyToPresent(_w) => {
-                        self.window.request_redraw();
-                    }
-                    EmbedderMsg::SetCursor(cursor) => {
-                        self.set_cursor_icon(cursor);
-                    }
-                    EmbedderMsg::Shutdown => {}
-                    e => {
-                        log::warn!("Verso Window isn't supporting handling this message yet: {e:?}")
-                    }
-                }
-            }
+        // // Handle message in Verso Panel
+        if webview_id == self.panel.webview_id {
+            self.handle_servo_messages_with_panel(webview_id, message, sender, clipboard);
+        }
+        // Handle message in Verso WebView
+        else {
+            self.handle_servo_messages_with_webview(webview_id, message, sender, clipboard);
         }
     }
 
@@ -264,17 +246,25 @@ impl Window {
         Size2D::new(size.width as i32, size.height as i32)
     }
 
+    /// Get Winit window ID of the window.
+    pub fn id(&self) -> WindowId {
+        self.window.id()
+    }
+
     /// Scale factor of the window. This is also known as HIDPI.
     pub fn scale_factor(&self) -> f64 {
         self.window.scale_factor()
     }
 
-    /// Get the mutable reference of the webview in this window from provided webview ID.
-    pub fn get_webview(&mut self, id: WebViewId) -> Option<&mut WebView> {
+    /// Check if the window has such webview.
+    pub fn has_webview(&mut self, id: WebViewId) -> bool {
         if self.panel.webview_id == id {
-            Some(&mut self.panel)
+            true
         } else {
-            self.webview.as_mut().filter(|w| w.webview_id == id)
+            self.webview
+                .as_ref()
+                .filter(|w| w.webview_id == id)
+                .is_some()
         }
     }
 

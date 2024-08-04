@@ -41,6 +41,7 @@ use webrender_traits::{
     NetToCompositorMsg, RenderingContext, ScriptToCompositorMsg, SerializedImageUpdate,
     UntrustedNodeAddress,
 };
+use winit::window::WindowId;
 
 use crate::touch::{TouchAction, TouchHandler};
 use crate::webview::WebView;
@@ -469,7 +470,11 @@ impl IOCompositor {
         }
     }
 
-    fn handle_browser_message(&mut self, msg: CompositorMsg, window: &mut Window) -> bool {
+    fn handle_browser_message(
+        &mut self,
+        msg: CompositorMsg,
+        windows: &mut HashMap<WindowId, Window>,
+    ) -> bool {
         match self.shutdown_state {
             ShutdownState::NotShuttingDown => {}
             ShutdownState::ShuttingDown => {
@@ -493,12 +498,12 @@ impl IOCompositor {
             }
 
             CompositorMsg::CreateOrUpdateWebView(frame_tree) => {
-                self.create_or_update_webview(&frame_tree, window);
+                self.create_or_update_webview(&frame_tree, windows);
                 self.send_scroll_positions_to_layout_for_pipeline(&frame_tree.pipeline.id);
             }
 
             CompositorMsg::RemoveWebView(top_level_browsing_context_id) => {
-                self.remove_webview(top_level_browsing_context_id, window);
+                self.remove_webview(top_level_browsing_context_id, windows);
             }
 
             CompositorMsg::MoveResizeWebView(_webview_id, _rect) => {
@@ -1106,14 +1111,21 @@ impl IOCompositor {
         }
     }
 
-    fn create_or_update_webview(&mut self, frame_tree: &SendableFrameTree, window: &mut Window) {
+    fn create_or_update_webview(
+        &mut self,
+        frame_tree: &SendableFrameTree,
+        windows: &mut HashMap<WindowId, Window>,
+    ) {
         debug!("{}: Setting frame tree for webview", frame_tree.pipeline.id);
 
-        window.set_webview(
-            frame_tree.pipeline.top_level_browsing_context_id,
-            frame_tree.pipeline.id,
-            self,
-        );
+        for window in windows.values_mut() {
+            // TODO: should only set to one window
+            window.set_webview(
+                frame_tree.pipeline.top_level_browsing_context_id,
+                frame_tree.pipeline.id,
+                self,
+            );
+        }
 
         self.send_root_pipeline_display_list();
         self.create_or_update_pipeline_details_with_frame_tree(frame_tree, None);
@@ -1125,20 +1137,21 @@ impl IOCompositor {
     fn remove_webview(
         &mut self,
         top_level_browsing_context_id: TopLevelBrowsingContextId,
-        window: &mut Window,
+        windows: &mut HashMap<WindowId, Window>,
     ) {
         debug!("{}: Removing", top_level_browsing_context_id);
-        let Some(webview) = window.remove_webview(top_level_browsing_context_id, self) else {
-            warn!("{top_level_browsing_context_id}: Removing unknown webview");
-            return;
-        };
+        for window in windows.values_mut() {
+            if let Some(webview) = window.remove_webview(top_level_browsing_context_id, self) {
+                self.send_root_pipeline_display_list();
+                if let Some(pipeline_id) = webview.pipeline_id {
+                    self.remove_pipeline_details_recursively(pipeline_id);
+                }
 
-        self.send_root_pipeline_display_list();
-        if let Some(pipeline_id) = webview.pipeline_id {
-            self.remove_pipeline_details_recursively(pipeline_id);
+                self.frame_tree_id.next();
+                return;
+            }
         }
-
-        self.frame_tree_id.next();
+        warn!("{top_level_browsing_context_id}: Removing unknown webview");
     }
 
     /// Notify compositor the provided webview is resized. The compositor will tell constellation and update the display list.
@@ -2039,7 +2052,7 @@ impl IOCompositor {
     }
 
     /// Receive and handle compositor messages.
-    pub fn receive_messages(&mut self, window: &mut Window) -> bool {
+    pub fn receive_messages(&mut self, windows: &mut HashMap<WindowId, Window>) -> bool {
         // Check for new messages coming from the other threads in the system.
         let mut compositor_messages = vec![];
         let mut found_recomposite_msg = false;
@@ -2058,7 +2071,7 @@ impl IOCompositor {
             }
         }
         for msg in compositor_messages {
-            if !self.handle_browser_message(msg, window) {
+            if !self.handle_browser_message(msg, windows) {
                 return false;
             }
         }
@@ -2100,11 +2113,11 @@ impl IOCompositor {
     /// paint is not scheduled the compositor will hang forever.
     ///
     /// This is used when resizing the window.
-    pub fn repaint_synchronously(&mut self, window: &mut Window) {
+    pub fn repaint_synchronously(&mut self, windows: &mut HashMap<WindowId, Window>) {
         while self.shutdown_state != ShutdownState::ShuttingDown {
             let msg = self.port.recv_compositor_msg();
             let need_recomposite = matches!(msg, CompositorMsg::NewWebRenderFrameReady(_));
-            let keep_going = self.handle_browser_message(msg, window);
+            let keep_going = self.handle_browser_message(msg, windows);
             if need_recomposite {
                 self.composite();
                 break;

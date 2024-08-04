@@ -1,6 +1,6 @@
 use std::{
     borrow::Cow,
-    path::PathBuf,
+    collections::HashMap,
     sync::{atomic::Ordering, Arc},
 };
 
@@ -17,7 +17,7 @@ use compositing_traits::{
 use constellation::{Constellation, FromCompositorLogger, InitialConstellationState};
 use crossbeam_channel::{unbounded, Sender};
 use devtools;
-use embedder_traits::{EmbedderProxy, EmbedderReceiver, EventLoopWaker};
+use embedder_traits::{EmbedderMsg, EmbedderProxy, EmbedderReceiver, EventLoopWaker};
 use euclid::Scale;
 use fonts::FontCacheThread;
 use gleam::gl;
@@ -37,7 +37,11 @@ use webgpu;
 use webrender::{create_webrender_instance, ShaderPrecacheFlags, WebRenderOptions};
 use webrender_api::*;
 use webrender_traits::*;
-use winit::{event::Event, event_loop::EventLoopProxy, window::Window as WinitWindow};
+use winit::{
+    event::Event,
+    event_loop::EventLoopProxy,
+    window::{Window as WinitWindow, WindowId},
+};
 
 use crate::{
     compositor::{IOCompositor, InitialCompositorState, ShutdownState},
@@ -47,7 +51,7 @@ use crate::{
 
 /// Main entry point of Verso browser.
 pub struct Verso {
-    window: Window,
+    windows: HashMap<WindowId, Window>,
     compositor: Option<IOCompositor>,
     constellation_sender: Sender<ConstellationMsg>,
     embedder_receiver: EmbedderReceiver,
@@ -57,7 +61,6 @@ pub struct Verso {
     _js_engine_setup: Option<JSEngineSetup>,
     /// FIXME: It's None on wayland in Flatpak. Find a way to support this.
     clipboard: Option<Clipboard>,
-    resource_dir: PathBuf,
 }
 
 impl Verso {
@@ -351,27 +354,30 @@ impl Verso {
             opts.debug.convert_mouse_to_touch,
         );
 
+        // Send the constellation message to start Panel UI
+        // NB: Should become a window method
+        let panel_id = window.panel.webview_id;
+        let path = resource_dir.join("panel.html");
+        let url = ServoUrl::from_file_path(path.to_str().unwrap()).unwrap();
+        send_to_constellation(
+            &constellation_sender,
+            ConstellationMsg::NewWebView(url, panel_id),
+        );
+
+        let mut windows = HashMap::new();
+        windows.insert(window.id(), window);
+
         // Create Verso instance
         let verso = Verso {
-            window,
+            windows,
             compositor: Some(compositor),
             constellation_sender,
             embedder_receiver,
             _js_engine_setup: js_engine_setup,
             clipboard: Clipboard::new().ok(),
-            resource_dir,
         };
 
         verso.setup_logging();
-        // Send the constellation message to start Panel UI
-        // NB: Should become a window method
-        let panel_id = verso.window.panel.webview_id;
-        let path = verso.resource_dir.join("panel.html");
-        let url = ServoUrl::from_file_path(path.to_str().unwrap()).unwrap();
-        send_to_constellation(
-            &verso.constellation_sender,
-            ConstellationMsg::NewWebView(url, panel_id),
-        );
         verso
     }
 
@@ -389,17 +395,21 @@ impl Verso {
         log::trace!("Verso is handling Winit event: {event:?}");
         match event {
             Event::NewEvents(_) | Event::Suspended | Event::Resumed | Event::UserEvent(()) => {}
-            Event::WindowEvent {
-                window_id: _,
-                event,
-            } => {
+            Event::WindowEvent { window_id, event } => {
                 if let Some(compositor) = &mut self.compositor {
-                    if self.window.handle_winit_window_event(
-                        &self.constellation_sender,
-                        compositor,
-                        &event,
-                    ) {
-                        compositor.repaint_synchronously(&mut self.window);
+                    let mut need_repaint = false;
+                    for (id, window) in &mut self.windows {
+                        if window_id == *id {
+                            need_repaint = window.handle_winit_window_event(
+                                &self.constellation_sender,
+                                compositor,
+                                &event,
+                            );
+                        }
+                    }
+
+                    if need_repaint {
+                        compositor.repaint_synchronously(&mut self.windows);
                         compositor.present();
                     }
                 }
@@ -414,25 +424,50 @@ impl Verso {
         if let Some(compositor) = &mut self.compositor {
             // Handle Compositor's messages first
             log::trace!("Verso is handling Compositor messages");
-            if compositor.receive_messages(&mut self.window) {
+            if compositor.receive_messages(&mut self.windows) {
                 // And then handle Embedder messages
                 log::trace!(
                     "Verso is handling Embedder messages when shutdown state is set to {:?}",
                     compositor.shutdown_state
                 );
-                while let Some((top_level_browsing_context, msg)) =
-                    self.embedder_receiver.try_recv_embedder_msg()
-                {
+                while let Some((webview_id, msg)) = self.embedder_receiver.try_recv_embedder_msg() {
                     match compositor.shutdown_state {
                         ShutdownState::NotShuttingDown => {
-                            // TODO we need to worry about which window to handle message in
-                            // multiwindow
-                            self.window.handle_servo_message(
-                                top_level_browsing_context,
-                                msg,
-                                &self.constellation_sender,
-                                self.clipboard.as_mut(),
-                            );
+                            if let Some(id) = webview_id {
+                                for window in self.windows.values_mut() {
+                                    if window.has_webview(id) {
+                                        window.handle_servo_message(
+                                            id,
+                                            msg,
+                                            &self.constellation_sender,
+                                            self.clipboard.as_mut(),
+                                        );
+                                        break;
+                                    }
+                                }
+                            } else {
+                                // Handle message in Verso Window
+                                log::trace!("Verso Window is handling Embedder message: {msg:?}");
+                                match msg {
+                                    EmbedderMsg::ReadyToPresent(_w) => {
+                                        // TODO: Should be done in compositor composite method
+                                        for window in self.windows.values() {
+                                            window.request_redraw();
+                                        }
+                                    }
+                                    EmbedderMsg::SetCursor(cursor) => {
+                                        // TODO: Should set to the right window
+                                        self.windows
+                                            .values()
+                                            .last()
+                                            .map(|w| w.set_cursor_icon(cursor));
+                                    }
+                                    EmbedderMsg::Shutdown => {}
+                                    e => {
+                                        log::warn!("Verso Window isn't supporting handling this message yet: {e:?}")
+                                    }
+                                }
+                            }
                         }
                         ShutdownState::FinishedShuttingDown => {
                             log::error!("Verso shouldn't be handling messages after compositor has shut down");
