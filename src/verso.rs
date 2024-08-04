@@ -418,7 +418,6 @@ impl Verso {
 
                         if need_repaint {
                             compositor.repaint_synchronously(&mut self.windows);
-                            compositor.present();
                         }
                     }
                 }
@@ -458,12 +457,6 @@ impl Verso {
                                 // Handle message in Verso Window
                                 log::trace!("Verso Window is handling Embedder message: {msg:?}");
                                 match msg {
-                                    EmbedderMsg::ReadyToPresent(_w) => {
-                                        // TODO: Should be done in compositor composite method
-                                        for window in self.windows.values() {
-                                            window.request_redraw();
-                                        }
-                                    }
                                     EmbedderMsg::SetCursor(cursor) => {
                                         // TODO: Should set to the right window
                                         self.windows
@@ -471,7 +464,7 @@ impl Verso {
                                             .last()
                                             .map(|w| w.set_cursor_icon(cursor));
                                     }
-                                    EmbedderMsg::Shutdown => {}
+                                    EmbedderMsg::Shutdown | EmbedderMsg::ReadyToPresent(_) => {}
                                     e => {
                                         log::warn!("Verso Window isn't supporting handling this message yet: {e:?}")
                                     }

@@ -86,9 +86,6 @@ impl Window {
         event: &winit::event::WindowEvent,
     ) -> bool {
         match event {
-            WindowEvent::RedrawRequested => {
-                compositor.present();
-            }
             WindowEvent::Resized(size) => {
                 let size = Size2D::new(size.width, size.height);
                 return self.resize(size.to_i32(), compositor);

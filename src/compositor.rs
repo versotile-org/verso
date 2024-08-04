@@ -198,9 +198,6 @@ pub struct IOCompositor {
     /// The number of frames pending to receive from WebRender.
     pending_frames: usize,
 
-    /// Waiting for external code to call present.
-    waiting_on_present: bool,
-
     /// The [`Instant`] of the last animation tick, used to avoid flooding the Constellation and
     /// ScriptThread with a deluge of animation ticks.
     last_animation_tick: Instant,
@@ -375,7 +372,6 @@ impl IOCompositor {
             exit_after_load,
             convert_mouse_to_touch,
             pending_frames: 0,
-            waiting_on_present: false,
             last_animation_tick: Instant::now(),
             is_animating: false,
             painting_order: vec![],
@@ -1924,13 +1920,6 @@ impl IOCompositor {
 
     /// Composite to the given target if any, or the current target otherwise.
     fn composite_specific_target(&mut self) -> Result<(), UnableToComposite> {
-        if self.waiting_on_present {
-            debug!("tried to composite while waiting on present");
-            return Err(UnableToComposite::NotReadyToPaintImage(
-                NotReadyToPaint::WaitingOnConstellation,
-            ));
-        }
-
         if let Err(err) = self.rendering_context.make_gl_context_current() {
             warn!("Failed to make GL context current: {:?}", err);
         }
@@ -2027,28 +2016,14 @@ impl IOCompositor {
             }
         }
 
-        // Notify embedder that servo is ready to present.
-        // Embedder should call `present` to tell compositor to continue rendering.
-        self.waiting_on_present = true;
-        let webview_ids = self.painting_order.iter().map(|w| w.webview_id);
-        let msg = ConstellationMsg::ReadyToPresent(webview_ids.collect());
-        if let Err(e) = self.constellation_chan.send(msg) {
-            warn!("Sending event to constellation failed ({:?}).", e);
+        if let Err(err) = self.rendering_context.present() {
+            warn!("Failed to present surface: {:?}", err);
         }
-
         self.composition_request = CompositionRequest::NoCompositingNecessary;
 
         self.process_animations(true);
 
         Ok(())
-    }
-
-    /// Displays the contents of the surface on screen.
-    pub fn present(&mut self) {
-        if let Err(err) = self.rendering_context.present() {
-            warn!("Failed to present surface: {:?}", err);
-        }
-        self.waiting_on_present = false;
     }
 
     fn composite_if_necessary(&mut self, reason: CompositingReason) {
