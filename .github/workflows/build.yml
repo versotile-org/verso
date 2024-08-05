@@ -113,7 +113,7 @@ jobs:
           path: verso-x86_64-unknown-linux-gnu.tar.gz
 
   build-windows:
-    # if: ${{ github.event_name != 'pull_request' }}
+    if: ${{ github.event_name != 'pull_request' }}
     name: Build [Windows]
     runs-on: windows-latest
     env:
@@ -127,6 +127,7 @@ jobs:
         uses: dsherret/rust-toolchain-file@v1
 
       - name: Install Rust toolchain for packager
+        if: ${{ github.event_name == 'schedule' }}
         uses: actions-rust-lang/setup-rust-toolchain@v1
         with:
           toolchain: stable
@@ -148,6 +149,7 @@ jobs:
         uses: Mozilla-Actions/sccache-action@v0.0.4
 
       - name: Install Cargo Packager
+        if: ${{ github.event_name == 'schedule' }}
         run: cargo +stable install cargo-packager
 
       - name: Build
@@ -159,24 +161,24 @@ jobs:
       #     cargo test --release
 
       - name: Bundle
-        # if: ${{ github.event_name == 'schedule' }}
+        if: ${{ github.event_name == 'schedule' }}
         run: |
           cargo packager --release
 
       - name: Fetch Verso version
-        # if: ${{ github.event_name == 'schedule' }}
+        if: ${{ github.event_name == 'schedule' }}
         run: |
           echo "VERSO_VERSION=$(cargo metadata --format-version=1 --no-deps | jq -r '.packages[] | select(.name == "verso") | .version')" >> $Env:GITHUB_ENV
 
       - name: Upload artifact
-        # if: ${{ github.event_name == 'schedule' }}
+        if: ${{ github.event_name == 'schedule' }}
         uses: actions/upload-artifact@v4
         with:
           name: verso_${{ env.VERSO_VERSION }}_x64-setup
           path: target\release\verso_${{ env.VERSO_VERSION }}_x64-setup.exe
 
   build-macos:
-    # if: ${{ github.event_name != 'pull_request' }}
+    if: ${{ github.event_name != 'pull_request' }}
     name: Build [macOS]
     strategy:
       fail-fast: false
@@ -197,6 +199,7 @@ jobs:
         uses: dsherret/rust-toolchain-file@v1
 
       - name: Install Rust toolchain for packager
+        if: ${{ github.event_name == 'schedule' }}
         uses: actions-rust-lang/setup-rust-toolchain@v1
         with:
           toolchain: stable
@@ -219,6 +222,7 @@ jobs:
         uses: Mozilla-Actions/sccache-action@v0.0.4
 
       - name: Install Cargo Packager
+        if: ${{ github.event_name == 'schedule' }}
         run: cargo +stable install cargo-packager
 
       - name: Build
@@ -232,19 +236,19 @@ jobs:
       #     cargo test --release
 
       - name: Bundle
-        # if: ${{ github.event_name == 'schedule' }}
+        if: ${{ github.event_name == 'schedule' }}
         run: |
           export PATH="/Library/Frameworks/GStreamer.framework/Versions/1.0/bin${PATH:+:$PATH}"
           export DYLD_LIBRARY_PATH="/Library/Frameworks/GStreamer.framework/Versions/1.0/lib${DYLD_LIBRARY_PATH:+:$DYLD_LIBRARY_PATH}"
           cargo packager --release
 
       - name: Fetch Verso version
-        # if: ${{ github.event_name == 'schedule' }}
+        if: ${{ github.event_name == 'schedule' }}
         run: |
           echo "VERSO_VERSION=$(cargo metadata --format-version=1 --no-deps | jq -r '.packages[] | select(.name == "verso") | .version')" >> $GITHUB_ENV
 
       - name: Upload artifact
-        # if: ${{ github.event_name == 'schedule' }}
+        if: ${{ github.event_name == 'schedule' }}
         uses: actions/upload-artifact@v4
         with:
           name: verso_${{ env.VERSO_VERSION }}_${{ matrix.platform.arch }}
