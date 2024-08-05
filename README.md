@@ -51,7 +51,7 @@ cargo run
 #### Flatpak
 
 For unified environment setup and package experience, we choose Flatpak to build the project from the start.
-Please follow [Flatpack Setup](https://flatpak.org/setup/) page to install Flakpak based on your distribution.
+Please follow the [Flatpak Setup](https://flatpak.org/setup/) page to install Flakpak based on your distribution.
 
 - Install flatpak runtimes and extensions:
 
@@ -94,9 +94,11 @@ But please understand we don't triage any build issue without flatpak or nix set
 
 Nightly releases built with CrabNebula Cloud can be found at [releases](https://web.crabnebula.cloud/verso/verso-nightly/releases).
 
+> Packages are unsigned currently. If you have problem opening the app on macOS, try `xattr -d com.apple.quarantine /Applications/verso.app` after installation. 
+
 ## Future Work
 
 - Multiwindow support.
 - Enable multiprocess mode.
-- Enable sandobx in all platforms.
-- Enable `Gstreamer` feature and remove `brew install harfbuzz` in README.
+- Enable sandbox in all platforms.
+- Enable `Gstreamer` feature.

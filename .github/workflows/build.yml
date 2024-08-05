@@ -127,6 +127,7 @@ jobs:
         uses: dsherret/rust-toolchain-file@v1
 
       - name: Install Rust toolchain for packager
+        if: ${{ github.event_name == 'schedule' }}
         uses: actions-rust-lang/setup-rust-toolchain@v1
         with:
           toolchain: stable
@@ -148,6 +149,7 @@ jobs:
         uses: Mozilla-Actions/sccache-action@v0.0.4
 
       - name: Install Cargo Packager
+        if: ${{ github.event_name == 'schedule' }}
         run: cargo +stable install cargo-packager
 
       - name: Build
@@ -196,6 +198,12 @@ jobs:
       - name: Install Rust
         uses: dsherret/rust-toolchain-file@v1
 
+      - name: Install Rust toolchain for packager
+        if: ${{ github.event_name == 'schedule' }}
+        uses: actions-rust-lang/setup-rust-toolchain@v1
+        with:
+          toolchain: stable
+
       - name: Install Python
         uses: actions/setup-python@v5
         with:
@@ -203,30 +211,48 @@ jobs:
 
       - name: Install dependencies
         run: |
-          brew install cmake pkg-config
+          brew install cmake
           python -m pip install mako
+          curl https://gstreamer.freedesktop.org/data/pkg/osx/1.24.6/gstreamer-1.0-1.24.6-universal.pkg -o runtime.pkg
+          sudo installer -pkg runtime.pkg -target /
+          curl https://gstreamer.freedesktop.org/data/pkg/osx/1.24.6/gstreamer-1.0-devel-1.24.6-universal.pkg -o develop.pkg
+          sudo installer -pkg develop.pkg -target /
 
       - name: Run sccache-cache
         uses: Mozilla-Actions/sccache-action@v0.0.4
 
+      - name: Install Cargo Packager
+        if: ${{ github.event_name == 'schedule' }}
+        run: cargo +stable install cargo-packager
+
       - name: Build
         run: |
+          export PATH="/Library/Frameworks/GStreamer.framework/Versions/1.0/bin${PATH:+:$PATH}"
+          export DYLD_LIBRARY_PATH="/Library/Frameworks/GStreamer.framework/Versions/1.0/lib${DYLD_LIBRARY_PATH:+:$DYLD_LIBRARY_PATH}"
           cargo build --release
 
       # - name: Test
       #   run: |
       #     cargo test --release
 
-      - name: Tar Binary
+      - name: Bundle
         if: ${{ github.event_name == 'schedule' }}
-        run: tar -czvf verso-${{ matrix.platform.target }}.tar.gz -C ./target/release/ verso
+        run: |
+          export PATH="/Library/Frameworks/GStreamer.framework/Versions/1.0/bin${PATH:+:$PATH}"
+          export DYLD_LIBRARY_PATH="/Library/Frameworks/GStreamer.framework/Versions/1.0/lib${DYLD_LIBRARY_PATH:+:$DYLD_LIBRARY_PATH}"
+          cargo packager --release
+
+      - name: Fetch Verso version
+        if: ${{ github.event_name == 'schedule' }}
+        run: |
+          echo "VERSO_VERSION=$(cargo metadata --format-version=1 --no-deps | jq -r '.packages[] | select(.name == "verso") | .version')" >> $GITHUB_ENV
 
       - name: Upload artifact
         if: ${{ github.event_name == 'schedule' }}
         uses: actions/upload-artifact@v4
         with:
-          name: verso-${{ matrix.platform.target }}
-          path: verso-${{ matrix.platform.target }}.tar.gz
+          name: verso_${{ env.VERSO_VERSION }}_${{ matrix.platform.arch }}
+          path: target/release/verso_${{ env.VERSO_VERSION }}_${{ matrix.platform.arch }}.dmg
 
   build-result:
     name: Build Result

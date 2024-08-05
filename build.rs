@@ -8,4 +8,7 @@ fn main() {
         apple: { any(target_os = "ios", target_os = "macos") },
         linux: { all(unix, not(apple), not(android)) },
     }
+
+    #[cfg(all(feature = "packager", target_os = "macos"))]
+    println!("cargo:rustc-link-arg=-Wl,-rpath,@executable_path/../Resources/lib");
 }
