@@ -7,12 +7,12 @@ use embedder_traits::{Cursor, EmbedderMsg};
 use euclid::{Point2D, Size2D};
 use raw_window_handle::{HasRawDisplayHandle, HasRawWindowHandle};
 use script_traits::{TouchEventType, WheelDelta, WheelMode};
-use surfman::{Connection, SurfaceType};
+use surfman::{Connection, Surface, SurfaceType};
 use webrender_api::{
     units::{
         DeviceIntPoint, DeviceIntRect, DeviceIntSize, DevicePixel, DevicePoint, LayoutVector2D,
     },
-    ScrollLocation,
+    DocumentId, ScrollLocation,
 };
 use webrender_traits::RenderingContext;
 use winit::{
@@ -43,6 +43,11 @@ pub struct Window {
     mouse_position: Cell<PhysicalPosition<f64>>,
     /// Modifiers state of the keyboard.
     modifiers_state: Cell<ModifiersState>,
+    /// Webrender document
+    pub(crate) document: DocumentId,
+    /// The surface of the window which isn't used by Compositor at the moment.
+    /// If this field is None, it means the compositor is currently rendering on this window.
+    pending_surface: Option<Surface>,
 }
 
 impl Window {
@@ -73,6 +78,8 @@ impl Window {
                 webview: None,
                 mouse_position: Cell::new(PhysicalPosition::default()),
                 modifiers_state: Cell::new(ModifiersState::default()),
+                document: DocumentId::INVALID,
+                pending_surface: None,
             },
             rendering_context,
         )

@@ -83,7 +83,7 @@ impl Verso {
         // Initialize configurations and Verso window
         let resource_dir = config.resource_dir.clone();
         config.init();
-        let (window, rendering_context) = Window::new(window);
+        let (mut window, rendering_context) = Window::new(window);
         let event_loop_waker = Box::new(Waker(proxy));
         let opts = opts::get();
 
@@ -105,16 +105,6 @@ impl Verso {
                 gl::GlesFns::load_with(|s| rendering_context.get_proc_address(s))
             },
         };
-        // Make sure the gl context is made current.
-        rendering_context.make_gl_context_current().unwrap();
-        debug_assert_eq!(webrender_gl.get_error(), gl::NO_ERROR,);
-        // Bind the webrender framebuffer
-        let framebuffer_object = rendering_context
-            .context_surface_info()
-            .unwrap_or(None)
-            .map(|info| info.framebuffer_object)
-            .unwrap_or(0);
-        webrender_gl.bind_framebuffer(gl::FRAMEBUFFER, framebuffer_object);
 
         // Create profiler threads
         let time_profiler_sender = profile::time::Profiler::create(
@@ -191,6 +181,7 @@ impl Verso {
         };
         let webrender_api = webrender_api_sender.create_api();
         let webrender_document = webrender_api.add_document(window.size());
+        window.document = webrender_document;
 
         // Initialize js engine if it's single process mode
         let js_engine_setup = if !opts.multiprocess {
@@ -335,6 +326,7 @@ impl Verso {
         // The compositor coordinates with the client window to create the final
         // rendered page and display it somewhere.
         let compositor = IOCompositor::new(
+            window.id(),
             window.size(),
             Scale::new(window.scale_factor() as f32),
             InitialCompositorState {

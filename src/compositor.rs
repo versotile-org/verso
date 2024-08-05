@@ -104,17 +104,26 @@ const MIN_ZOOM: f32 = 0.1;
 /// The compositor will communicate with Serv messages from the Constellation and then
 /// composite to WebRender frames and present the surface to the window.
 pub struct IOCompositor {
+    /// The current window that Compositor is handling.
+    current_window: WindowId,
+
     /// Size of current viewport that Compositor is handling.
     viewport: DeviceIntSize,
+
+    /// The pixel density of the display.
+    scale_factor: Scale<f32, DeviceIndependentPixel, DevicePixel>,
+
+    /// The order to paint webviews in, top most webview should be the last element.
+    painting_order: Vec<WebView>,
+
+    /// The active webrender document.
+    webrender_document: DocumentId,
 
     /// The port on which we receive messages.
     port: CompositorReceiver,
 
     /// Tracks details about each active pipeline that the compositor knows about.
     pipeline_details: HashMap<PipelineId, PipelineDetails>,
-
-    /// The pixel density of the display.
-    scale_factor: Scale<f32, DeviceIndependentPixel, DevicePixel>,
 
     /// "Mobile-style" zoom that does not reflow the page.
     viewport_zoom: PinchZoomFactor,
@@ -161,9 +170,6 @@ pub struct IOCompositor {
     /// The webrender renderer.
     webrender: webrender::Renderer,
 
-    /// The active webrender document.
-    webrender_document: DocumentId,
-
     /// The webrender interface, if enabled.
     webrender_api: RenderApi,
 
@@ -207,9 +213,6 @@ pub struct IOCompositor {
     /// will want to avoid blocking on UI events, and just
     /// run the event loop at the vsync interval.
     pub is_animating: bool,
-
-    /// The order to paint webviews in, top most webview should be the last element.
-    painting_order: Vec<WebView>,
 }
 
 #[derive(Clone, Copy)]
@@ -335,6 +338,7 @@ impl PipelineDetails {
 impl IOCompositor {
     /// Create a new compositor.
     pub fn new(
+        current_window: WindowId,
         viewport: DeviceIntSize,
         scale_factor: Scale<f32, DeviceIndependentPixel, DevicePixel>,
         state: InitialCompositorState,
@@ -342,6 +346,7 @@ impl IOCompositor {
         convert_mouse_to_touch: bool,
     ) -> Self {
         let compositor = IOCompositor {
+            current_window,
             viewport,
             port: state.receiver,
             pipeline_details: HashMap::new(),
@@ -1271,8 +1276,8 @@ impl IOCompositor {
         true
     }
 
-    /// Handle the window resize event and return a boolean to tell embedder if it should further
-    /// handle the resize event.
+    /// Handle the window scale factor event and return a boolean to tell embedder if it should further
+    /// handle the scale factor event.
     pub fn on_scale_factor_event(&mut self, scale_factor: f32) -> bool {
         if self.shutdown_state != ShutdownState::NotShuttingDown {
             return false;
@@ -1748,10 +1753,6 @@ impl IOCompositor {
         }
     }
 
-    fn scale_factor(&self) -> Scale<f32, DeviceIndependentPixel, DevicePixel> {
-        self.scale_factor
-    }
-
     fn device_pixels_per_page_pixel(&self) -> Scale<f32, CSSPixel, DevicePixel> {
         self.device_pixels_per_page_pixel_not_including_page_zoom() * self.pinch_zoom_level()
     }
@@ -1759,7 +1760,7 @@ impl IOCompositor {
     fn device_pixels_per_page_pixel_not_including_page_zoom(
         &self,
     ) -> Scale<f32, CSSPixel, DevicePixel> {
-        self.page_zoom * self.scale_factor()
+        self.page_zoom * self.scale_factor
     }
 
     /// Handle zoom reset event
