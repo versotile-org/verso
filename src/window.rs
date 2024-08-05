@@ -7,19 +7,21 @@ use embedder_traits::{Cursor, EmbedderMsg};
 use euclid::{Point2D, Size2D};
 use raw_window_handle::{HasRawDisplayHandle, HasRawWindowHandle};
 use script_traits::{TouchEventType, WheelDelta, WheelMode};
-use surfman::{Connection, Surface, SurfaceType};
+use surfman::Connection;
+use surfman::SurfaceType;
 use webrender_api::{
     units::{
         DeviceIntPoint, DeviceIntRect, DeviceIntSize, DevicePixel, DevicePoint, LayoutVector2D,
     },
-    DocumentId, ScrollLocation,
+    ScrollLocation,
 };
 use webrender_traits::RenderingContext;
 use winit::{
     dpi::PhysicalPosition,
     event::{ElementState, TouchPhase, WindowEvent},
+    event_loop::EventLoopWindowTarget,
     keyboard::ModifiersState,
-    window::{CursorIcon, Window as WinitWindow, WindowId},
+    window::{CursorIcon, Window as WinitWindow, WindowBuilder, WindowId},
 };
 
 use crate::{
@@ -43,16 +45,21 @@ pub struct Window {
     mouse_position: Cell<PhysicalPosition<f64>>,
     /// Modifiers state of the keyboard.
     modifiers_state: Cell<ModifiersState>,
-    /// Webrender document
-    pub(crate) document: DocumentId,
-    /// The surface of the window which isn't used by Compositor at the moment.
-    /// If this field is None, it means the compositor is currently rendering on this window.
-    pending_surface: Option<Surface>,
 }
 
 impl Window {
     /// Create a Verso window from Winit window and return the rendering context.
-    pub fn new(window: WinitWindow) -> (Self, RenderingContext) {
+    pub fn new(evl: &EventLoopWindowTarget<()>) -> (Self, RenderingContext) {
+        let window = WindowBuilder::new()
+            .build(evl)
+            .expect("Failed to create window.");
+        #[cfg(macos)]
+        unsafe {
+            let rwh = window.raw_window_handle();
+            if let RawWindowHandle::AppKit(AppKitWindowHandle { ns_window, .. }) = rwh {
+                decorate_window(ns_window as *mut Object, LogicalPosition::new(8.0, 40.0));
+            }
+        }
         let window_size = window.inner_size();
         let window_size = Size2D::new(window_size.width as i32, window_size.height as i32);
         let display_handle = window.raw_display_handle();
@@ -78,11 +85,39 @@ impl Window {
                 webview: None,
                 mouse_position: Cell::new(PhysicalPosition::default()),
                 modifiers_state: Cell::new(ModifiersState::default()),
-                document: DocumentId::INVALID,
-                pending_surface: None,
             },
             rendering_context,
         )
+    }
+
+    /// Create a Verso window with the rendering context.
+    pub fn new_with_compositor(
+        evl: &EventLoopWindowTarget<()>,
+        compositor: &mut IOCompositor,
+    ) -> Self {
+        let window = WindowBuilder::new()
+            .build(evl)
+            .expect("Failed to create window.");
+        let window_size = window.inner_size();
+        let window_size = Size2D::new(window_size.width as i32, window_size.height as i32);
+        let native_widget = compositor
+            .rendering_context
+            .connection()
+            .create_native_widget_from_raw_window_handle(window.raw_window_handle(), window_size)
+            .expect("Failed to create native widget");
+        let surface_type = SurfaceType::Widget { native_widget };
+        let surface = compositor
+            .rendering_context
+            .create_surface(surface_type)
+            .ok();
+        compositor.surfaces.insert(window.id(), surface);
+        Self {
+            window,
+            panel: None,
+            webview: None,
+            mouse_position: Cell::new(PhysicalPosition::default()),
+            modifiers_state: Cell::new(ModifiersState::default()),
+        }
     }
 
     /// Handle Winit window event and return a boolean to indicate if the compositor should repaint immediately.
@@ -93,6 +128,11 @@ impl Window {
         event: &winit::event::WindowEvent,
     ) -> bool {
         match event {
+            WindowEvent::Focused(focused) => {
+                if *focused {
+                    compositor.update_current_window(self);
+                }
+            }
             WindowEvent::Resized(size) => {
                 let size = Size2D::new(size.width, size.height);
                 return self.resize(size.to_i32(), compositor);
@@ -101,6 +141,7 @@ impl Window {
                 compositor.on_scale_factor_event(*scale_factor as f32);
             }
             WindowEvent::CursorMoved { position, .. } => {
+                compositor.update_current_window(self);
                 let cursor: DevicePoint = DevicePoint::new(position.x as f32, position.y as f32);
                 self.mouse_position.set(*position);
                 compositor.on_mouse_window_move_event_class(cursor);
@@ -394,4 +435,28 @@ impl Window {
         };
         self.window.set_cursor_icon(winit_cursor);
     }
+}
+
+/* window decoration */
+#[cfg(macos)]
+use cocoa::appkit::{NSWindow, NSWindowStyleMask, NSWindowTitleVisibility};
+#[cfg(macos)]
+use objc::runtime::Object;
+#[cfg(macos)]
+use raw_window_handle::{AppKitWindowHandle, HasRawWindowHandle, RawWindowHandle};
+#[cfg(macos)]
+use winit::dpi::LogicalPosition;
+
+#[cfg(macos)]
+pub unsafe fn decorate_window(window: *mut Object, _position: LogicalPosition<f64>) {
+    NSWindow::setTitlebarAppearsTransparent_(window, cocoa::base::YES);
+    NSWindow::setTitleVisibility_(window, NSWindowTitleVisibility::NSWindowTitleHidden);
+    NSWindow::setStyleMask_(
+        window,
+        NSWindowStyleMask::NSTitledWindowMask
+            | NSWindowStyleMask::NSFullSizeContentViewWindowMask
+            | NSWindowStyleMask::NSClosableWindowMask
+            | NSWindowStyleMask::NSResizableWindowMask
+            | NSWindowStyleMask::NSMiniaturizableWindowMask,
+    );
 }

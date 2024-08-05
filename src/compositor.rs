@@ -24,6 +24,7 @@ use script_traits::{
 };
 use servo_geometry::DeviceIndependentPixel;
 use style_traits::{CSSPixel, DevicePixel, PinchZoomFactor};
+use surfman::Surface;
 use webrender::{RenderApi, Transaction};
 use webrender_api::units::{
     DeviceIntPoint, DeviceIntRect, DeviceIntSize, DevicePoint, LayoutPoint, LayoutRect, LayoutSize,
@@ -104,6 +105,9 @@ const MIN_ZOOM: f32 = 0.1;
 /// The compositor will communicate with Serv messages from the Constellation and then
 /// composite to WebRender frames and present the surface to the window.
 pub struct IOCompositor {
+    /// All surfaces that Compositor currently owns.
+    pub surfaces: HashMap<WindowId, Option<Surface>>,
+
     /// The current window that Compositor is handling.
     current_window: WindowId,
 
@@ -174,7 +178,7 @@ pub struct IOCompositor {
     webrender_api: RenderApi,
 
     /// The surfman instance that webrender targets
-    rendering_context: RenderingContext,
+    pub rendering_context: RenderingContext,
 
     /// The GL bindings for webrender
     webrender_gl: Rc<dyn gl::Gl>,
@@ -345,7 +349,10 @@ impl IOCompositor {
         exit_after_load: bool,
         convert_mouse_to_touch: bool,
     ) -> Self {
+        let mut surfaces = HashMap::new();
+        surfaces.insert(current_window, None);
         let compositor = IOCompositor {
+            surfaces,
             current_window,
             viewport,
             port: state.receiver,
@@ -388,10 +395,14 @@ impl IOCompositor {
     }
 
     /// Consume compositor itself and deinit webrender.
-    pub fn deinit(self) {
-        // TODO: can we do this in drop?
+    pub fn deinit(mut self) {
         if let Err(err) = self.rendering_context.make_gl_context_current() {
             warn!("Failed to make GL context current: {:?}", err);
+        }
+        for surface in self.surfaces.values_mut() {
+            surface
+                .take()
+                .map(|s| self.rendering_context.destroy_surface(s));
         }
         self.webrender.deinit();
     }
@@ -1256,6 +1267,22 @@ impl IOCompositor {
 
     fn remove_pipeline_root_layer(&mut self, pipeline_id: PipelineId) {
         self.pipeline_details.remove(&pipeline_id);
+    }
+
+    /// Change the current window of the compositor should display.
+    pub fn update_current_window(&mut self, window: &mut Window) {
+        if window.id() != self.current_window {
+            if let Some(Some(new_surface)) = self.surfaces.insert(window.id(), None) {
+                self.rendering_context.with_front_buffer(|_, old_surface| {
+                    self.surfaces.insert(self.current_window, Some(old_surface));
+                    new_surface
+                });
+                self.current_window = window.id();
+                self.scale_factor = Scale::new(window.scale_factor() as f32);
+                window.resize(window.size(), self);
+                // TODO: Figure out why second screen may turn black
+            }
+        }
     }
 
     /// Handle the window resize event and return a boolean to tell embedder if it should further

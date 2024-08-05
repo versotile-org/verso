@@ -39,8 +39,8 @@ use webrender_api::*;
 use webrender_traits::*;
 use winit::{
     event::{Event, WindowEvent},
-    event_loop::EventLoopProxy,
-    window::{Window as WinitWindow, WindowId},
+    event_loop::{EventLoopProxy, EventLoopWindowTarget},
+    window::WindowId,
 };
 
 use crate::{
@@ -79,11 +79,11 @@ impl Verso {
     /// - Font cache
     /// - Canvas
     /// - Constellation
-    pub fn new(window: WinitWindow, proxy: EventLoopProxy<()>, config: Config) -> Self {
+    pub fn new(evl: &EventLoopWindowTarget<()>, proxy: EventLoopProxy<()>, config: Config) -> Self {
         // Initialize configurations and Verso window
         let resource_dir = config.resource_dir.clone();
         config.init();
-        let (mut window, rendering_context) = Window::new(window);
+        let (window, rendering_context) = Window::new(evl);
         let event_loop_waker = Box::new(Waker(proxy));
         let opts = opts::get();
 
@@ -151,7 +151,7 @@ impl Verso {
             debug_flags.set(DebugFlags::PROFILER_DBG, opts.debug.webrender_stats);
 
             let render_notifier = Box::new(RenderNotifier::new(compositor_sender.clone()));
-            let clear_color = ColorF::new(0., 0., 0., 0.);
+            let clear_color = ColorF::new(0., 1., 0., 0.);
             create_webrender_instance(
                 webrender_gl.clone(),
                 render_notifier,
@@ -180,8 +180,9 @@ impl Verso {
             .expect("Unable to initialize webrender!")
         };
         let webrender_api = webrender_api_sender.create_api();
-        let webrender_document = webrender_api.add_document(window.size());
-        window.document = webrender_document;
+        let document_id: u64 = window.id().into();
+        let webrender_document =
+            webrender_api.add_document_with_id(window.size(), document_id as u32);
 
         // Initialize js engine if it's single process mode
         let js_engine_setup = if !opts.multiprocess {
@@ -377,7 +378,11 @@ impl Verso {
     ///
     /// - Handle Winit's event, updating Compositor and sending messages to Constellation.
     /// - Handle Servo's messages and updating Compositor again.
-    pub fn run(&mut self, event: Event<()>) {
+    pub fn run(&mut self, event: Event<()>, evl: &EventLoopWindowTarget<()>) {
+        if self.windows.len() == 1 {
+            let window = Window::new_with_compositor(evl, self.compositor.as_mut().unwrap());
+            self.windows.insert(window.id(), window);
+        }
         self.handle_winit_event(event);
         self.handle_servo_messages();
         if self.windows.is_empty() {
@@ -395,7 +400,8 @@ impl Verso {
             Event::WindowEvent { window_id, event } => {
                 if let Some(compositor) = &mut self.compositor {
                     if let WindowEvent::CloseRequested = event {
-                        self.windows.remove(&window_id);
+                        // self.windows.remove(&window_id);
+                        compositor.maybe_start_shutting_down();
                     } else {
                         let mut need_repaint = false;
                         for (id, window) in &mut self.windows {
