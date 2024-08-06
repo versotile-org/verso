@@ -1278,9 +1278,9 @@ impl IOCompositor {
                     new_surface
                 });
                 self.current_window = window.id();
+                // self.webrender_document = window.document_id;
                 self.scale_factor = Scale::new(window.scale_factor() as f32);
                 window.resize(window.size(), self);
-                // TODO: Figure out why second screen may turn black
             }
         }
     }

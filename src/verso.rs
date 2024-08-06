@@ -83,7 +83,7 @@ impl Verso {
         // Initialize configurations and Verso window
         let resource_dir = config.resource_dir.clone();
         config.init();
-        let (window, rendering_context) = Window::new(evl);
+        let (mut window, rendering_context) = Window::new(evl);
         let event_loop_waker = Box::new(Waker(proxy));
         let opts = opts::get();
 
@@ -105,6 +105,17 @@ impl Verso {
                 gl::GlesFns::load_with(|s| rendering_context.get_proc_address(s))
             },
         };
+
+        // Make sure the gl context is made current.
+        rendering_context.make_gl_context_current().unwrap();
+        debug_assert_eq!(webrender_gl.get_error(), gl::NO_ERROR,);
+        // Bind the webrender framebuffer
+        let framebuffer_object = rendering_context
+            .context_surface_info()
+            .unwrap_or(None)
+            .map(|info| info.framebuffer_object)
+            .unwrap_or(0);
+        webrender_gl.bind_framebuffer(gl::FRAMEBUFFER, framebuffer_object);
 
         // Create profiler threads
         let time_profiler_sender = profile::time::Profiler::create(
@@ -180,9 +191,9 @@ impl Verso {
             .expect("Unable to initialize webrender!")
         };
         let webrender_api = webrender_api_sender.create_api();
-        let document_id: u64 = window.id().into();
         let webrender_document =
-            webrender_api.add_document_with_id(window.size(), document_id as u32);
+            webrender_api.add_document_with_id(window.size(), u64::from(window.id()) as u32);
+        window.document_id = webrender_document;
 
         // Initialize js engine if it's single process mode
         let js_engine_setup = if !opts.multiprocess {

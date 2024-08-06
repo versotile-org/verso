@@ -9,6 +9,7 @@ use raw_window_handle::{HasRawDisplayHandle, HasRawWindowHandle};
 use script_traits::{TouchEventType, WheelDelta, WheelMode};
 use surfman::Connection;
 use surfman::SurfaceType;
+use webrender_api::DocumentId;
 use webrender_api::{
     units::{
         DeviceIntPoint, DeviceIntRect, DeviceIntSize, DevicePixel, DevicePoint, LayoutVector2D,
@@ -45,6 +46,7 @@ pub struct Window {
     mouse_position: Cell<PhysicalPosition<f64>>,
     /// Modifiers state of the keyboard.
     modifiers_state: Cell<ModifiersState>,
+    pub(crate) document_id: DocumentId,
 }
 
 impl Window {
@@ -85,6 +87,7 @@ impl Window {
                 webview: None,
                 mouse_position: Cell::new(PhysicalPosition::default()),
                 modifiers_state: Cell::new(ModifiersState::default()),
+                document_id: DocumentId::INVALID,
             },
             rendering_context,
         )
@@ -111,12 +114,18 @@ impl Window {
             .create_surface(surface_type)
             .ok();
         compositor.surfaces.insert(window.id(), surface);
+        // let window_size = window.inner_size();
+        // let window_size = Size2D::new(window_size.width as i32, window_size.height as i32);
+        // let document_id = compositor
+        //     .webrender_api
+        //     .add_document_with_id(window_size, u64::from(window.id()) as u32);
         Self {
             window,
             panel: None,
             webview: None,
             mouse_position: Cell::new(PhysicalPosition::default()),
             modifiers_state: Cell::new(ModifiersState::default()),
+            document_id: DocumentId::INVALID,
         }
     }
 
@@ -352,6 +361,18 @@ impl Window {
                 &compositor.constellation_chan,
                 ConstellationMsg::FocusWebView(webview_id),
             );
+        } else {
+            let size = self.size();
+            let rect = DeviceIntRect::from_size(size);
+            self.panel = Some(WebView::new(webview_id, rect));
+
+            // Ignore the return boolean since the webview will present eventually.
+            self.resize(self.size(), compositor);
+
+            send_to_constellation(
+                &compositor.constellation_chan,
+                ConstellationMsg::FocusWebView(webview_id),
+            );
         }
     }
 
@@ -443,10 +464,11 @@ use cocoa::appkit::{NSWindow, NSWindowStyleMask, NSWindowTitleVisibility};
 #[cfg(macos)]
 use objc::runtime::Object;
 #[cfg(macos)]
-use raw_window_handle::{AppKitWindowHandle, HasRawWindowHandle, RawWindowHandle};
+use raw_window_handle::{AppKitWindowHandle, RawWindowHandle};
 #[cfg(macos)]
 use winit::dpi::LogicalPosition;
 
+/// Window decoration for macOS.
 #[cfg(macos)]
 pub unsafe fn decorate_window(window: *mut Object, _position: LogicalPosition<f64>) {
     NSWindow::setTitlebarAppearsTransparent_(window, cocoa::base::YES);
