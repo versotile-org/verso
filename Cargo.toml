@@ -62,36 +62,35 @@ surfman = { version = "0.9", features = ["chains", "sm-raw-window-handle-05"] }
 thiserror = "1.0"
 winit = { version = "0.29", features = ["rwh_05"] }
 # Servo repo crates
-# libservo = { git = "https://github.com/servo/servo.git", rev = "5e59988", features = ["max_log_level", "native-bluetooth", "webdriver"] }
-base = { git = "https://github.com/servo/servo.git", rev = "5e59988" }
-bluetooth = { git = "https://github.com/servo/servo.git", rev = "5e59988" }
-bluetooth_traits = { git = "https://github.com/servo/servo.git", rev = "5e59988" }
-canvas = { git = "https://github.com/servo/servo.git", rev = "5e59988" }
-compositing_traits = { git = "https://github.com/servo/servo.git", rev = "5e59988" }
-constellation = { git = "https://github.com/servo/servo.git", rev = "5e59988" }
-devtools = { git = "https://github.com/servo/servo.git", rev = "5e59988" }
-embedder_traits = { git = "https://github.com/servo/servo.git", rev = "5e59988" }
-fonts = { git = "https://github.com/servo/servo.git", rev = "5e59988" }
-layout_thread_2020 = { git = "https://github.com/servo/servo.git", rev = "5e59988" }
-media = { git = "https://github.com/servo/servo.git", rev = "5e59988" }
-net = { git = "https://github.com/servo/servo.git", rev = "5e59988" }
-profile = { git = "https://github.com/servo/servo.git", rev = "5e59988" }
-profile_traits = { git = "https://github.com/servo/servo.git", rev = "5e59988" }
-script = { git = "https://github.com/servo/servo.git", rev = "5e59988" }
-script_traits = { git = "https://github.com/servo/servo.git", rev = "5e59988" }
-servo_config = { git = "https://github.com/servo/servo.git", rev = "5e59988" }
-servo_geometry = { git = "https://github.com/servo/servo.git", rev = "5e59988" }
-servo_url = { git = "https://github.com/servo/servo.git", rev = "5e59988" }
-webdriver_server = { git = "https://github.com/servo/servo.git", rev = "5e59988" }
-webrender_traits = { git = "https://github.com/servo/servo.git", rev = "5e59988" }
-webgpu = { git = "https://github.com/servo/servo.git", rev = "5e59988" }
+base = { git = "https://github.com/servo/servo.git", rev = "28430ba" }
+bluetooth = { git = "https://github.com/servo/servo.git", rev = "28430ba" }
+bluetooth_traits = { git = "https://github.com/servo/servo.git", rev = "28430ba" }
+canvas = { git = "https://github.com/servo/servo.git", rev = "28430ba" }
+compositing_traits = { git = "https://github.com/servo/servo.git", rev = "28430ba" }
+constellation = { git = "https://github.com/servo/servo.git", rev = "28430ba" }
+devtools = { git = "https://github.com/servo/servo.git", rev = "28430ba" }
+embedder_traits = { git = "https://github.com/servo/servo.git", rev = "28430ba" }
+fonts = { git = "https://github.com/servo/servo.git", rev = "28430ba" }
+layout_thread_2020 = { git = "https://github.com/servo/servo.git", rev = "28430ba" }
+media = { git = "https://github.com/servo/servo.git", rev = "28430ba" }
+net = { git = "https://github.com/servo/servo.git", rev = "28430ba" }
+profile = { git = "https://github.com/servo/servo.git", rev = "28430ba" }
+profile_traits = { git = "https://github.com/servo/servo.git", rev = "28430ba" }
+script = { git = "https://github.com/servo/servo.git", rev = "28430ba" }
+script_traits = { git = "https://github.com/servo/servo.git", rev = "28430ba" }
+servo_config = { git = "https://github.com/servo/servo.git", rev = "28430ba" }
+servo_geometry = { git = "https://github.com/servo/servo.git", rev = "28430ba" }
+servo_url = { git = "https://github.com/servo/servo.git", rev = "28430ba" }
+webdriver_server = { git = "https://github.com/servo/servo.git", rev = "28430ba" }
+webrender_traits = { git = "https://github.com/servo/servo.git", rev = "28430ba" }
+webgpu = { git = "https://github.com/servo/servo.git", rev = "28430ba" }
 # Servo org crates
 servo-media = { git = "https://github.com/servo/media" }
 servo-media-dummy = { git = "https://github.com/servo/media" }
 style = { git = "https://github.com/servo/stylo", branch = "2024-07-16", features = ["servo"] }
 style_traits = { git = "https://github.com/servo/stylo", branch = "2024-07-16", features = ["servo"] }
-webrender = { git = "https://github.com/servo/webrender", branch = "0.64", features = ["capture"] }
-webrender_api = { git = "https://github.com/servo/webrender", branch = "0.64" }
+webrender = { git = "https://github.com/servo/webrender", branch = "0.65", features = ["capture"] }
+webrender_api = { git = "https://github.com/servo/webrender", branch = "0.65" }
 webxr = { git = "https://github.com/servo/webxr", features = ["headless"] }
 # Packager feature
 cargo-packager-resource-resolver = { version = "0.1.1", features = [
