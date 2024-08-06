@@ -1,10 +1,12 @@
 use std::{
     borrow::Cow,
     collections::HashMap,
+    path::PathBuf,
     sync::{atomic::Ordering, Arc},
 };
 
 use arboard::Clipboard;
+use base::id::WebViewId;
 use bluetooth::BluetoothThreadFactory;
 use bluetooth_traits::BluetoothRequest;
 use canvas::{
@@ -33,6 +35,7 @@ use servo_config::{opts, pref};
 use servo_url::ServoUrl;
 use style;
 use surfman::GLApi;
+use units::DeviceIntRect;
 use webgpu;
 use webrender::{create_webrender_instance, ShaderPrecacheFlags, WebRenderOptions};
 use webrender_api::*;
@@ -46,6 +49,7 @@ use winit::{
 use crate::{
     compositor::{IOCompositor, InitialCompositorState, ShutdownState},
     config::Config,
+    webview::WebView,
     window::Window,
 };
 
@@ -61,6 +65,7 @@ pub struct Verso {
     _js_engine_setup: Option<JSEngineSetup>,
     /// FIXME: It's None on wayland in Flatpak. Find a way to support this.
     clipboard: Option<Clipboard>,
+    resource_dir: PathBuf,
 }
 
 impl Verso {
@@ -359,7 +364,7 @@ impl Verso {
         );
 
         // Send the constellation message to start Panel UI
-        // NB: Should become a window method
+        // TODO: Should become a window method
         let panel_id = window.panel.as_ref().unwrap().webview_id;
         let path = resource_dir.join("panel.html");
         let url = ServoUrl::from_file_path(path.to_str().unwrap()).unwrap();
@@ -379,6 +384,7 @@ impl Verso {
             embedder_receiver,
             _js_engine_setup: js_engine_setup,
             clipboard: Clipboard::new().ok(),
+            resource_dir,
         };
 
         verso.setup_logging();
@@ -390,12 +396,8 @@ impl Verso {
     /// - Handle Winit's event, updating Compositor and sending messages to Constellation.
     /// - Handle Servo's messages and updating Compositor again.
     pub fn run(&mut self, event: Event<()>, evl: &EventLoopWindowTarget<()>) {
-        if self.windows.len() == 1 {
-            let window = Window::new_with_compositor(evl, self.compositor.as_mut().unwrap());
-            self.windows.insert(window.id(), window);
-        }
         self.handle_winit_event(event);
-        self.handle_servo_messages();
+        self.handle_servo_messages(evl);
         if self.windows.is_empty() {
             self.compositor
                 .as_mut()
@@ -436,7 +438,7 @@ impl Verso {
     }
 
     /// Handle message came from Servo.
-    fn handle_servo_messages(&mut self) {
+    fn handle_servo_messages(&mut self, evl: &EventLoopWindowTarget<()>) {
         let mut shutdown = false;
         if let Some(compositor) = &mut self.compositor {
             // Handle Compositor's messages first
@@ -453,12 +455,27 @@ impl Verso {
                             if let Some(id) = webview_id {
                                 for window in self.windows.values_mut() {
                                     if window.has_webview(id) {
-                                        window.handle_servo_message(
+                                        if window.handle_servo_message(
                                             id,
                                             msg,
                                             &self.constellation_sender,
                                             self.clipboard.as_mut(),
-                                        );
+                                        ) {
+                                            let mut window =
+                                                Window::new_with_compositor(evl, compositor);
+                                            let panel_id = WebViewId::new();
+                                            let path = self.resource_dir.join("panel.html");
+                                            let url =
+                                                ServoUrl::from_file_path(path.to_str().unwrap())
+                                                    .unwrap();
+                                            send_to_constellation(
+                                                &self.constellation_sender,
+                                                ConstellationMsg::NewWebView(url, panel_id),
+                                            );
+                                            let rect = DeviceIntRect::from_size(window.size());
+                                            window.panel = Some(WebView::new(panel_id, rect));
+                                            self.windows.insert(window.id(), window);
+                                        }
                                         break;
                                     }
                                 }
@@ -467,11 +484,12 @@ impl Verso {
                                 log::trace!("Verso Window is handling Embedder message: {msg:?}");
                                 match msg {
                                     EmbedderMsg::SetCursor(cursor) => {
-                                        // TODO: Should set to the right window
-                                        self.windows
-                                            .values()
-                                            .last()
-                                            .map(|w| w.set_cursor_icon(cursor));
+                                        // TODO: This should move to compositor
+                                        if let Some(window) =
+                                            self.windows.get(&compositor.current_window)
+                                        {
+                                            window.set_cursor_icon(cursor);
+                                        }
                                     }
                                     EmbedderMsg::Shutdown | EmbedderMsg::ReadyToPresent(_) => {}
                                     e => {

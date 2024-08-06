@@ -246,14 +246,14 @@ impl Window {
         false
     }
 
-    /// Handle servo messages.
+    /// Handle servo messages. Return true if it requests a new window
     pub fn handle_servo_message(
         &mut self,
         webview_id: WebViewId,
         message: EmbedderMsg,
         sender: &Sender<ConstellationMsg>,
         clipboard: Option<&mut Clipboard>,
-    ) {
+    ) -> bool {
         // // Handle message in Verso Panel
         if self
             .panel
@@ -261,11 +261,12 @@ impl Window {
             .filter(|p| p.webview_id == webview_id)
             .is_some()
         {
-            self.handle_servo_messages_with_panel(webview_id, message, sender, clipboard);
+            self.handle_servo_messages_with_panel(webview_id, message, sender, clipboard)
         }
         // Handle message in Verso WebView
         else {
             self.handle_servo_messages_with_webview(webview_id, message, sender, clipboard);
+            false
         }
     }
 
@@ -331,13 +332,13 @@ impl Window {
 
     /// Set the webview to this window. It won't be updated if the existing webview and pipeline ID
     /// are the same. This will also set the painting order of the compositor and tell
-    /// constellation to focus the webview.
+    /// constellation to focus the webview. Return true if the webview is set to this window.
     pub fn set_webview(
         &mut self,
         webview_id: WebViewId,
         pipeline_id: PipelineId,
         compositor: &mut IOCompositor,
-    ) {
+    ) -> bool {
         if let Some(panel) = &mut self.panel {
             if panel.webview_id == webview_id {
                 if panel.pipeline_id != Some(pipeline_id) {
@@ -348,10 +349,7 @@ impl Window {
                     webview.pipeline_id = Some(pipeline_id);
                 }
             } else {
-                let size = self.size();
-                let mut rect = DeviceIntRect::from_size(size);
-                rect.min.y = rect.max.y.min(76);
-                self.webview = Some(WebView::new(webview_id, rect));
+                return false;
             }
 
             // Ignore the return boolean since the webview will present eventually.
@@ -361,19 +359,9 @@ impl Window {
                 &compositor.constellation_chan,
                 ConstellationMsg::FocusWebView(webview_id),
             );
-        } else {
-            let size = self.size();
-            let rect = DeviceIntRect::from_size(size);
-            self.panel = Some(WebView::new(webview_id, rect));
-
-            // Ignore the return boolean since the webview will present eventually.
-            self.resize(self.size(), compositor);
-
-            send_to_constellation(
-                &compositor.constellation_chan,
-                ConstellationMsg::FocusWebView(webview_id),
-            );
+            return true;
         }
+        false
     }
 
     /// Remove the webview in this window by provided webview ID. If this is the panel, it will

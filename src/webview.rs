@@ -119,14 +119,14 @@ impl Window {
         }
     }
 
-    /// Handle servo messages with main panel.
+    /// Handle servo messages with main panel. Return true it requests a new window.
     pub fn handle_servo_messages_with_panel(
         &mut self,
         panel_id: WebViewId,
         message: EmbedderMsg,
         sender: &Sender<ConstellationMsg>,
         clipboard: Option<&mut Clipboard>,
-    ) {
+    ) -> bool {
         log::trace!("Verso Panel {panel_id:?} is handling Embedder message: {message:?}",);
         match message {
             EmbedderMsg::LoadStart
@@ -142,6 +142,10 @@ impl Window {
                 // let demo_url = ServoUrl::parse("https://demo.versotile.org").unwrap();
                 let demo_url = ServoUrl::parse("https://keyboard-test.space").unwrap();
                 let demo_id = WebViewId::new();
+                let size = self.size();
+                let mut rect = DeviceIntRect::from_size(size);
+                rect.min.y = rect.max.y.min(76);
+                self.webview = Some(WebView::new(demo_id, rect));
                 send_to_constellation(sender, ConstellationMsg::NewWebView(demo_url, demo_id));
             }
             EmbedderMsg::AllowNavigationRequest(id, _url) => {
@@ -154,6 +158,7 @@ impl Window {
             EmbedderMsg::Prompt(definition, _origin) => {
                 match definition {
                     PromptDefinition::Input(msg, _, prompt_sender) => {
+                        let _ = prompt_sender.send(None);
                         if let Some(webview) = &self.webview {
                             let id = webview.webview_id;
 
@@ -185,7 +190,8 @@ impl Window {
                                         // TODO Set EmbedderMsg::Status to None
                                     }
                                     "REFRESH" => {
-                                        send_to_constellation(sender, ConstellationMsg::Reload(id));
+                                        // send_to_constellation(sender, ConstellationMsg::Reload(id));
+                                        return true;
                                     }
                                     "MINIMIZE" => {
                                         self.window.set_minimized(true);
@@ -200,7 +206,6 @@ impl Window {
                                 }
                             }
                         }
-                        let _ = prompt_sender.send(None);
                     }
                     _ => log::warn!("Verso Panel isn't supporting this prompt yet"),
                 }
@@ -229,5 +234,6 @@ impl Window {
                 log::warn!("Verso Panel isn't supporting this message yet: {e:?}")
             }
         }
+        false
     }
 }

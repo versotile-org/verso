@@ -109,7 +109,7 @@ pub struct IOCompositor {
     pub surfaces: HashMap<WindowId, Option<Surface>>,
 
     /// The current window that Compositor is handling.
-    current_window: WindowId,
+    pub current_window: WindowId,
 
     /// Size of current viewport that Compositor is handling.
     viewport: DeviceIntSize,
@@ -1131,12 +1131,13 @@ impl IOCompositor {
         debug!("{}: Setting frame tree for webview", frame_tree.pipeline.id);
 
         for window in windows.values_mut() {
-            // TODO: should only set to one window
-            window.set_webview(
+            if window.set_webview(
                 frame_tree.pipeline.top_level_browsing_context_id,
                 frame_tree.pipeline.id,
                 self,
-            );
+            ) {
+                break;
+            }
         }
 
         self.send_root_pipeline_display_list();
