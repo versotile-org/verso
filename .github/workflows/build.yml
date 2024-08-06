@@ -290,13 +290,13 @@ jobs:
       - name: Upload macOS binary (ARM)
         uses: crabnebula-dev/cloud-release@v0.1.0
         with:
-          command: release upload --file "verso-aarch64-apple-darwin/verso-aarch64-apple-darwin.tar.gz" ${{ env.CN_APP_SLUG }} $VERSO_RELEASE_NAME
+          command: release upload --file "verso_${{ env.VERSO_VERSION }}_aarch64/verso_${{ env.VERSO_VERSION }}_aarch64.dmg" ${{ env.CN_APP_SLUG }} $VERSO_RELEASE_NAME
           api-key: ${{ secrets.CN_API_KEY }}
 
       - name: Upload macOS binary (Intel)
         uses: crabnebula-dev/cloud-release@v0.1.0
         with:
-          command: release upload --file "verso-x86_64-apple-darwin/verso-x86_64-apple-darwin.tar.gz" ${{ env.CN_APP_SLUG }} $VERSO_RELEASE_NAME
+          command: release upload --file "verso_${{ env.VERSO_VERSION }}_x64/verso_${{ env.VERSO_VERSION }}_x64.dmg" ${{ env.CN_APP_SLUG }} $VERSO_RELEASE_NAME
           api-key: ${{ secrets.CN_API_KEY }}
 
       - name: Upload Windows binary
