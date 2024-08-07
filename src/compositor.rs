@@ -1171,8 +1171,7 @@ impl IOCompositor {
             let (webview, close_window) =
                 window.remove_webview(top_level_browsing_context_id, self);
             if let Some(webview) = webview {
-                self.set_painting_order(window.painting_order());
-                self.send_root_pipeline_display_list();
+                self.set_painting_order(window);
                 if let Some(pipeline_id) = self.webviews.remove(&webview.webview_id) {
                     self.remove_pipeline_details_recursively(pipeline_id);
                 }
@@ -1198,7 +1197,6 @@ impl IOCompositor {
         rect: DeviceIntRect,
     ) {
         self.send_window_size_message_for_top_level_browser_context(rect, webview_id);
-        self.send_root_pipeline_display_list();
     }
 
     fn send_window_size_message_for_top_level_browser_context(
@@ -1300,8 +1298,7 @@ impl IOCompositor {
                 self.scale_factor = Scale::new(window.scale_factor() as f32);
                 self.painting_order.clear();
                 self.viewport = window.size();
-                self.set_painting_order(window.painting_order());
-                self.send_root_pipeline_display_list();
+                self.set_painting_order(window);
             }
         }
     }
@@ -1319,7 +1316,6 @@ impl IOCompositor {
         transaction.set_document_view(DeviceIntRect::from_size(self.viewport));
         self.webrender_api
             .send_transaction(self.webrender_document, transaction);
-        self.update_after_zoom_or_hidpi_change();
         self.composite_if_necessary(CompositingReason::Resize);
         true
     }
@@ -2214,8 +2210,17 @@ impl IOCompositor {
     }
 
     /// Update the painting order of the compositor.
-    pub fn set_painting_order(&mut self, painting_order: Vec<WebView>) {
-        self.painting_order = painting_order;
+    pub fn set_painting_order(&mut self, window: &Window) {
+        if self.current_window == window.id() {
+            let painting_order = window.painting_order();
+            self.painting_order = painting_order;
+            self.send_root_pipeline_display_list();
+        } else {
+            warn!(
+                "Failed to set painting order due to {:?} is not the current window",
+                window.id()
+            );
+        }
     }
 }
 

@@ -51,8 +51,8 @@ impl Window {
     /// Create a Verso window from Winit window and return the rendering context.
     pub fn new(evl: &EventLoopWindowTarget<()>) -> (Self, RenderingContext) {
         let window = WindowBuilder::new()
-            .with_transparent(true)
-            .with_decorations(false)
+            // .with_transparent(true)
+            // .with_decorations(false)
             .build(evl)
             .expect("Failed to create window.");
         #[cfg(macos)]
@@ -98,8 +98,8 @@ impl Window {
         compositor: &mut IOCompositor,
     ) -> Self {
         let window = WindowBuilder::new()
-            .with_transparent(true)
-            .with_decorations(false)
+            // .with_transparent(true)
+            // .with_decorations(false)
             .build(evl)
             .expect("Failed to create window.");
         #[cfg(macos)]
@@ -299,7 +299,7 @@ impl Window {
             compositor.on_resize_webview_event(w.webview_id, rect);
         }
 
-        compositor.set_painting_order(self.painting_order());
+        compositor.set_painting_order(self);
 
         need_resize
     }
