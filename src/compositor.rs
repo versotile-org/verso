@@ -45,6 +45,7 @@ use webrender_traits::{
 use winit::window::WindowId;
 
 use crate::touch::{TouchAction, TouchHandler};
+use crate::verso::send_to_constellation;
 use crate::webview::WebView;
 use crate::window::Window;
 
@@ -126,6 +127,9 @@ pub struct IOCompositor {
     /// The port on which we receive messages.
     port: CompositorReceiver,
 
+    /// Tracks each webview and its current pipeline
+    webviews: HashMap<TopLevelBrowsingContextId, PipelineId>,
+
     /// Tracks details about each active pipeline that the compositor knows about.
     pipeline_details: HashMap<PipelineId, PipelineDetails>,
 
@@ -175,7 +179,7 @@ pub struct IOCompositor {
     webrender: webrender::Renderer,
 
     /// The webrender interface, if enabled.
-    webrender_api: RenderApi,
+    pub webrender_api: RenderApi,
 
     /// The surfman instance that webrender targets
     pub rendering_context: RenderingContext,
@@ -356,6 +360,7 @@ impl IOCompositor {
             current_window,
             viewport,
             port: state.receiver,
+            webviews: HashMap::new(),
             pipeline_details: HashMap::new(),
             scale_factor,
             composition_request: CompositionRequest::NoCompositingNecessary,
@@ -1044,7 +1049,7 @@ impl IOCompositor {
         // Every display list needs a pipeline, but we'd like to choose one that is unlikely
         // to conflict with our content pipelines, which start at (1, 1). (0, 0) is WebRender's
         // dummy pipeline, so we choose (0, 1).
-        let root_pipeline = WebRenderPipelineId(0, 1);
+        let root_pipeline = WebRenderPipelineId(u64::from(self.current_window) as u32, 1);
         transaction.set_root_pipeline(root_pipeline);
 
         let mut builder = webrender::api::DisplayListBuilder::new(root_pipeline);
@@ -1072,7 +1077,7 @@ impl IOCompositor {
         let root_clip_id = builder.define_clip_rect(zoom_reference_frame, scaled_viewport_rect);
         let clip_chain_id = builder.define_clip_chain(None, [root_clip_id]);
         for webview in &self.painting_order {
-            if let Some(pipeline_id) = webview.pipeline_id {
+            if let Some(pipeline_id) = self.webviews.get(&webview.webview_id) {
                 let scaled_webview_rect = webview.rect.to_f32() / zoom_factor;
                 builder.push_iframe(
                     LayoutRect::from_untyped(&scaled_webview_rect.to_untyped()),
@@ -1130,16 +1135,24 @@ impl IOCompositor {
     ) {
         debug!("{}: Setting frame tree for webview", frame_tree.pipeline.id);
 
+        let pipeline_id = frame_tree.pipeline.id;
+        let webview_id = frame_tree.pipeline.top_level_browsing_context_id;
+        if let Some(old_pipeline) = self.webviews.insert(webview_id, pipeline_id) {
+            debug!("{webview_id}'s pipeline has changed from {old_pipeline} to {pipeline_id}");
+        }
+
+        // Resize window and focus webview if the window has this webview
         for window in windows.values_mut() {
-            if window.set_webview(
-                frame_tree.pipeline.top_level_browsing_context_id,
-                frame_tree.pipeline.id,
-                self,
-            ) {
+            if window.has_webview(webview_id) {
+                window.resize(window.size(), self);
+
+                send_to_constellation(
+                    &self.constellation_chan,
+                    ConstellationMsg::FocusWebView(webview_id),
+                );
                 break;
             }
         }
-
         self.send_root_pipeline_display_list();
         self.create_or_update_pipeline_details_with_frame_tree(frame_tree, None);
         self.reset_scroll_tree_for_unattached_pipelines(frame_tree);
@@ -1160,7 +1173,7 @@ impl IOCompositor {
             if let Some(webview) = webview {
                 self.set_painting_order(window.painting_order());
                 self.send_root_pipeline_display_list();
-                if let Some(pipeline_id) = webview.pipeline_id {
+                if let Some(pipeline_id) = self.webviews.remove(&webview.webview_id) {
                     self.remove_pipeline_details_recursively(pipeline_id);
                 }
 
@@ -1279,9 +1292,10 @@ impl IOCompositor {
                     new_surface
                 });
                 self.current_window = window.id();
-                // self.webrender_document = window.document_id;
                 self.scale_factor = Scale::new(window.scale_factor() as f32);
+                self.painting_order.clear();
                 window.resize(window.size(), self);
+                self.send_root_pipeline_display_list();
             }
         }
     }
@@ -1994,7 +2008,7 @@ impl IOCompositor {
                 // TODO(gw): Take notice of any errors the renderer returns!
                 self.webrender
                     // TODO to untyped?
-                    .render(self.viewport, 0 /* buffer_age */)
+                    .render(self.viewport, 0)
                     .ok();
             },
         );

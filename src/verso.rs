@@ -88,7 +88,7 @@ impl Verso {
         // Initialize configurations and Verso window
         let resource_dir = config.resource_dir.clone();
         config.init();
-        let (mut window, rendering_context) = Window::new(evl);
+        let (window, rendering_context) = Window::new(evl);
         let event_loop_waker = Box::new(Waker(proxy));
         let opts = opts::get();
 
@@ -198,7 +198,6 @@ impl Verso {
         let webrender_api = webrender_api_sender.create_api();
         let webrender_document =
             webrender_api.add_document_with_id(window.size(), u64::from(window.id()) as u32);
-        window.document_id = webrender_document;
 
         // Initialize js engine if it's single process mode
         let js_engine_setup = if !opts.multiprocess {

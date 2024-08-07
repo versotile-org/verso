@@ -1,5 +1,5 @@
 use arboard::Clipboard;
-use base::id::{PipelineId, PipelineNamespace, PipelineNamespaceId, WebViewId};
+use base::id::{PipelineNamespace, PipelineNamespaceId, WebViewId};
 use compositing_traits::ConstellationMsg;
 use crossbeam_channel::Sender;
 use embedder_traits::{CompositorEventVariant, EmbedderMsg, PromptDefinition};
@@ -14,8 +14,6 @@ use crate::{verso::send_to_constellation, window::Window};
 pub struct WebView {
     /// Webview ID
     pub webview_id: WebViewId,
-    /// Pipeline ID for webrender usage.
-    pub pipeline_id: Option<PipelineId>,
     /// The position and size of the webview.
     pub rect: DeviceIntRect,
 }
@@ -23,11 +21,7 @@ pub struct WebView {
 impl WebView {
     /// Create a web view from Winit window.
     pub fn new(webview_id: WebViewId, rect: DeviceIntRect) -> Self {
-        Self {
-            webview_id,
-            pipeline_id: None,
-            rect,
-        }
+        Self { webview_id, rect }
     }
 
     /// Create a panel view from Winit window. A panel is a special web view that focus on controlling states around window.
@@ -47,7 +41,6 @@ impl WebView {
         let id = WebViewId::new();
         Self {
             webview_id: id,
-            pipeline_id: None,
             rect,
         }
     }
@@ -139,8 +132,8 @@ impl Window {
             }
             EmbedderMsg::LoadComplete => {
                 self.window.request_redraw();
-                // let demo_url = ServoUrl::parse("https://demo.versotile.org").unwrap();
-                let demo_url = ServoUrl::parse("https://keyboard-test.space").unwrap();
+                let demo_url = ServoUrl::parse("https://servo.org").unwrap();
+                // let demo_url = ServoUrl::parse("https://keyboard-test.space").unwrap();
                 let demo_id = WebViewId::new();
                 let size = self.size();
                 let mut rect = DeviceIntRect::from_size(size);

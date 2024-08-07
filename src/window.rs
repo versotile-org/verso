@@ -1,6 +1,6 @@
 use std::cell::Cell;
 
-use base::id::{PipelineId, WebViewId};
+use base::id::WebViewId;
 use compositing_traits::ConstellationMsg;
 use crossbeam_channel::Sender;
 use embedder_traits::{Cursor, EmbedderMsg};
@@ -9,7 +9,6 @@ use raw_window_handle::{HasRawDisplayHandle, HasRawWindowHandle};
 use script_traits::{TouchEventType, WheelDelta, WheelMode};
 use surfman::Connection;
 use surfman::SurfaceType;
-use webrender_api::DocumentId;
 use webrender_api::{
     units::{
         DeviceIntPoint, DeviceIntRect, DeviceIntSize, DevicePixel, DevicePoint, LayoutVector2D,
@@ -46,7 +45,6 @@ pub struct Window {
     mouse_position: Cell<PhysicalPosition<f64>>,
     /// Modifiers state of the keyboard.
     modifiers_state: Cell<ModifiersState>,
-    pub(crate) document_id: DocumentId,
 }
 
 impl Window {
@@ -87,7 +85,6 @@ impl Window {
                 webview: None,
                 mouse_position: Cell::new(PhysicalPosition::default()),
                 modifiers_state: Cell::new(ModifiersState::default()),
-                document_id: DocumentId::INVALID,
             },
             rendering_context,
         )
@@ -114,18 +111,12 @@ impl Window {
             .create_surface(surface_type)
             .ok();
         compositor.surfaces.insert(window.id(), surface);
-        // let window_size = window.inner_size();
-        // let window_size = Size2D::new(window_size.width as i32, window_size.height as i32);
-        // let document_id = compositor
-        //     .webrender_api
-        //     .add_document_with_id(window_size, u64::from(window.id()) as u32);
         Self {
             window,
             panel: None,
             webview: None,
             mouse_position: Cell::new(PhysicalPosition::default()),
             modifiers_state: Cell::new(ModifiersState::default()),
-            document_id: DocumentId::INVALID,
         }
     }
 
@@ -328,40 +319,6 @@ impl Window {
                 .filter(|w| w.webview_id == id)
                 .is_some()
         }
-    }
-
-    /// Set the webview to this window. It won't be updated if the existing webview and pipeline ID
-    /// are the same. This will also set the painting order of the compositor and tell
-    /// constellation to focus the webview. Return true if the webview is set to this window.
-    pub fn set_webview(
-        &mut self,
-        webview_id: WebViewId,
-        pipeline_id: PipelineId,
-        compositor: &mut IOCompositor,
-    ) -> bool {
-        if let Some(panel) = &mut self.panel {
-            if panel.webview_id == webview_id {
-                if panel.pipeline_id != Some(pipeline_id) {
-                    panel.pipeline_id = Some(pipeline_id);
-                }
-            } else if let Some(webview) = &mut self.webview {
-                if webview.webview_id == webview_id && webview.pipeline_id != Some(pipeline_id) {
-                    webview.pipeline_id = Some(pipeline_id);
-                }
-            } else {
-                return false;
-            }
-
-            // Ignore the return boolean since the webview will present eventually.
-            self.resize(self.size(), compositor);
-
-            send_to_constellation(
-                &compositor.constellation_chan,
-                ConstellationMsg::FocusWebView(webview_id),
-            );
-            return true;
-        }
-        false
     }
 
     /// Remove the webview in this window by provided webview ID. If this is the panel, it will
