@@ -132,7 +132,7 @@ impl Window {
             }
             EmbedderMsg::LoadComplete => {
                 self.window.request_redraw();
-                let demo_url = ServoUrl::parse("https://servo.org").unwrap();
+                let demo_url = ServoUrl::parse("https://wusyong.github.io/").unwrap();
                 // let demo_url = ServoUrl::parse("https://keyboard-test.space").unwrap();
                 let demo_id = WebViewId::new();
                 let size = self.size();

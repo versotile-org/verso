@@ -1284,9 +1284,14 @@ impl IOCompositor {
     }
 
     /// Change the current window of the compositor should display.
-    pub fn update_current_window(&mut self, window: &mut Window) {
+    pub fn swap_current_window(&mut self, window: &mut Window) {
         if window.id() != self.current_window {
             if let Some(Some(new_surface)) = self.surfaces.insert(window.id(), None) {
+                // Present current surface first
+                if let Err(err) = self.rendering_context.present() {
+                    warn!("Failed to present surface: {:?}", err);
+                }
+                // Swap the surface
                 self.rendering_context.with_front_buffer(|_, old_surface| {
                     self.surfaces.insert(self.current_window, Some(old_surface));
                     new_surface
@@ -1294,7 +1299,8 @@ impl IOCompositor {
                 self.current_window = window.id();
                 self.scale_factor = Scale::new(window.scale_factor() as f32);
                 self.painting_order.clear();
-                window.resize(window.size(), self);
+                self.viewport = window.size();
+                self.set_painting_order(window.painting_order());
                 self.send_root_pipeline_display_list();
             }
         }

@@ -51,6 +51,8 @@ impl Window {
     /// Create a Verso window from Winit window and return the rendering context.
     pub fn new(evl: &EventLoopWindowTarget<()>) -> (Self, RenderingContext) {
         let window = WindowBuilder::new()
+            .with_transparent(true)
+            .with_decorations(false)
             .build(evl)
             .expect("Failed to create window.");
         #[cfg(macos)]
@@ -96,8 +98,17 @@ impl Window {
         compositor: &mut IOCompositor,
     ) -> Self {
         let window = WindowBuilder::new()
+            .with_transparent(true)
+            .with_decorations(false)
             .build(evl)
             .expect("Failed to create window.");
+        #[cfg(macos)]
+        unsafe {
+            let rwh = window.raw_window_handle();
+            if let RawWindowHandle::AppKit(AppKitWindowHandle { ns_window, .. }) = rwh {
+                decorate_window(ns_window as *mut Object, LogicalPosition::new(8.0, 40.0));
+            }
+        }
         let window_size = window.inner_size();
         let window_size = Size2D::new(window_size.width as i32, window_size.height as i32);
         let native_widget = compositor
@@ -130,7 +141,7 @@ impl Window {
         match event {
             WindowEvent::Focused(focused) => {
                 if *focused {
-                    compositor.update_current_window(self);
+                    compositor.swap_current_window(self);
                 }
             }
             WindowEvent::Resized(size) => {
@@ -141,7 +152,7 @@ impl Window {
                 compositor.on_scale_factor_event(*scale_factor as f32);
             }
             WindowEvent::CursorMoved { position, .. } => {
-                compositor.update_current_window(self);
+                compositor.swap_current_window(self);
                 let cursor: DevicePoint = DevicePoint::new(position.x as f32, position.y as f32);
                 self.mouse_position.set(*position);
                 compositor.on_mouse_window_move_event_class(cursor);
