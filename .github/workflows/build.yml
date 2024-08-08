@@ -69,10 +69,24 @@ jobs:
       - name: Install Rust
         uses: dsherret/rust-toolchain-file@v1
 
+      - name: Install flatpak dependencies
+        if: ${{ github.event_name == 'schedule' }}
+        run: |
+          sudo apt-get install -y flatpak flatpak-builder
+          sudo flatpak remote-add --if-not-exists flathub https://dl.flathub.org/repo/flathub.flatpakrepo
+          sudo flatpak install -y --noninteractive flathub org.freedesktop.Platform//23.08
+          sudo flatpak install -y --noninteractive flathub org.freedesktop.Sdk//23.08
+          sudo flatpak install -y --noninteractive flathub org.freedesktop.Sdk.Extension.rust-stable//23.08
+          sudo flatpak install -y --noninteractive flathub org.freedesktop.Sdk.Extension.llvm18//23.08
+
       - name: Set env
         run: echo "LIBCLANG_PATH=/usr/lib/llvm-14/lib" >> $GITHUB_ENV
 
-      - name: Install dependencies
+      - name: Run sccache-cache
+        uses: Mozilla-Actions/sccache-action@v0.0.4
+
+      - name: Install dependencies for merge group test
+        if: ${{ github.event_name != 'schedule' }}
         run: |
           sudo apt-get update
           sudo apt install build-essential python3-pip ccache clang cmake curl \
@@ -88,12 +102,10 @@ jobs:
             libxmu-dev libxmu6 libegl1-mesa-dev llvm-dev m4 xorg-dev sway \
             python3-mako
 
-      - name: Run sccache-cache
-        uses: Mozilla-Actions/sccache-action@v0.0.4
-
-      - name: Build
+      - name: Check for merge group test
+        if: ${{ github.event_name != 'schedule' }}
         run: |
-          cargo build --release
+          cargo check
 
       # - name: Test
       #   # Run sway(wayland compositor) in the background, winit will use it
@@ -101,16 +113,31 @@ jobs:
       #     sway > /dev/null 2>&1 &
       #     cargo test --release
 
-      - name: Tar Binary
+      - name: Fetch Verso version
         if: ${{ github.event_name == 'schedule' }}
-        run: tar -czvf verso-x86_64-unknown-linux-gnu.tar.gz -C ./target/release/ verso
+        run: |
+          echo "VERSO_VERSION=$(cargo metadata --format-version=1 --no-deps | jq -r '.packages[] | select(.name == "verso") | .version')" >> $GITHUB_ENV
+
+      - name: Generate flatpak cargo sources
+        if: ${{ github.event_name == 'schedule' }}
+        run: |
+          pip3 install aiohttp toml
+          python3 ./flatpak-cargo-generator.py ./Cargo.lock -o cargo-sources.json
+
+      - name: Build and bundle flatpak
+        if: ${{ github.event_name == 'schedule' }}
+        uses: flatpak/flatpak-github-actions/flatpak-builder@v6
+        with:
+          bundle: verso_${{ env.VERSO_VERSION }}_x64.flatpak
+          manifest-path: org.versotile.verso.yml
+          cache-key: flatpak-builder-${{ github.sha }}
 
       - name: Upload artifact
         if: ${{ github.event_name == 'schedule' }}
         uses: actions/upload-artifact@v4
         with:
-          name: verso-x86_64-unknown-linux-gnu
-          path: verso-x86_64-unknown-linux-gnu.tar.gz
+          name: verso_${{ env.VERSO_VERSION }}_x64_flatpak
+          path: verso_${{ env.VERSO_VERSION }}_x64.flatpak
 
   build-windows:
     if: ${{ github.event_name != 'pull_request' }}
@@ -174,7 +201,7 @@ jobs:
         if: ${{ github.event_name == 'schedule' }}
         uses: actions/upload-artifact@v4
         with:
-          name: verso_${{ env.VERSO_VERSION }}_x64-setup
+          name: verso_${{ env.VERSO_VERSION }}_x64_nsis
           path: target\release\verso_${{ env.VERSO_VERSION }}_x64-setup.exe
 
   build-macos:
@@ -251,7 +278,7 @@ jobs:
         if: ${{ github.event_name == 'schedule' }}
         uses: actions/upload-artifact@v4
         with:
-          name: verso_${{ env.VERSO_VERSION }}_${{ matrix.platform.arch }}
+          name: verso_${{ env.VERSO_VERSION }}_${{ matrix.platform.arch }}_dmg
           path: target/release/verso_${{ env.VERSO_VERSION }}_${{ matrix.platform.arch }}.dmg
 
   build-result:
@@ -287,28 +314,28 @@ jobs:
           command: release draft ${{ env.CN_APP_SLUG }} $VERSO_RELEASE_NAME
           api-key: ${{ secrets.CN_API_KEY }}
 
-      - name: Upload macOS binary (ARM)
+      - name: Upload macOS DMG bundle (ARM)
         uses: crabnebula-dev/cloud-release@v0.1.0
         with:
-          command: release upload --file "verso_${{ env.VERSO_VERSION }}_aarch64/verso_${{ env.VERSO_VERSION }}_aarch64.dmg" ${{ env.CN_APP_SLUG }} $VERSO_RELEASE_NAME
+          command: release upload --file "verso_${{ env.VERSO_VERSION }}_aarch64_dmg/verso_${{ env.VERSO_VERSION }}_aarch64.dmg" ${{ env.CN_APP_SLUG }} $VERSO_RELEASE_NAME
           api-key: ${{ secrets.CN_API_KEY }}
 
-      - name: Upload macOS binary (Intel)
+      - name: Upload macOS DMG bundle (Intel)
         uses: crabnebula-dev/cloud-release@v0.1.0
         with:
-          command: release upload --file "verso_${{ env.VERSO_VERSION }}_x64/verso_${{ env.VERSO_VERSION }}_x64.dmg" ${{ env.CN_APP_SLUG }} $VERSO_RELEASE_NAME
+          command: release upload --file "verso_${{ env.VERSO_VERSION }}_x64_dmg/verso_${{ env.VERSO_VERSION }}_x64.dmg" ${{ env.CN_APP_SLUG }} $VERSO_RELEASE_NAME
           api-key: ${{ secrets.CN_API_KEY }}
 
-      - name: Upload Windows binary
+      - name: Upload Windows NSIS installer
         uses: crabnebula-dev/cloud-release@v0.1.0
         with:
-          command: release upload --file "verso_${{ env.VERSO_VERSION }}_x64-setup/verso_${{ env.VERSO_VERSION }}_x64-setup.exe" ${{ env.CN_APP_SLUG }} $VERSO_RELEASE_NAME
+          command: release upload --file "verso_${{ env.VERSO_VERSION }}_x64_nsis/verso_${{ env.VERSO_VERSION }}_x64-setup.exe" ${{ env.CN_APP_SLUG }} $VERSO_RELEASE_NAME
           api-key: ${{ secrets.CN_API_KEY }}
 
-      - name: Upload Linux binary
+      - name: Upload Flatpak bundle
         uses: crabnebula-dev/cloud-release@v0.1.0
         with:
-          command: release upload --file "verso-x86_64-unknown-linux-gnu/verso-x86_64-unknown-linux-gnu.tar.gz" ${{ env.CN_APP_SLUG }} $VERSO_RELEASE_NAME
+          command: release upload --file "verso_${{ env.VERSO_VERSION }}_x64_flatpak/verso_${{ env.VERSO_VERSION }}_x64.flatpak" ${{ env.CN_APP_SLUG }} $VERSO_RELEASE_NAME
           api-key: ${{ secrets.CN_API_KEY }}
 
       - name: Publish release
