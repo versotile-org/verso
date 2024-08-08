@@ -112,7 +112,7 @@ impl Window {
                 }
             }
             e => {
-                log::warn!("Verso WebView isn't supporting this message yet: {e:?}")
+                log::trace!("Verso WebView isn't supporting this message yet: {e:?}")
             }
         }
     }
@@ -203,14 +203,14 @@ impl Window {
                                         let is_maximized = self.window.is_maximized();
                                         self.window.set_maximized(!is_maximized);
                                     }
-                                    e => log::warn!(
+                                    e => log::trace!(
                                         "Verso Panel isn't supporting this prompt message yet: {e}"
                                     ),
                                 }
                             }
                         }
                     }
-                    _ => log::warn!("Verso Panel isn't supporting this prompt yet"),
+                    _ => log::trace!("Verso Panel isn't supporting this prompt yet"),
                 }
             }
             EmbedderMsg::GetClipboardContents(sender) => {
@@ -234,7 +234,7 @@ impl Window {
                 });
             }
             e => {
-                log::warn!("Verso Panel isn't supporting this message yet: {e:?}")
+                log::trace!("Verso Panel isn't supporting this message yet: {e:?}")
             }
         }
         false

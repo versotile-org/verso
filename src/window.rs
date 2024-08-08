@@ -163,7 +163,7 @@ impl Window {
                     winit::event::MouseButton::Right => script_traits::MouseButton::Right,
                     winit::event::MouseButton::Middle => script_traits::MouseButton::Middle,
                     _ => {
-                        log::warn!(
+                        log::trace!(
                             "Verso Window isn't supporting this mouse button yet: {button:?}"
                         );
                         return false;
@@ -243,7 +243,7 @@ impl Window {
                 let msg = ConstellationMsg::Keyboard(event);
                 send_to_constellation(sender, msg);
             }
-            e => log::warn!("Verso Window isn't supporting this window event yet: {e:?}"),
+            e => log::trace!("Verso Window isn't supporting this window event yet: {e:?}"),
         }
         false
     }

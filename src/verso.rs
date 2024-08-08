@@ -432,7 +432,7 @@ impl Verso {
                     }
                 }
             }
-            e => log::warn!("Verso isn't supporting this event yet: {e:?}"),
+            e => log::trace!("Verso isn't supporting this event yet: {e:?}"),
         }
     }
 
@@ -493,7 +493,7 @@ impl Verso {
                                     }
                                     EmbedderMsg::Shutdown | EmbedderMsg::ReadyToPresent(_) => {}
                                     e => {
-                                        log::warn!("Verso Window isn't supporting handling this message yet: {e:?}")
+                                        log::trace!("Verso Window isn't supporting handling this message yet: {e:?}")
                                     }
                                 }
                             }
