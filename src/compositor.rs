@@ -45,7 +45,6 @@ use webrender_traits::{
 use winit::window::WindowId;
 
 use crate::touch::{TouchAction, TouchHandler};
-use crate::verso::send_to_constellation;
 use crate::webview::WebView;
 use crate::window::Window;
 
@@ -128,7 +127,7 @@ pub struct IOCompositor {
     port: CompositorReceiver,
 
     /// Tracks each webview and its current pipeline
-    webviews: HashMap<TopLevelBrowsingContextId, PipelineId>,
+    webviews: HashMap<TopLevelBrowsingContextId, (PipelineId, bool)>,
 
     /// Tracks details about each active pipeline that the compositor knows about.
     pipeline_details: HashMap<PipelineId, PipelineDetails>,
@@ -515,7 +514,7 @@ impl IOCompositor {
             }
 
             CompositorMsg::CreateOrUpdateWebView(frame_tree) => {
-                self.create_or_update_webview(&frame_tree, windows);
+                self.create_or_update_webview(&frame_tree);
                 self.send_scroll_positions_to_layout_for_pipeline(&frame_tree.pipeline.id);
             }
 
@@ -1077,7 +1076,7 @@ impl IOCompositor {
         let root_clip_id = builder.define_clip_rect(zoom_reference_frame, scaled_viewport_rect);
         let clip_chain_id = builder.define_clip_chain(None, [root_clip_id]);
         for webview in &self.painting_order {
-            if let Some(pipeline_id) = self.webviews.get(&webview.webview_id) {
+            if let Some((pipeline_id, true)) = self.webviews.get(&webview.webview_id) {
                 let scaled_webview_rect = webview.rect.to_f32() / zoom_factor;
                 builder.push_iframe(
                     LayoutRect::from_untyped(&scaled_webview_rect.to_untyped()),
@@ -1128,31 +1127,37 @@ impl IOCompositor {
         }
     }
 
-    fn create_or_update_webview(
-        &mut self,
-        frame_tree: &SendableFrameTree,
-        windows: &mut HashMap<WindowId, Window>,
-    ) {
+    /// Set the webview of the compositor to completely loaded, and hence it could add to display
+    /// list.
+    pub fn set_webview_loaded(&mut self, webview_id: &TopLevelBrowsingContextId) {
+        if let Some((_, loaded)) = self.webviews.get_mut(webview_id) {
+            *loaded = true;
+        } else {
+            warn!("The compositor doesn't have {webview_id} to set its loaded state");
+        }
+    }
+
+    fn create_or_update_webview(&mut self, frame_tree: &SendableFrameTree) {
         debug!("{}: Setting frame tree for webview", frame_tree.pipeline.id);
 
         let pipeline_id = frame_tree.pipeline.id;
         let webview_id = frame_tree.pipeline.top_level_browsing_context_id;
-        if let Some(old_pipeline) = self.webviews.insert(webview_id, pipeline_id) {
+        if let Some((old_pipeline, _)) = self.webviews.insert(webview_id, (pipeline_id, false)) {
             debug!("{webview_id}'s pipeline has changed from {old_pipeline} to {pipeline_id}");
         }
 
-        // Resize window and focus webview if the window has this webview
-        for window in windows.values_mut() {
-            if window.has_webview(webview_id) {
-                window.resize(window.size(), self);
-
-                send_to_constellation(
-                    &self.constellation_chan,
-                    ConstellationMsg::FocusWebView(webview_id),
-                );
-                break;
-            }
-        }
+        // // Resize window and focus webview if the window has this webview
+        // for window in windows.values_mut() {
+        //     if window.has_webview(webview_id) {
+        //         window.resize(window.size(), self);
+        //
+        //         send_to_constellation(
+        //             &self.constellation_chan,
+        //             ConstellationMsg::FocusWebView(webview_id),
+        //         );
+        //         break;
+        //     }
+        // }
         self.send_root_pipeline_display_list();
         self.create_or_update_pipeline_details_with_frame_tree(frame_tree, None);
         self.reset_scroll_tree_for_unattached_pipelines(frame_tree);
@@ -1172,7 +1177,7 @@ impl IOCompositor {
                 window.remove_webview(top_level_browsing_context_id, self);
             if let Some(webview) = webview {
                 self.set_painting_order(window);
-                if let Some(pipeline_id) = self.webviews.remove(&webview.webview_id) {
+                if let Some((pipeline_id, _)) = self.webviews.remove(&webview.webview_id) {
                     self.remove_pipeline_details_recursively(pipeline_id);
                 }
 

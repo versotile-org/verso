@@ -459,6 +459,7 @@ impl Verso {
                                             msg,
                                             &self.constellation_sender,
                                             self.clipboard.as_mut(),
+                                            compositor,
                                         ) {
                                             let mut window =
                                                 Window::new_with_compositor(evl, compositor);

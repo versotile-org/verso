@@ -7,7 +7,7 @@ use script_traits::TraversalDirection;
 use servo_url::ServoUrl;
 use webrender_api::units::DeviceIntRect;
 
-use crate::{verso::send_to_constellation, window::Window};
+use crate::{compositor::IOCompositor, verso::send_to_constellation, window::Window};
 
 /// A web view is an area to display web browsing context. It's what user will treat as a "web page".
 #[derive(Debug, Clone)]
@@ -54,19 +54,24 @@ impl Window {
         message: EmbedderMsg,
         sender: &Sender<ConstellationMsg>,
         clipboard: Option<&mut Clipboard>,
+        compositor: &mut IOCompositor,
     ) {
         log::trace!("Verso WebView {webview_id:?} is handling Embedder message: {message:?}",);
         match message {
             EmbedderMsg::LoadStart
             | EmbedderMsg::HeadParsed
             | EmbedderMsg::WebViewOpened(_)
-            | EmbedderMsg::WebViewClosed(_)
-            | EmbedderMsg::WebViewFocused(_) => {
+            | EmbedderMsg::WebViewClosed(_) => {
                 // Most WebView messages are ignored because it's done by compositor.
                 log::trace!("Verso WebView {webview_id:?} ignores this message: {message:?}")
             }
+            EmbedderMsg::WebViewFocused(w) => {
+                compositor.set_webview_loaded(&w);
+                compositor.set_painting_order(self);
+            }
             EmbedderMsg::LoadComplete => {
                 self.window.request_redraw();
+                send_to_constellation(sender, ConstellationMsg::FocusWebView(webview_id));
             }
             EmbedderMsg::AllowNavigationRequest(id, _url) => {
                 // TODO should provide a API for users to check url
@@ -119,19 +124,25 @@ impl Window {
         message: EmbedderMsg,
         sender: &Sender<ConstellationMsg>,
         clipboard: Option<&mut Clipboard>,
+        compositor: &mut IOCompositor,
     ) -> bool {
         log::trace!("Verso Panel {panel_id:?} is handling Embedder message: {message:?}",);
         match message {
             EmbedderMsg::LoadStart
             | EmbedderMsg::HeadParsed
             | EmbedderMsg::WebViewOpened(_)
-            | EmbedderMsg::WebViewClosed(_)
-            | EmbedderMsg::WebViewFocused(_) => {
+            | EmbedderMsg::WebViewClosed(_) => {
                 // Most WebView messages are ignored because it's done by compositor.
                 log::trace!("Verso Panel ignores this message: {message:?}")
             }
+            EmbedderMsg::WebViewFocused(w) => {
+                compositor.set_webview_loaded(&w);
+                compositor.set_painting_order(self);
+            }
             EmbedderMsg::LoadComplete => {
                 self.window.request_redraw();
+                send_to_constellation(sender, ConstellationMsg::FocusWebView(panel_id));
+
                 let demo_url = ServoUrl::parse("https://example.com").unwrap();
                 let demo_id = WebViewId::new();
                 let size = self.size();

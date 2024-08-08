@@ -255,6 +255,7 @@ impl Window {
         message: EmbedderMsg,
         sender: &Sender<ConstellationMsg>,
         clipboard: Option<&mut Clipboard>,
+        compositor: &mut IOCompositor,
     ) -> bool {
         // // Handle message in Verso Panel
         if self
@@ -263,11 +264,15 @@ impl Window {
             .filter(|p| p.webview_id == webview_id)
             .is_some()
         {
-            self.handle_servo_messages_with_panel(webview_id, message, sender, clipboard)
+            self.handle_servo_messages_with_panel(
+                webview_id, message, sender, clipboard, compositor,
+            )
         }
         // Handle message in Verso WebView
         else {
-            self.handle_servo_messages_with_webview(webview_id, message, sender, clipboard);
+            self.handle_servo_messages_with_webview(
+                webview_id, message, sender, clipboard, compositor,
+            );
             false
         }
     }
