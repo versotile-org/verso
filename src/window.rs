@@ -260,23 +260,16 @@ impl Window {
         compositor: &mut IOCompositor,
     ) -> bool {
         // // Handle message in Verso Panel
-        if self
-            .panel
-            .as_ref()
-            .filter(|p| p.webview_id == webview_id)
-            .is_some()
-        {
-            self.handle_servo_messages_with_panel(
-                webview_id, message, sender, clipboard, compositor,
-            )
+        if let Some(panel) = &self.panel {
+            if panel.webview_id == webview_id {
+                return self.handle_servo_messages_with_panel(
+                    webview_id, message, sender, clipboard, compositor,
+                );
+            }
         }
         // Handle message in Verso WebView
-        else {
-            self.handle_servo_messages_with_webview(
-                webview_id, message, sender, clipboard, compositor,
-            );
-            false
-        }
+        self.handle_servo_messages_with_webview(webview_id, message, sender, clipboard, compositor);
+        false
     }
 
     /// Queues a Winit `WindowEvent::RedrawRequested` event to be emitted that aligns with the windowing system drawing loop.
@@ -328,15 +321,9 @@ impl Window {
     }
 
     /// Check if the window has such webview.
-    pub fn has_webview(&mut self, id: WebViewId) -> bool {
-        if self.panel.as_ref().filter(|w| w.webview_id == id).is_some() {
-            true
-        } else {
-            self.webview
-                .as_ref()
-                .filter(|w| w.webview_id == id)
-                .is_some()
-        }
+    pub fn has_webview(&self, id: WebViewId) -> bool {
+        self.panel.as_ref().map_or(false, |w| w.webview_id == id)
+            || self.webview.as_ref().map_or(false, |w| w.webview_id == id)
     }
 
     /// Remove the webview in this window by provided webview ID. If this is the panel, it will
