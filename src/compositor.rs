@@ -1288,10 +1288,6 @@ impl IOCompositor {
                 window.id()
             );
             if let Some(Some(new_surface)) = self.surfaces.insert(window.id(), None) {
-                // Present current surface first
-                if let Err(err) = self.rendering_context.present() {
-                    warn!("Failed to present surface: {:?}", err);
-                }
                 // Swap the surface
                 self.rendering_context.with_front_buffer(|_, old_surface| {
                     self.surfaces.insert(self.current_window, Some(old_surface));
