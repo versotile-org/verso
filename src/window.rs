@@ -151,8 +151,10 @@ impl Window {
             WindowEvent::ScaleFactorChanged { scale_factor, .. } => {
                 compositor.on_scale_factor_event(*scale_factor as f32);
             }
-            WindowEvent::CursorMoved { position, .. } => {
+            WindowEvent::CursorEntered { .. } => {
                 compositor.swap_current_window(self);
+            }
+            WindowEvent::CursorMoved { position, .. } => {
                 let cursor: DevicePoint = DevicePoint::new(position.x as f32, position.y as f32);
                 self.mouse_position.set(*position);
                 compositor.on_mouse_window_move_event_class(cursor);

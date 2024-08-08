@@ -1138,26 +1138,16 @@ impl IOCompositor {
     }
 
     fn create_or_update_webview(&mut self, frame_tree: &SendableFrameTree) {
-        debug!("{}: Setting frame tree for webview", frame_tree.pipeline.id);
-
         let pipeline_id = frame_tree.pipeline.id;
         let webview_id = frame_tree.pipeline.top_level_browsing_context_id;
+        debug!(
+            "Verso Compositor is setting frame tree with pipeline {} for webview {}",
+            pipeline_id, webview_id
+        );
         if let Some((old_pipeline, _)) = self.webviews.insert(webview_id, (pipeline_id, false)) {
             debug!("{webview_id}'s pipeline has changed from {old_pipeline} to {pipeline_id}");
         }
 
-        // // Resize window and focus webview if the window has this webview
-        // for window in windows.values_mut() {
-        //     if window.has_webview(webview_id) {
-        //         window.resize(window.size(), self);
-        //
-        //         send_to_constellation(
-        //             &self.constellation_chan,
-        //             ConstellationMsg::FocusWebView(webview_id),
-        //         );
-        //         break;
-        //     }
-        // }
         self.send_root_pipeline_display_list();
         self.create_or_update_pipeline_details_with_frame_tree(frame_tree, None);
         self.reset_scroll_tree_for_unattached_pipelines(frame_tree);
@@ -1170,7 +1160,10 @@ impl IOCompositor {
         top_level_browsing_context_id: TopLevelBrowsingContextId,
         windows: &mut HashMap<WindowId, Window>,
     ) {
-        debug!("{}: Removing", top_level_browsing_context_id);
+        debug!(
+            "Verso Compositor is removing webview {}",
+            top_level_browsing_context_id
+        );
         let mut window_id = None;
         for window in windows.values_mut() {
             let (webview, close_window) =
@@ -1289,6 +1282,11 @@ impl IOCompositor {
     /// Change the current window of the compositor should display.
     pub fn swap_current_window(&mut self, window: &mut Window) {
         if window.id() != self.current_window {
+            debug!(
+                "Verso Compositor swap current window from {:?} to {:?}",
+                self.current_window,
+                window.id()
+            );
             if let Some(Some(new_surface)) = self.surfaces.insert(window.id(), None) {
                 // Present current surface first
                 if let Err(err) = self.rendering_context.present() {
@@ -1302,8 +1300,7 @@ impl IOCompositor {
                 self.current_window = window.id();
                 self.scale_factor = Scale::new(window.scale_factor() as f32);
                 self.painting_order.clear();
-                self.viewport = window.size();
-                self.set_painting_order(window);
+                window.resize(window.size(), self);
             }
         }
     }
@@ -2220,6 +2217,14 @@ impl IOCompositor {
             let painting_order = window.painting_order();
             self.painting_order = painting_order;
             self.send_root_pipeline_display_list();
+            debug!(
+                "Verso Compositor sets painting order to {:?}'s painting order {:?}",
+                window.id(),
+                self.painting_order
+                    .iter()
+                    .map(|w| w.webview_id)
+                    .collect::<Vec<_>>()
+            );
         } else {
             warn!(
                 "Failed to set painting order due to {:?} is not the current window",

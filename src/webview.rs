@@ -66,6 +66,11 @@ impl Window {
                 log::trace!("Verso WebView {webview_id:?} ignores this message: {message:?}")
             }
             EmbedderMsg::WebViewFocused(w) => {
+                log::debug!(
+                    "Verso Window {:?}'s webview {} has loaded completely.",
+                    self.id(),
+                    w
+                );
                 compositor.set_webview_loaded(&w);
                 compositor.set_painting_order(self);
             }
@@ -136,6 +141,11 @@ impl Window {
                 log::trace!("Verso Panel ignores this message: {message:?}")
             }
             EmbedderMsg::WebViewFocused(w) => {
+                log::debug!(
+                    "Verso Window {:?}'s panel {} has loaded completely.",
+                    self.id(),
+                    w
+                );
                 compositor.set_webview_loaded(&w);
                 compositor.set_painting_order(self);
             }
@@ -150,6 +160,7 @@ impl Window {
                 rect.min.y = rect.max.y.min(76);
                 self.webview = Some(WebView::new(demo_id, rect));
                 send_to_constellation(sender, ConstellationMsg::NewWebView(demo_url, demo_id));
+                log::debug!("Verso Window {:?} adds webview {}", self.id(), demo_id);
             }
             EmbedderMsg::AllowNavigationRequest(id, _url) => {
                 // The panel shouldn't navigate to other pages.
