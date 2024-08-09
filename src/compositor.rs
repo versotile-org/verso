@@ -100,10 +100,10 @@ pub enum MouseWindowEvent {
 const MAX_ZOOM: f32 = 8.0;
 const MIN_ZOOM: f32 = 0.1;
 
-// NB: Never block on the constellation, because sometimes the constellation blocks on us.
-/// Verso compositor contains a GL rendering context with a WebRender insrtance.
-/// The compositor will communicate with Serv messages from the Constellation and then
-/// composite to WebRender frames and present the surface to the window.
+// NB: Never block on the Constellation, because sometimes the Constellation blocks on us.
+/// The Verso compositor contains a GL rendering context with a WebRender instance.
+/// The compositor will communicate with Servo using messages from the Constellation,
+/// then composite the WebRender frames and present the surface to the window.
 pub struct IOCompositor {
     /// All surfaces that Compositor currently owns.
     pub surfaces: HashMap<WindowId, Option<Surface>>,
