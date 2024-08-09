@@ -1,5 +1,5 @@
 use arboard::Clipboard;
-use base::id::{PipelineId, PipelineNamespace, PipelineNamespaceId, WebViewId};
+use base::id::{PipelineNamespace, PipelineNamespaceId, WebViewId};
 use compositing_traits::ConstellationMsg;
 use crossbeam_channel::Sender;
 use embedder_traits::{CompositorEventVariant, EmbedderMsg, PromptDefinition};
@@ -7,15 +7,13 @@ use script_traits::TraversalDirection;
 use servo_url::ServoUrl;
 use webrender_api::units::DeviceIntRect;
 
-use crate::{verso::send_to_constellation, window::Window};
+use crate::{compositor::IOCompositor, verso::send_to_constellation, window::Window};
 
 /// A web view is an area to display web browsing context. It's what user will treat as a "web page".
 #[derive(Debug, Clone)]
 pub struct WebView {
     /// Webview ID
     pub webview_id: WebViewId,
-    /// Pipeline ID for webrender usage.
-    pub pipeline_id: Option<PipelineId>,
     /// The position and size of the webview.
     pub rect: DeviceIntRect,
 }
@@ -23,11 +21,7 @@ pub struct WebView {
 impl WebView {
     /// Create a web view from Winit window.
     pub fn new(webview_id: WebViewId, rect: DeviceIntRect) -> Self {
-        Self {
-            webview_id,
-            pipeline_id: None,
-            rect,
-        }
+        Self { webview_id, rect }
     }
 
     /// Create a panel view from Winit window. A panel is a special web view that focus on controlling states around window.
@@ -47,7 +41,6 @@ impl WebView {
         let id = WebViewId::new();
         Self {
             webview_id: id,
-            pipeline_id: None,
             rect,
         }
     }
@@ -61,19 +54,29 @@ impl Window {
         message: EmbedderMsg,
         sender: &Sender<ConstellationMsg>,
         clipboard: Option<&mut Clipboard>,
+        compositor: &mut IOCompositor,
     ) {
         log::trace!("Verso WebView {webview_id:?} is handling Embedder message: {message:?}",);
         match message {
             EmbedderMsg::LoadStart
             | EmbedderMsg::HeadParsed
             | EmbedderMsg::WebViewOpened(_)
-            | EmbedderMsg::WebViewClosed(_)
-            | EmbedderMsg::WebViewFocused(_) => {
+            | EmbedderMsg::WebViewClosed(_) => {
                 // Most WebView messages are ignored because it's done by compositor.
                 log::trace!("Verso WebView {webview_id:?} ignores this message: {message:?}")
             }
+            EmbedderMsg::WebViewFocused(w) => {
+                log::debug!(
+                    "Verso Window {:?}'s webview {} has loaded completely.",
+                    self.id(),
+                    w
+                );
+                compositor.set_webview_loaded(&w);
+                compositor.set_painting_order(self);
+            }
             EmbedderMsg::LoadComplete => {
                 self.window.request_redraw();
+                send_to_constellation(sender, ConstellationMsg::FocusWebView(webview_id));
             }
             EmbedderMsg::AllowNavigationRequest(id, _url) => {
                 // TODO should provide a API for users to check url
@@ -114,35 +117,50 @@ impl Window {
                 }
             }
             e => {
-                log::warn!("Verso WebView isn't supporting this message yet: {e:?}")
+                log::trace!("Verso WebView isn't supporting this message yet: {e:?}")
             }
         }
     }
 
-    /// Handle servo messages with main panel.
+    /// Handle servo messages with main panel. Return true it requests a new window.
     pub fn handle_servo_messages_with_panel(
         &mut self,
         panel_id: WebViewId,
         message: EmbedderMsg,
         sender: &Sender<ConstellationMsg>,
         clipboard: Option<&mut Clipboard>,
-    ) {
+        compositor: &mut IOCompositor,
+    ) -> bool {
         log::trace!("Verso Panel {panel_id:?} is handling Embedder message: {message:?}",);
         match message {
             EmbedderMsg::LoadStart
             | EmbedderMsg::HeadParsed
             | EmbedderMsg::WebViewOpened(_)
-            | EmbedderMsg::WebViewClosed(_)
-            | EmbedderMsg::WebViewFocused(_) => {
+            | EmbedderMsg::WebViewClosed(_) => {
                 // Most WebView messages are ignored because it's done by compositor.
                 log::trace!("Verso Panel ignores this message: {message:?}")
             }
+            EmbedderMsg::WebViewFocused(w) => {
+                log::debug!(
+                    "Verso Window {:?}'s panel {} has loaded completely.",
+                    self.id(),
+                    w
+                );
+                compositor.set_webview_loaded(&w);
+                compositor.set_painting_order(self);
+            }
             EmbedderMsg::LoadComplete => {
                 self.window.request_redraw();
-                // let demo_url = ServoUrl::parse("https://demo.versotile.org").unwrap();
-                let demo_url = ServoUrl::parse("https://keyboard-test.space").unwrap();
+                send_to_constellation(sender, ConstellationMsg::FocusWebView(panel_id));
+
+                let demo_url = ServoUrl::parse("https://example.com").unwrap();
                 let demo_id = WebViewId::new();
+                let size = self.size();
+                let mut rect = DeviceIntRect::from_size(size);
+                rect.min.y = rect.max.y.min(76);
+                self.webview = Some(WebView::new(demo_id, rect));
                 send_to_constellation(sender, ConstellationMsg::NewWebView(demo_url, demo_id));
+                log::debug!("Verso Window {:?} adds webview {}", self.id(), demo_id);
             }
             EmbedderMsg::AllowNavigationRequest(id, _url) => {
                 // The panel shouldn't navigate to other pages.
@@ -154,6 +172,7 @@ impl Window {
             EmbedderMsg::Prompt(definition, _origin) => {
                 match definition {
                     PromptDefinition::Input(msg, _, prompt_sender) => {
+                        let _ = prompt_sender.send(None);
                         if let Some(webview) = &self.webview {
                             let id = webview.webview_id;
 
@@ -185,7 +204,8 @@ impl Window {
                                         // TODO Set EmbedderMsg::Status to None
                                     }
                                     "REFRESH" => {
-                                        send_to_constellation(sender, ConstellationMsg::Reload(id));
+                                        // send_to_constellation(sender, ConstellationMsg::Reload(id));
+                                        return true;
                                     }
                                     "MINIMIZE" => {
                                         self.window.set_minimized(true);
@@ -194,15 +214,14 @@ impl Window {
                                         let is_maximized = self.window.is_maximized();
                                         self.window.set_maximized(!is_maximized);
                                     }
-                                    e => log::warn!(
+                                    e => log::trace!(
                                         "Verso Panel isn't supporting this prompt message yet: {e}"
                                     ),
                                 }
                             }
                         }
-                        let _ = prompt_sender.send(None);
                     }
-                    _ => log::warn!("Verso Panel isn't supporting this prompt yet"),
+                    _ => log::trace!("Verso Panel isn't supporting this prompt yet"),
                 }
             }
             EmbedderMsg::GetClipboardContents(sender) => {
@@ -226,8 +245,9 @@ impl Window {
                 });
             }
             e => {
-                log::warn!("Verso Panel isn't supporting this message yet: {e:?}")
+                log::trace!("Verso Panel isn't supporting this message yet: {e:?}")
             }
         }
+        false
     }
 }

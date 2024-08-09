@@ -1,13 +1,14 @@
 use std::cell::Cell;
 
-use base::id::{PipelineId, WebViewId};
+use base::id::WebViewId;
 use compositing_traits::ConstellationMsg;
 use crossbeam_channel::Sender;
 use embedder_traits::{Cursor, EmbedderMsg};
 use euclid::{Point2D, Size2D};
 use raw_window_handle::{HasRawDisplayHandle, HasRawWindowHandle};
 use script_traits::{TouchEventType, WheelDelta, WheelMode};
-use surfman::{Connection, SurfaceType};
+use surfman::Connection;
+use surfman::SurfaceType;
 use webrender_api::{
     units::{
         DeviceIntPoint, DeviceIntRect, DeviceIntSize, DevicePixel, DevicePoint, LayoutVector2D,
@@ -18,8 +19,9 @@ use webrender_traits::RenderingContext;
 use winit::{
     dpi::PhysicalPosition,
     event::{ElementState, TouchPhase, WindowEvent},
+    event_loop::EventLoopWindowTarget,
     keyboard::ModifiersState,
-    window::{CursorIcon, Window as WinitWindow},
+    window::{CursorIcon, Window as WinitWindow, WindowBuilder, WindowId},
 };
 
 use crate::{
@@ -36,7 +38,7 @@ pub struct Window {
     /// Access to Winit window
     pub(crate) window: WinitWindow,
     /// The main control panel of this window.
-    pub(crate) panel: WebView,
+    pub(crate) panel: Option<WebView>,
     /// The WebView of this window.
     pub(crate) webview: Option<WebView>,
     /// The mouse physical position in the web view.
@@ -47,7 +49,19 @@ pub struct Window {
 
 impl Window {
     /// Create a Verso window from Winit window and return the rendering context.
-    pub fn new(window: WinitWindow) -> (Self, RenderingContext) {
+    pub fn new(evl: &EventLoopWindowTarget<()>) -> (Self, RenderingContext) {
+        let window = WindowBuilder::new()
+            // .with_transparent(true)
+            // .with_decorations(false)
+            .build(evl)
+            .expect("Failed to create window.");
+        #[cfg(macos)]
+        unsafe {
+            let rwh = window.raw_window_handle();
+            if let RawWindowHandle::AppKit(AppKitWindowHandle { ns_window, .. }) = rwh {
+                decorate_window(ns_window as *mut Object, LogicalPosition::new(8.0, 40.0));
+            }
+        }
         let window_size = window.inner_size();
         let window_size = Size2D::new(window_size.width as i32, window_size.height as i32);
         let display_handle = window.raw_display_handle();
@@ -69,7 +83,7 @@ impl Window {
         (
             Self {
                 window,
-                panel: WebView::new_panel(DeviceIntRect::from_size(size)),
+                panel: Some(WebView::new_panel(DeviceIntRect::from_size(size))),
                 webview: None,
                 mouse_position: Cell::new(PhysicalPosition::default()),
                 modifiers_state: Cell::new(ModifiersState::default()),
@@ -78,20 +92,67 @@ impl Window {
         )
     }
 
-    /// Handle Winit window event.
+    /// Create a Verso window with the rendering context.
+    pub fn new_with_compositor(
+        evl: &EventLoopWindowTarget<()>,
+        compositor: &mut IOCompositor,
+    ) -> Self {
+        let window = WindowBuilder::new()
+            // .with_transparent(true)
+            // .with_decorations(false)
+            .build(evl)
+            .expect("Failed to create window.");
+        #[cfg(macos)]
+        unsafe {
+            let rwh = window.raw_window_handle();
+            if let RawWindowHandle::AppKit(AppKitWindowHandle { ns_window, .. }) = rwh {
+                decorate_window(ns_window as *mut Object, LogicalPosition::new(8.0, 40.0));
+            }
+        }
+        let window_size = window.inner_size();
+        let window_size = Size2D::new(window_size.width as i32, window_size.height as i32);
+        let native_widget = compositor
+            .rendering_context
+            .connection()
+            .create_native_widget_from_raw_window_handle(window.raw_window_handle(), window_size)
+            .expect("Failed to create native widget");
+        let surface_type = SurfaceType::Widget { native_widget };
+        let surface = compositor
+            .rendering_context
+            .create_surface(surface_type)
+            .ok();
+        compositor.surfaces.insert(window.id(), surface);
+        Self {
+            window,
+            panel: None,
+            webview: None,
+            mouse_position: Cell::new(PhysicalPosition::default()),
+            modifiers_state: Cell::new(ModifiersState::default()),
+        }
+    }
+
+    /// Handle Winit window event and return a boolean to indicate if the compositor should repaint immediately.
     pub fn handle_winit_window_event(
         &mut self,
         sender: &Sender<ConstellationMsg>,
         compositor: &mut IOCompositor,
         event: &winit::event::WindowEvent,
-    ) {
+    ) -> bool {
         match event {
-            WindowEvent::RedrawRequested => {
-                compositor.present();
+            WindowEvent::Focused(focused) => {
+                if *focused {
+                    compositor.swap_current_window(self);
+                }
             }
             WindowEvent::Resized(size) => {
                 let size = Size2D::new(size.width, size.height);
-                let _ = self.resize(size.to_i32(), compositor);
+                return self.resize(size.to_i32(), compositor);
+            }
+            WindowEvent::ScaleFactorChanged { scale_factor, .. } => {
+                compositor.on_scale_factor_event(*scale_factor as f32);
+            }
+            WindowEvent::CursorEntered { .. } => {
+                compositor.swap_current_window(self);
             }
             WindowEvent::CursorMoved { position, .. } => {
                 let cursor: DevicePoint = DevicePoint::new(position.x as f32, position.y as f32);
@@ -104,10 +165,10 @@ impl Window {
                     winit::event::MouseButton::Right => script_traits::MouseButton::Right,
                     winit::event::MouseButton::Middle => script_traits::MouseButton::Middle,
                     _ => {
-                        log::warn!(
+                        log::trace!(
                             "Verso Window isn't supporting this mouse button yet: {button:?}"
                         );
-                        return;
+                        return false;
                     }
                 };
                 let position = Point2D::new(
@@ -177,9 +238,6 @@ impl Window {
                     phase,
                 );
             }
-            WindowEvent::CloseRequested => {
-                compositor.maybe_start_shutting_down();
-            }
             WindowEvent::ModifiersChanged(modifier) => self.modifiers_state.set(modifier.state()),
             WindowEvent::KeyboardInput { event, .. } => {
                 let event = keyboard_event_from_winit(&event, self.modifiers_state.get());
@@ -187,44 +245,31 @@ impl Window {
                 let msg = ConstellationMsg::Keyboard(event);
                 send_to_constellation(sender, msg);
             }
-            e => log::warn!("Verso Window isn't supporting this window event yet: {e:?}"),
+            e => log::trace!("Verso Window isn't supporting this window event yet: {e:?}"),
         }
+        false
     }
 
-    /// Handle servo messages.
+    /// Handle servo messages. Return true if it requests a new window
     pub fn handle_servo_message(
         &mut self,
-        webview_id: Option<WebViewId>,
+        webview_id: WebViewId,
         message: EmbedderMsg,
         sender: &Sender<ConstellationMsg>,
         clipboard: Option<&mut Clipboard>,
-    ) {
-        match webview_id {
-            // // Handle message in Verso Panel
-            Some(p) if p == self.panel.webview_id => {
-                self.handle_servo_messages_with_panel(p, message, sender, clipboard);
-            }
-            // Handle message in Verso WebView
-            Some(w) => {
-                self.handle_servo_messages_with_webview(w, message, sender, clipboard);
-            }
-            // Handle message in Verso Window
-            None => {
-                log::trace!("Verso Window is handling Embedder message: {message:?}");
-                match message {
-                    EmbedderMsg::ReadyToPresent(_w) => {
-                        self.window.request_redraw();
-                    }
-                    EmbedderMsg::SetCursor(cursor) => {
-                        self.set_cursor_icon(cursor);
-                    }
-                    EmbedderMsg::Shutdown => {}
-                    e => {
-                        log::warn!("Verso Window isn't supporting handling this message yet: {e:?}")
-                    }
-                }
+        compositor: &mut IOCompositor,
+    ) -> bool {
+        // // Handle message in Verso Panel
+        if let Some(panel) = &self.panel {
+            if panel.webview_id == webview_id {
+                return self.handle_servo_messages_with_panel(
+                    webview_id, message, sender, clipboard, compositor,
+                );
             }
         }
+        // Handle message in Verso WebView
+        self.handle_servo_messages_with_webview(webview_id, message, sender, clipboard, compositor);
+        false
     }
 
     /// Queues a Winit `WindowEvent::RedrawRequested` event to be emitted that aligns with the windowing system drawing loop.
@@ -232,23 +277,31 @@ impl Window {
         self.window.request_redraw()
     }
 
-    /// Resize the rendering context and all web views.
-    pub fn resize(&mut self, size: Size2D<i32, DevicePixel>, compositor: &mut IOCompositor) {
+    /// Resize the rendering context and all web views. Return true if the compositor should repaint and present
+    /// after this.
+    pub fn resize(
+        &mut self,
+        size: Size2D<i32, DevicePixel>,
+        compositor: &mut IOCompositor,
+    ) -> bool {
         let need_resize = compositor.on_resize_window_event(size);
 
-        let rect = DeviceIntRect::from_size(size);
-        compositor.on_resize_webview_event(self.panel.webview_id, rect);
+        if let Some(panel) = &mut self.panel {
+            let rect = DeviceIntRect::from_size(size);
+            panel.rect = rect;
+            compositor.on_resize_webview_event(panel.webview_id, rect);
+        }
 
-        if let Some(w) = &self.webview {
+        if let Some(w) = &mut self.webview {
             let mut rect = DeviceIntRect::from_size(size);
             rect.min.y = rect.max.y.min(76);
+            w.rect = rect;
             compositor.on_resize_webview_event(w.webview_id, rect);
         }
 
-        if need_resize {
-            compositor.repaint_synchronously(self);
-            compositor.present();
-        }
+        compositor.set_painting_order(self);
+
+        need_resize
     }
 
     /// Size of the window that's used by webrender.
@@ -257,51 +310,20 @@ impl Window {
         Size2D::new(size.width as i32, size.height as i32)
     }
 
+    /// Get Winit window ID of the window.
+    pub fn id(&self) -> WindowId {
+        self.window.id()
+    }
+
     /// Scale factor of the window. This is also known as HIDPI.
     pub fn scale_factor(&self) -> f64 {
         self.window.scale_factor()
     }
 
-    /// Get the mutable reference of the webview in this window from provided webview ID.
-    pub fn get_webview(&mut self, id: WebViewId) -> Option<&mut WebView> {
-        if self.panel.webview_id == id {
-            Some(&mut self.panel)
-        } else {
-            self.webview.as_mut().filter(|w| w.webview_id == id)
-        }
-    }
-
-    /// Set the webview to this window. It won't be updated if the exisitng webview and pipeline ID
-    /// are the same. This will also set the painting order of the compositor and tell
-    /// constellation to focus the webview.
-    pub fn set_webview(
-        &mut self,
-        webview_id: WebViewId,
-        pipline_id: PipelineId,
-        compositor: &mut IOCompositor,
-    ) {
-        if self.panel.webview_id == webview_id {
-            if self.panel.pipeline_id != Some(pipline_id) {
-                self.panel.pipeline_id = Some(pipline_id);
-            }
-        } else if let Some(webview) = &mut self.webview {
-            if webview.webview_id == webview_id && webview.pipeline_id != Some(pipline_id) {
-                webview.pipeline_id = Some(pipline_id);
-            }
-        } else {
-            let size = self.size();
-            let mut rect = DeviceIntRect::from_size(size);
-            rect.min.y = rect.max.y.min(76);
-            self.webview = Some(WebView::new(webview_id, rect));
-        }
-
-        compositor.set_painting_order(self.paiting_order());
-        self.resize(self.size(), compositor);
-
-        send_to_constellation(
-            &compositor.constellation_chan,
-            ConstellationMsg::FocusWebView(webview_id),
-        );
+    /// Check if the window has such webview.
+    pub fn has_webview(&self, id: WebViewId) -> bool {
+        self.panel.as_ref().map_or(false, |w| w.webview_id == id)
+            || self.webview.as_ref().map_or(false, |w| w.webview_id == id)
     }
 
     /// Remove the webview in this window by provided webview ID. If this is the panel, it will
@@ -310,29 +332,36 @@ impl Window {
         &mut self,
         id: WebViewId,
         compositor: &mut IOCompositor,
-    ) -> Option<WebView> {
-        if id == self.panel.webview_id {
-            compositor.maybe_start_shutting_down();
-            None
+    ) -> (Option<WebView>, bool) {
+        if self.panel.as_ref().filter(|w| w.webview_id == id).is_some() {
+            self.webview.as_ref().map(|w| {
+                send_to_constellation(
+                    &compositor.constellation_chan,
+                    ConstellationMsg::CloseWebView(w.webview_id),
+                )
+            });
+            (self.panel.take(), false)
         } else if self
             .webview
             .as_ref()
             .filter(|w| w.webview_id == id)
             .is_some()
         {
-            self.webview.take()
+            (self.webview.take(), self.panel.is_none())
         } else {
-            None
+            (None, false)
         }
     }
 
     /// Get the painting order of this window.
-    pub fn paiting_order(&self) -> Vec<WebView> {
+    pub fn painting_order(&self) -> Vec<WebView> {
         let mut order = vec![];
         if let Some(webview) = &self.webview {
             order.push(webview.clone());
         }
-        order.push(self.panel.clone());
+        if let Some(panel) = &self.panel {
+            order.push(panel.clone());
+        }
         order
     }
 
@@ -377,4 +406,29 @@ impl Window {
         };
         self.window.set_cursor_icon(winit_cursor);
     }
+}
+
+/* window decoration */
+#[cfg(macos)]
+use cocoa::appkit::{NSWindow, NSWindowStyleMask, NSWindowTitleVisibility};
+#[cfg(macos)]
+use objc::runtime::Object;
+#[cfg(macos)]
+use raw_window_handle::{AppKitWindowHandle, RawWindowHandle};
+#[cfg(macos)]
+use winit::dpi::LogicalPosition;
+
+/// Window decoration for macOS.
+#[cfg(macos)]
+pub unsafe fn decorate_window(window: *mut Object, _position: LogicalPosition<f64>) {
+    NSWindow::setTitlebarAppearsTransparent_(window, cocoa::base::YES);
+    NSWindow::setTitleVisibility_(window, NSWindowTitleVisibility::NSWindowTitleHidden);
+    NSWindow::setStyleMask_(
+        window,
+        NSWindowStyleMask::NSTitledWindowMask
+            | NSWindowStyleMask::NSFullSizeContentViewWindowMask
+            | NSWindowStyleMask::NSClosableWindowMask
+            | NSWindowStyleMask::NSResizableWindowMask
+            | NSWindowStyleMask::NSMiniaturizableWindowMask,
+    );
 }

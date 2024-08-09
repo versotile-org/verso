@@ -24,6 +24,7 @@ use script_traits::{
 };
 use servo_geometry::DeviceIndependentPixel;
 use style_traits::{CSSPixel, DevicePixel, PinchZoomFactor};
+use surfman::Surface;
 use webrender::{RenderApi, Transaction};
 use webrender_api::units::{
     DeviceIntPoint, DeviceIntRect, DeviceIntSize, DevicePoint, LayoutPoint, LayoutRect, LayoutSize,
@@ -41,6 +42,7 @@ use webrender_traits::{
     NetToCompositorMsg, RenderingContext, ScriptToCompositorMsg, SerializedImageUpdate,
     UntrustedNodeAddress,
 };
+use winit::window::WindowId;
 
 use crate::touch::{TouchAction, TouchHandler};
 use crate::webview::WebView;
@@ -98,19 +100,37 @@ pub enum MouseWindowEvent {
 const MAX_ZOOM: f32 = 8.0;
 const MIN_ZOOM: f32 = 0.1;
 
-/// NB: Never block on the constellation, because sometimes the constellation blocks on us.
+// NB: Never block on the Constellation, because sometimes the Constellation blocks on us.
+/// The Verso compositor contains a GL rendering context with a WebRender instance.
+/// The compositor will communicate with Servo using messages from the Constellation,
+/// then composite the WebRender frames and present the surface to the window.
 pub struct IOCompositor {
+    /// All surfaces that Compositor currently owns.
+    pub surfaces: HashMap<WindowId, Option<Surface>>,
+
+    /// The current window that Compositor is handling.
+    pub current_window: WindowId,
+
     /// Size of current viewport that Compositor is handling.
     viewport: DeviceIntSize,
+
+    /// The pixel density of the display.
+    scale_factor: Scale<f32, DeviceIndependentPixel, DevicePixel>,
+
+    /// The order to paint webviews in, top most webview should be the last element.
+    painting_order: Vec<WebView>,
+
+    /// The active webrender document.
+    webrender_document: DocumentId,
 
     /// The port on which we receive messages.
     port: CompositorReceiver,
 
+    /// Tracks each webview and its current pipeline
+    webviews: HashMap<TopLevelBrowsingContextId, (PipelineId, bool)>,
+
     /// Tracks details about each active pipeline that the compositor knows about.
     pipeline_details: HashMap<PipelineId, PipelineDetails>,
-
-    /// The pixel density of the display.
-    scale_factor: Scale<f32, DeviceIndependentPixel, DevicePixel>,
 
     /// "Mobile-style" zoom that does not reflow the page.
     viewport_zoom: PinchZoomFactor,
@@ -157,14 +177,11 @@ pub struct IOCompositor {
     /// The webrender renderer.
     webrender: webrender::Renderer,
 
-    /// The active webrender document.
-    webrender_document: DocumentId,
-
     /// The webrender interface, if enabled.
-    webrender_api: RenderApi,
+    pub webrender_api: RenderApi,
 
     /// The surfman instance that webrender targets
-    rendering_context: RenderingContext,
+    pub rendering_context: RenderingContext,
 
     /// The GL bindings for webrender
     webrender_gl: Rc<dyn gl::Gl>,
@@ -194,9 +211,6 @@ pub struct IOCompositor {
     /// The number of frames pending to receive from WebRender.
     pending_frames: usize,
 
-    /// Waiting for external code to call present.
-    waiting_on_present: bool,
-
     /// The [`Instant`] of the last animation tick, used to avoid flooding the Constellation and
     /// ScriptThread with a deluge of animation ticks.
     last_animation_tick: Instant,
@@ -206,9 +220,6 @@ pub struct IOCompositor {
     /// will want to avoid blocking on UI events, and just
     /// run the event loop at the vsync interval.
     pub is_animating: bool,
-
-    /// The order to paint webviews in, top most webview should be the last element.
-    painting_order: Vec<WebView>,
 }
 
 #[derive(Clone, Copy)]
@@ -334,15 +345,21 @@ impl PipelineDetails {
 impl IOCompositor {
     /// Create a new compositor.
     pub fn new(
+        current_window: WindowId,
         viewport: DeviceIntSize,
         scale_factor: Scale<f32, DeviceIndependentPixel, DevicePixel>,
         state: InitialCompositorState,
         exit_after_load: bool,
         convert_mouse_to_touch: bool,
     ) -> Self {
+        let mut surfaces = HashMap::new();
+        surfaces.insert(current_window, None);
         let compositor = IOCompositor {
+            surfaces,
+            current_window,
             viewport,
             port: state.receiver,
+            webviews: HashMap::new(),
             pipeline_details: HashMap::new(),
             scale_factor,
             composition_request: CompositionRequest::NoCompositingNecessary,
@@ -371,7 +388,6 @@ impl IOCompositor {
             exit_after_load,
             convert_mouse_to_touch,
             pending_frames: 0,
-            waiting_on_present: false,
             last_animation_tick: Instant::now(),
             is_animating: false,
             painting_order: vec![],
@@ -383,10 +399,14 @@ impl IOCompositor {
     }
 
     /// Consume compositor itself and deinit webrender.
-    pub fn deinit(self) {
-        // TODO: can we do this in drop?
+    pub fn deinit(mut self) {
         if let Err(err) = self.rendering_context.make_gl_context_current() {
             warn!("Failed to make GL context current: {:?}", err);
+        }
+        for surface in self.surfaces.values_mut() {
+            surface
+                .take()
+                .map(|s| self.rendering_context.destroy_surface(s));
         }
         self.webrender.deinit();
     }
@@ -466,7 +486,11 @@ impl IOCompositor {
         }
     }
 
-    fn handle_browser_message(&mut self, msg: CompositorMsg, window: &mut Window) -> bool {
+    fn handle_browser_message(
+        &mut self,
+        msg: CompositorMsg,
+        windows: &mut HashMap<WindowId, Window>,
+    ) -> bool {
         match self.shutdown_state {
             ShutdownState::NotShuttingDown => {}
             ShutdownState::ShuttingDown => {
@@ -490,12 +514,12 @@ impl IOCompositor {
             }
 
             CompositorMsg::CreateOrUpdateWebView(frame_tree) => {
-                self.create_or_update_webview(&frame_tree, window);
+                self.create_or_update_webview(&frame_tree);
                 self.send_scroll_positions_to_layout_for_pipeline(&frame_tree.pipeline.id);
             }
 
             CompositorMsg::RemoveWebView(top_level_browsing_context_id) => {
-                self.remove_webview(top_level_browsing_context_id, window);
+                self.remove_webview(top_level_browsing_context_id, windows);
             }
 
             CompositorMsg::MoveResizeWebView(_webview_id, _rect) => {
@@ -1024,7 +1048,7 @@ impl IOCompositor {
         // Every display list needs a pipeline, but we'd like to choose one that is unlikely
         // to conflict with our content pipelines, which start at (1, 1). (0, 0) is WebRender's
         // dummy pipeline, so we choose (0, 1).
-        let root_pipeline = WebRenderPipelineId(0, 1);
+        let root_pipeline = WebRenderPipelineId(u64::from(self.current_window) as u32, 1);
         transaction.set_root_pipeline(root_pipeline);
 
         let mut builder = webrender::api::DisplayListBuilder::new(root_pipeline);
@@ -1052,7 +1076,7 @@ impl IOCompositor {
         let root_clip_id = builder.define_clip_rect(zoom_reference_frame, scaled_viewport_rect);
         let clip_chain_id = builder.define_clip_chain(None, [root_clip_id]);
         for webview in &self.painting_order {
-            if let Some(pipeline_id) = webview.pipeline_id {
+            if let Some((pipeline_id, true)) = self.webviews.get(&webview.webview_id) {
                 let scaled_webview_rect = webview.rect.to_f32() / zoom_factor;
                 builder.push_iframe(
                     LayoutRect::from_untyped(&scaled_webview_rect.to_untyped()),
@@ -1103,14 +1127,26 @@ impl IOCompositor {
         }
     }
 
-    fn create_or_update_webview(&mut self, frame_tree: &SendableFrameTree, window: &mut Window) {
-        debug!("{}: Setting frame tree for webview", frame_tree.pipeline.id);
+    /// Set the webview of the compositor to completely loaded, and hence it could add to display
+    /// list.
+    pub fn set_webview_loaded(&mut self, webview_id: &TopLevelBrowsingContextId) {
+        if let Some((_, loaded)) = self.webviews.get_mut(webview_id) {
+            *loaded = true;
+        } else {
+            warn!("The compositor doesn't have {webview_id} to set its loaded state");
+        }
+    }
 
-        window.set_webview(
-            frame_tree.pipeline.top_level_browsing_context_id,
-            frame_tree.pipeline.id,
-            self,
+    fn create_or_update_webview(&mut self, frame_tree: &SendableFrameTree) {
+        let pipeline_id = frame_tree.pipeline.id;
+        let webview_id = frame_tree.pipeline.top_level_browsing_context_id;
+        debug!(
+            "Verso Compositor is setting frame tree with pipeline {} for webview {}",
+            pipeline_id, webview_id
         );
+        if let Some((old_pipeline, _)) = self.webviews.insert(webview_id, (pipeline_id, false)) {
+            debug!("{webview_id}'s pipeline has changed from {old_pipeline} to {pipeline_id}");
+        }
 
         self.send_root_pipeline_display_list();
         self.create_or_update_pipeline_details_with_frame_tree(frame_tree, None);
@@ -1122,20 +1158,34 @@ impl IOCompositor {
     fn remove_webview(
         &mut self,
         top_level_browsing_context_id: TopLevelBrowsingContextId,
-        window: &mut Window,
+        windows: &mut HashMap<WindowId, Window>,
     ) {
-        debug!("{}: Removing", top_level_browsing_context_id);
-        let Some(webview) = window.remove_webview(top_level_browsing_context_id, self) else {
-            warn!("{top_level_browsing_context_id}: Removing unknown webview");
-            return;
-        };
+        debug!(
+            "Verso Compositor is removing webview {}",
+            top_level_browsing_context_id
+        );
+        let mut window_id = None;
+        for window in windows.values_mut() {
+            let (webview, close_window) =
+                window.remove_webview(top_level_browsing_context_id, self);
+            if let Some(webview) = webview {
+                self.set_painting_order(window);
+                if let Some((pipeline_id, _)) = self.webviews.remove(&webview.webview_id) {
+                    self.remove_pipeline_details_recursively(pipeline_id);
+                }
 
-        self.send_root_pipeline_display_list();
-        if let Some(pipeline_id) = webview.pipeline_id {
-            self.remove_pipeline_details_recursively(pipeline_id);
+                if close_window {
+                    window_id = Some(window.id());
+                }
+
+                self.frame_tree_id.next();
+                break;
+            }
         }
 
-        self.frame_tree_id.next();
+        if let Some(id) = window_id {
+            windows.remove(&id);
+        }
     }
 
     /// Notify compositor the provided webview is resized. The compositor will tell constellation and update the display list.
@@ -1145,7 +1195,6 @@ impl IOCompositor {
         rect: DeviceIntRect,
     ) {
         self.send_window_size_message_for_top_level_browser_context(rect, webview_id);
-        self.send_root_pipeline_display_list();
     }
 
     fn send_window_size_message_for_top_level_browser_context(
@@ -1230,6 +1279,28 @@ impl IOCompositor {
         self.pipeline_details.remove(&pipeline_id);
     }
 
+    /// Change the current window of the compositor should display.
+    pub fn swap_current_window(&mut self, window: &mut Window) {
+        if window.id() != self.current_window {
+            debug!(
+                "Verso Compositor swap current window from {:?} to {:?}",
+                self.current_window,
+                window.id()
+            );
+            if let Some(Some(new_surface)) = self.surfaces.insert(window.id(), None) {
+                // Swap the surface
+                self.rendering_context.with_front_buffer(|_, old_surface| {
+                    self.surfaces.insert(self.current_window, Some(old_surface));
+                    new_surface
+                });
+                self.current_window = window.id();
+                self.scale_factor = Scale::new(window.scale_factor() as f32);
+                self.painting_order.clear();
+                window.resize(window.size(), self);
+            }
+        }
+    }
+
     /// Handle the window resize event and return a boolean to tell embedder if it should further
     /// handle the resize event.
     pub fn on_resize_window_event(&mut self, new_viewport: DeviceIntSize) -> bool {
@@ -1243,6 +1314,18 @@ impl IOCompositor {
         transaction.set_document_view(DeviceIntRect::from_size(self.viewport));
         self.webrender_api
             .send_transaction(self.webrender_document, transaction);
+        self.composite_if_necessary(CompositingReason::Resize);
+        true
+    }
+
+    /// Handle the window scale factor event and return a boolean to tell embedder if it should further
+    /// handle the scale factor event.
+    pub fn on_scale_factor_event(&mut self, scale_factor: f32) -> bool {
+        if self.shutdown_state != ShutdownState::NotShuttingDown {
+            return false;
+        }
+
+        self.scale_factor = Scale::new(scale_factor);
         self.update_after_zoom_or_hidpi_change();
         self.composite_if_necessary(CompositingReason::Resize);
         true
@@ -1486,7 +1569,7 @@ impl IOCompositor {
         self.dispatch_mouse_window_event_class(MouseWindowEvent::Click(button, p));
     }
 
-    /// Hit test and foward the wheel event to constellation.
+    /// Hit test and forward the wheel event to constellation.
     pub fn on_wheel_event(&mut self, delta: WheelDelta, p: DevicePoint) {
         if self.shutdown_state != ShutdownState::NotShuttingDown {
             return;
@@ -1712,10 +1795,6 @@ impl IOCompositor {
         }
     }
 
-    fn scale_factor(&self) -> Scale<f32, DeviceIndependentPixel, DevicePixel> {
-        self.scale_factor
-    }
-
     fn device_pixels_per_page_pixel(&self) -> Scale<f32, CSSPixel, DevicePixel> {
         self.device_pixels_per_page_pixel_not_including_page_zoom() * self.pinch_zoom_level()
     }
@@ -1723,7 +1802,7 @@ impl IOCompositor {
     fn device_pixels_per_page_pixel_not_including_page_zoom(
         &self,
     ) -> Scale<f32, CSSPixel, DevicePixel> {
-        self.page_zoom * self.scale_factor()
+        self.page_zoom * self.scale_factor
     }
 
     /// Handle zoom reset event
@@ -1884,13 +1963,6 @@ impl IOCompositor {
 
     /// Composite to the given target if any, or the current target otherwise.
     fn composite_specific_target(&mut self) -> Result<(), UnableToComposite> {
-        if self.waiting_on_present {
-            debug!("tried to composite while waiting on present");
-            return Err(UnableToComposite::NotReadyToPaintImage(
-                NotReadyToPaint::WaitingOnConstellation,
-            ));
-        }
-
         if let Err(err) = self.rendering_context.make_gl_context_current() {
             warn!("Failed to make GL context current: {:?}", err);
         }
@@ -1934,10 +2006,9 @@ impl IOCompositor {
                 trace!("Compositing");
                 // Paint the scene.
                 // TODO(gw): Take notice of any errors the renderer returns!
-                self.clear_background();
                 self.webrender
                     // TODO to untyped?
-                    .render(self.viewport, 0 /* buffer_age */)
+                    .render(self.viewport, 0)
                     .ok();
             },
         );
@@ -1988,28 +2059,14 @@ impl IOCompositor {
             }
         }
 
-        // Notify embedder that servo is ready to present.
-        // Embedder should call `present` to tell compositor to continue rendering.
-        self.waiting_on_present = true;
-        let webview_ids = self.painting_order.iter().map(|w| w.webview_id);
-        let msg = ConstellationMsg::ReadyToPresent(webview_ids.collect());
-        if let Err(e) = self.constellation_chan.send(msg) {
-            warn!("Sending event to constellation failed ({:?}).", e);
+        if let Err(err) = self.rendering_context.present() {
+            warn!("Failed to present surface: {:?}", err);
         }
-
         self.composition_request = CompositionRequest::NoCompositingNecessary;
 
         self.process_animations(true);
 
         Ok(())
-    }
-
-    /// Displays the contents of the surface on screen.
-    pub fn present(&mut self) {
-        if let Err(err) = self.rendering_context.present() {
-            warn!("Failed to present surface: {:?}", err);
-        }
-        self.waiting_on_present = false;
     }
 
     fn composite_if_necessary(&mut self, reason: CompositingReason) {
@@ -2018,44 +2075,6 @@ impl IOCompositor {
             self.composition_request
         );
         self.composition_request = CompositionRequest::CompositeNow(reason)
-    }
-
-    fn clear_background(&self) {
-        let gl = &self.webrender_gl;
-        self.assert_gl_framebuffer_complete();
-
-        // Set the viewport background based on prefs.
-        let color = servo_config::pref!(shell.background_color.rgba);
-        gl.clear_color(
-            color[0] as f32,
-            color[1] as f32,
-            color[2] as f32,
-            color[3] as f32,
-        );
-
-        let framebuffer_height = self.viewport.height;
-        // Clear the viewport rect of each top-level browsing context.
-        for webview in &self.painting_order {
-            // Flip the rectangle in the framebuffer
-            let origin = webview.rect.to_i32();
-            let mut rect = origin.clone();
-            let min_y = framebuffer_height - rect.max.y;
-            let max_y = framebuffer_height - rect.min.y;
-            rect.min.y = min_y;
-            rect.max.y = max_y;
-
-            gl.scissor(
-                rect.min.x,
-                rect.min.y,
-                rect.size().width,
-                rect.size().height,
-            );
-            gl.enable(gl::SCISSOR_TEST);
-            gl.clear(gl::COLOR_BUFFER_BIT);
-            gl.disable(gl::SCISSOR_TEST);
-        }
-
-        self.assert_gl_framebuffer_complete();
     }
 
     #[track_caller]
@@ -2075,7 +2094,7 @@ impl IOCompositor {
     }
 
     /// Receive and handle compositor messages.
-    pub fn receive_messages(&mut self, window: &mut Window) -> bool {
+    pub fn receive_messages(&mut self, windows: &mut HashMap<WindowId, Window>) -> bool {
         // Check for new messages coming from the other threads in the system.
         let mut compositor_messages = vec![];
         let mut found_recomposite_msg = false;
@@ -2094,7 +2113,7 @@ impl IOCompositor {
             }
         }
         for msg in compositor_messages {
-            if !self.handle_browser_message(msg, window) {
+            if !self.handle_browser_message(msg, windows) {
                 return false;
             }
         }
@@ -2136,11 +2155,11 @@ impl IOCompositor {
     /// paint is not scheduled the compositor will hang forever.
     ///
     /// This is used when resizing the window.
-    pub fn repaint_synchronously(&mut self, window: &mut Window) {
+    pub fn repaint_synchronously(&mut self, windows: &mut HashMap<WindowId, Window>) {
         while self.shutdown_state != ShutdownState::ShuttingDown {
             let msg = self.port.recv_compositor_msg();
             let need_recomposite = matches!(msg, CompositorMsg::NewWebRenderFrameReady(_));
-            let keep_going = self.handle_browser_message(msg, window);
+            let keep_going = self.handle_browser_message(msg, windows);
             if need_recomposite {
                 self.composite();
                 break;
@@ -2189,8 +2208,25 @@ impl IOCompositor {
     }
 
     /// Update the painting order of the compositor.
-    pub fn set_painting_order(&mut self, painting_order: Vec<WebView>) {
-        self.painting_order = painting_order;
+    pub fn set_painting_order(&mut self, window: &Window) {
+        if self.current_window == window.id() {
+            let painting_order = window.painting_order();
+            self.painting_order = painting_order;
+            self.send_root_pipeline_display_list();
+            debug!(
+                "Verso Compositor sets painting order to {:?}'s painting order {:?}",
+                window.id(),
+                self.painting_order
+                    .iter()
+                    .map(|w| w.webview_id)
+                    .collect::<Vec<_>>()
+            );
+        } else {
+            warn!(
+                "Failed to set painting order due to {:?} is not the current window",
+                window.id()
+            );
+        }
     }
 }
 
