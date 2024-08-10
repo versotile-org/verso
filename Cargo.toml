@@ -92,6 +92,7 @@ style_traits = { git = "https://github.com/servo/stylo", branch = "2024-07-16", 
 webrender = { git = "https://github.com/servo/webrender", branch = "0.65", features = ["capture"] }
 webrender_api = { git = "https://github.com/servo/webrender", branch = "0.65" }
 webxr = { git = "https://github.com/servo/webxr", features = ["headless"] }
+webxr-api = { git = "https://github.com/servo/webxr" }
 # Packager feature
 cargo-packager-resource-resolver = { version = "0.1.1", features = [
   "auto-detect-format",
