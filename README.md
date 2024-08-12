@@ -98,7 +98,7 @@ Nightly releases built with CrabNebula Cloud can be found at [releases](https://
 
 ## Future Work
 
-- Multiwindow support.
+- Multi-window support.
 - Enable multiprocess mode.
 - Enable sandbox in all platforms.
 - Enable `Gstreamer` feature.
