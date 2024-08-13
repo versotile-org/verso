@@ -72,7 +72,6 @@ impl Window {
                     w
                 );
                 compositor.set_webview_loaded(&w);
-                compositor.set_painting_order(self);
             }
             EmbedderMsg::LoadComplete => {
                 self.window.request_redraw();
@@ -147,7 +146,6 @@ impl Window {
                     w
                 );
                 compositor.set_webview_loaded(&w);
-                compositor.set_painting_order(self);
             }
             EmbedderMsg::LoadComplete => {
                 self.window.request_redraw();

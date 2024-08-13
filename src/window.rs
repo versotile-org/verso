@@ -149,7 +149,7 @@ impl Window {
                 return self.resize(size.to_i32(), compositor);
             }
             WindowEvent::ScaleFactorChanged { scale_factor, .. } => {
-                compositor.on_scale_factor_event(*scale_factor as f32);
+                compositor.on_scale_factor_event(*scale_factor as f32, self);
             }
             WindowEvent::CursorEntered { .. } => {
                 compositor.swap_current_window(self);
@@ -189,7 +189,7 @@ impl Window {
                 }
             }
             WindowEvent::TouchpadMagnify { delta, .. } => {
-                compositor.on_zoom_window_event(1.0 + *delta as f32);
+                compositor.on_zoom_window_event(1.0 + *delta as f32, self);
             }
             WindowEvent::MouseWheel { delta, phase, .. } => {
                 // FIXME: Pixels per line, should be configurable (from browser setting?) and vary by zoom level.
@@ -299,8 +299,7 @@ impl Window {
             compositor.on_resize_webview_event(w.webview_id, rect);
         }
 
-        compositor.set_painting_order(self);
-
+        compositor.send_root_pipeline_display_list(self);
         need_resize
     }
 
@@ -354,13 +353,13 @@ impl Window {
     }
 
     /// Get the painting order of this window.
-    pub fn painting_order(&self) -> Vec<WebView> {
+    pub fn painting_order(&self) -> Vec<&WebView> {
         let mut order = vec![];
         if let Some(webview) = &self.webview {
-            order.push(webview.clone());
+            order.push(webview);
         }
         if let Some(panel) = &self.panel {
-            order.push(panel.clone());
+            order.push(panel);
         }
         order
     }

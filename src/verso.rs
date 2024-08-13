@@ -508,7 +508,7 @@ impl Verso {
 
             if compositor.shutdown_state != ShutdownState::FinishedShuttingDown {
                 // Update compositor
-                compositor.perform_updates();
+                compositor.perform_updates(&mut self.windows);
             } else {
                 shutdown = true;
             }
