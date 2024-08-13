@@ -9,10 +9,7 @@ use arboard::Clipboard;
 use base::id::WebViewId;
 use bluetooth::BluetoothThreadFactory;
 use bluetooth_traits::BluetoothRequest;
-use canvas::{
-    canvas_paint_thread::{self, CanvasPaintThread},
-    WebGLComm,
-};
+use canvas::canvas_paint_thread::{self, CanvasPaintThread};
 use compositing_traits::{
     CompositorMsg, CompositorProxy, CompositorReceiver, ConstellationMsg, ForwardedToCompositorMsg,
 };
@@ -40,6 +37,7 @@ use webgpu;
 use webrender::{create_webrender_instance, ShaderPrecacheFlags, WebRenderOptions};
 use webrender_api::*;
 use webrender_traits::*;
+use webxr_api::{LayerGrandManager, LayerGrandManagerAPI, LayerManager, LayerManagerFactory};
 use winit::{
     event::{Event, WindowEvent},
     event_loop::{EventLoopProxy, EventLoopWindowTarget},
@@ -206,30 +204,32 @@ impl Verso {
             None
         };
 
-        // Create the webgl thread
-        let gl_type = match webrender_gl.get_type() {
-            gl::GlType::Gl => sparkle::gl::GlType::Gl,
-            gl::GlType::Gles => sparkle::gl::GlType::Gles,
-        };
         let (external_image_handlers, external_images) = WebrenderExternalImageHandlers::new();
         let mut external_image_handlers = Box::new(external_image_handlers);
-        let WebGLComm {
-            webgl_threads,
-            webxr_layer_grand_manager,
-            image_handler,
-        } = WebGLComm::new(
-            rendering_context.clone(),
-            webrender_api.create_sender(),
-            webrender_document,
-            external_images.clone(),
-            gl_type,
-        );
+        // Create the webgl thread
+        // TODO: create webGL thread based on pref
+        // let gl_type = match webrender_gl.get_type() {
+        //     gl::GlType::Gl => sparkle::gl::GlType::Gl,
+        //     gl::GlType::Gles => sparkle::gl::GlType::Gles,
+        // };
+        // let WebGLComm {
+        //     webgl_threads,
+        //     webxr_layer_grand_manager,
+        //     image_handler,
+        // } = WebGLComm::new(
+        //     rendering_context.clone(),
+        //     webrender_api.create_sender(),
+        //     webrender_document,
+        //     external_images.clone(),
+        //     gl_type,
+        // );
         // Set webrender external image handler for WebGL textures
-        external_image_handlers.set_handler(image_handler, WebrenderImageHandlerType::WebGL);
+        // external_image_handlers.set_handler(image_handler, WebrenderImageHandlerType::WebGL);
 
         // Create WebXR dummy
+        let webxr_layer_grand_manager = LayerGrandManager::new(DummyLayer);
         let webxr_registry =
-            webxr::MainThreadRegistry::new(event_loop_waker, webxr_layer_grand_manager)
+            webxr_api::MainThreadRegistry::new(event_loop_waker, webxr_layer_grand_manager)
                 .expect("Failed to create WebXR device registry");
         // if pref!(dom.webxr.enabled) {
         // TODO if pref!(dom.webxr.test) {
@@ -303,7 +303,7 @@ impl Verso {
             webrender_document,
             webrender_api_sender,
             webxr_registry: webxr_registry.registry(),
-            webgl_threads: Some(webgl_threads),
+            webgl_threads: None,
             glplayer_threads: None,
             player_context: glplayer_context,
             user_agent,
@@ -729,5 +729,21 @@ pub(crate) fn send_to_constellation(sender: &Sender<ConstellationMsg>, msg: Cons
     let variant_name = msg.variant_name();
     if let Err(e) = sender.send(msg) {
         log::warn!("Sending {variant_name} to constellation failed: {e:?}");
+    }
+}
+
+#[derive(Clone, Copy, Debug)]
+struct DummyLayer;
+
+impl LayerGrandManagerAPI<()> for DummyLayer {
+    fn create_layer_manager(
+        &self,
+        _: LayerManagerFactory<()>,
+    ) -> Result<LayerManager, webxr_api::Error> {
+        Err(webxr_api::Error::CommunicationError)
+    }
+
+    fn clone_layer_grand_manager(&self) -> LayerGrandManager<()> {
+        LayerGrandManager::new(DummyLayer)
     }
 }

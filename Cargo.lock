@@ -6123,6 +6123,7 @@ dependencies = [
  "webrender_api",
  "webrender_traits",
  "webxr",
+ "webxr-api",
  "winit",
 ]
 

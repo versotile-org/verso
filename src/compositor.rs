@@ -71,7 +71,7 @@ pub struct InitialCompositorState {
     /// Webrender GL handle
     pub webrender_gl: Rc<dyn gl::Gl>,
     /// WebXR registry
-    pub webxr_main_thread: webxr::MainThreadRegistry,
+    pub webxr_main_thread: webxr_api::MainThreadRegistry<()>,
 }
 
 /// Various debug and profiling flags that WebRender supports.
@@ -187,7 +187,7 @@ pub struct IOCompositor {
     webrender_gl: Rc<dyn gl::Gl>,
 
     /// Some XR devices want to run on the main thread.
-    pub webxr_main_thread: webxr::MainThreadRegistry,
+    pub webxr_main_thread: webxr_api::MainThreadRegistry<()>,
 
     /// Map of the pending paint metrics per Layout.
     /// The Layout for each specific pipeline expects the compositor to
