@@ -112,3 +112,7 @@ objc_id = "0.1"
 [[test]]
 name = "general"
 harness = false
+
+[profile.release-lto]
+inherits = "release"
+lto = true
