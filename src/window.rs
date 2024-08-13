@@ -10,9 +10,7 @@ use script_traits::{TouchEventType, WheelDelta, WheelMode};
 use surfman::Connection;
 use surfman::SurfaceType;
 use webrender_api::{
-    units::{
-        DeviceIntPoint, DeviceIntRect, DeviceIntSize, DevicePixel, DevicePoint, LayoutVector2D,
-    },
+    units::{DeviceIntPoint, DeviceIntRect, DeviceIntSize, DevicePoint, LayoutVector2D},
     ScrollLocation,
 };
 use webrender_traits::RenderingContext;
@@ -146,7 +144,7 @@ impl Window {
             }
             WindowEvent::Resized(size) => {
                 let size = Size2D::new(size.width, size.height);
-                return self.resize(size.to_i32(), compositor);
+                return compositor.resize(size.to_i32(), self);
             }
             WindowEvent::ScaleFactorChanged { scale_factor, .. } => {
                 compositor.on_scale_factor_event(*scale_factor as f32, self);
@@ -275,32 +273,6 @@ impl Window {
     /// Queues a Winit `WindowEvent::RedrawRequested` event to be emitted that aligns with the windowing system drawing loop.
     pub fn request_redraw(&self) {
         self.window.request_redraw()
-    }
-
-    /// Resize the rendering context and all web views. Return true if the compositor should repaint and present
-    /// after this.
-    pub fn resize(
-        &mut self,
-        size: Size2D<i32, DevicePixel>,
-        compositor: &mut IOCompositor,
-    ) -> bool {
-        let need_resize = compositor.on_resize_window_event(size);
-
-        if let Some(panel) = &mut self.panel {
-            let rect = DeviceIntRect::from_size(size);
-            panel.rect = rect;
-            compositor.on_resize_webview_event(panel.webview_id, rect);
-        }
-
-        if let Some(w) = &mut self.webview {
-            let mut rect = DeviceIntRect::from_size(size);
-            rect.min.y = rect.max.y.min(76);
-            w.rect = rect;
-            compositor.on_resize_webview_event(w.webview_id, rect);
-        }
-
-        compositor.send_root_pipeline_display_list(self);
-        need_resize
     }
 
     /// Size of the window that's used by webrender.

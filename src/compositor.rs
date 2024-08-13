@@ -11,7 +11,7 @@ use compositing_traits::{
 };
 use crossbeam_channel::Sender;
 use embedder_traits::Cursor;
-use euclid::{Point2D, Scale, Transform3D, Vector2D};
+use euclid::{Point2D, Scale, Size2D, Transform3D, Vector2D};
 use gleam::gl;
 use ipc_channel::ipc;
 use log::{debug, error, trace, warn};
@@ -1300,9 +1300,31 @@ impl IOCompositor {
                 });
                 self.current_window = window.id();
                 self.scale_factor = Scale::new(window.scale_factor() as f32);
-                window.resize(window.size(), self);
+                self.resize(window.size(), window);
             }
         }
+    }
+
+    /// Resize the rendering context and all web views. Return true if the compositor should repaint and present
+    /// after this.
+    pub fn resize(&mut self, size: Size2D<i32, DevicePixel>, window: &mut Window) -> bool {
+        let need_resize = self.on_resize_window_event(size);
+
+        if let Some(panel) = &mut window.panel {
+            let rect = DeviceIntRect::from_size(size);
+            panel.rect = rect;
+            self.on_resize_webview_event(panel.webview_id, rect);
+        }
+
+        if let Some(w) = &mut window.webview {
+            let mut rect = DeviceIntRect::from_size(size);
+            rect.min.y = rect.max.y.min(76);
+            w.rect = rect;
+            self.on_resize_webview_event(w.webview_id, rect);
+        }
+
+        self.send_root_pipeline_display_list(window);
+        need_resize
     }
 
     /// Handle the window resize event and return a boolean to tell embedder if it should further
