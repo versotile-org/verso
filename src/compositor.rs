@@ -123,7 +123,7 @@ pub struct IOCompositor {
     port: CompositorReceiver,
 
     /// Tracks each webview and its current pipeline
-    webviews: HashMap<TopLevelBrowsingContextId, (PipelineId, bool)>,
+    webviews: HashMap<TopLevelBrowsingContextId, PipelineId>,
 
     /// Tracks details about each active pipeline that the compositor knows about.
     pipeline_details: HashMap<PipelineId, PipelineDetails>,
@@ -1075,7 +1075,7 @@ impl IOCompositor {
         let root_clip_id = builder.define_clip_rect(zoom_reference_frame, scaled_viewport_rect);
         let clip_chain_id = builder.define_clip_chain(None, [root_clip_id]);
         for webview in window.painting_order() {
-            if let Some((pipeline_id, _)) = self.webviews.get(&webview.webview_id) {
+            if let Some(pipeline_id) = self.webviews.get(&webview.webview_id) {
                 let scaled_webview_rect = webview.rect.to_f32() / zoom_factor;
                 builder.push_iframe(
                     LayoutRect::from_untyped(&scaled_webview_rect.to_untyped()),
@@ -1126,16 +1126,6 @@ impl IOCompositor {
         }
     }
 
-    /// Set the webview of the compositor to completely loaded, and hence it could add to display
-    /// list.
-    pub fn set_webview_loaded(&mut self, webview_id: &TopLevelBrowsingContextId) {
-        if let Some((_, loaded)) = self.webviews.get_mut(webview_id) {
-            *loaded = true;
-        } else {
-            warn!("The compositor doesn't have {webview_id} to set its loaded state");
-        }
-    }
-
     fn create_or_update_webview(
         &mut self,
         frame_tree: &SendableFrameTree,
@@ -1148,7 +1138,7 @@ impl IOCompositor {
             "Verso Compositor is setting frame tree with pipeline {} for webview {}",
             pipeline_id, webview_id
         );
-        if let Some((old_pipeline, _)) = self.webviews.insert(webview_id, (pipeline_id, false)) {
+        if let Some(old_pipeline) = self.webviews.insert(webview_id, pipeline_id) {
             debug!("{webview_id}'s pipeline has changed from {old_pipeline} to {pipeline_id}");
         }
 
@@ -1175,7 +1165,7 @@ impl IOCompositor {
             let (webview, close_window) =
                 window.remove_webview(top_level_browsing_context_id, self);
             if let Some(webview) = webview {
-                if let Some((pipeline_id, _)) = self.webviews.remove(&webview.webview_id) {
+                if let Some(pipeline_id) = self.webviews.remove(&webview.webview_id) {
                     self.remove_pipeline_details_recursively(pipeline_id);
                 }
 
