@@ -10,9 +10,7 @@ use script_traits::{TouchEventType, WheelDelta, WheelMode};
 use surfman::Connection;
 use surfman::SurfaceType;
 use webrender_api::{
-    units::{
-        DeviceIntPoint, DeviceIntRect, DeviceIntSize, DevicePixel, DevicePoint, LayoutVector2D,
-    },
+    units::{DeviceIntPoint, DeviceIntRect, DeviceIntSize, DevicePoint, LayoutVector2D},
     ScrollLocation,
 };
 use webrender_traits::RenderingContext;
@@ -146,10 +144,10 @@ impl Window {
             }
             WindowEvent::Resized(size) => {
                 let size = Size2D::new(size.width, size.height);
-                return self.resize(size.to_i32(), compositor);
+                return compositor.resize(size.to_i32(), self);
             }
             WindowEvent::ScaleFactorChanged { scale_factor, .. } => {
-                compositor.on_scale_factor_event(*scale_factor as f32);
+                compositor.on_scale_factor_event(*scale_factor as f32, self);
             }
             WindowEvent::CursorEntered { .. } => {
                 compositor.swap_current_window(self);
@@ -189,7 +187,7 @@ impl Window {
                 }
             }
             WindowEvent::TouchpadMagnify { delta, .. } => {
-                compositor.on_zoom_window_event(1.0 + *delta as f32);
+                compositor.on_zoom_window_event(1.0 + *delta as f32, self);
             }
             WindowEvent::MouseWheel { delta, phase, .. } => {
                 // FIXME: Pixels per line, should be configurable (from browser setting?) and vary by zoom level.
@@ -277,33 +275,6 @@ impl Window {
         self.window.request_redraw()
     }
 
-    /// Resize the rendering context and all web views. Return true if the compositor should repaint and present
-    /// after this.
-    pub fn resize(
-        &mut self,
-        size: Size2D<i32, DevicePixel>,
-        compositor: &mut IOCompositor,
-    ) -> bool {
-        let need_resize = compositor.on_resize_window_event(size);
-
-        if let Some(panel) = &mut self.panel {
-            let rect = DeviceIntRect::from_size(size);
-            panel.rect = rect;
-            compositor.on_resize_webview_event(panel.webview_id, rect);
-        }
-
-        if let Some(w) = &mut self.webview {
-            let mut rect = DeviceIntRect::from_size(size);
-            rect.min.y = rect.max.y.min(76);
-            w.rect = rect;
-            compositor.on_resize_webview_event(w.webview_id, rect);
-        }
-
-        compositor.set_painting_order(self);
-
-        need_resize
-    }
-
     /// Size of the window that's used by webrender.
     pub fn size(&self) -> DeviceIntSize {
         let size = self.window.inner_size();
@@ -354,13 +325,13 @@ impl Window {
     }
 
     /// Get the painting order of this window.
-    pub fn painting_order(&self) -> Vec<WebView> {
+    pub fn painting_order(&self) -> Vec<&WebView> {
         let mut order = vec![];
         if let Some(webview) = &self.webview {
-            order.push(webview.clone());
+            order.push(webview);
         }
         if let Some(panel) = &self.panel {
-            order.push(panel.clone());
+            order.push(panel);
         }
         order
     }

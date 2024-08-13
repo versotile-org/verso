@@ -54,7 +54,7 @@ impl Window {
         message: EmbedderMsg,
         sender: &Sender<ConstellationMsg>,
         clipboard: Option<&mut Clipboard>,
-        compositor: &mut IOCompositor,
+        _compositor: &mut IOCompositor,
     ) {
         log::trace!("Verso WebView {webview_id:?} is handling Embedder message: {message:?}",);
         match message {
@@ -71,8 +71,6 @@ impl Window {
                     self.id(),
                     w
                 );
-                compositor.set_webview_loaded(&w);
-                compositor.set_painting_order(self);
             }
             EmbedderMsg::LoadComplete => {
                 self.window.request_redraw();
@@ -129,7 +127,7 @@ impl Window {
         message: EmbedderMsg,
         sender: &Sender<ConstellationMsg>,
         clipboard: Option<&mut Clipboard>,
-        compositor: &mut IOCompositor,
+        _compositor: &mut IOCompositor,
     ) -> bool {
         log::trace!("Verso Panel {panel_id:?} is handling Embedder message: {message:?}",);
         match message {
@@ -146,8 +144,6 @@ impl Window {
                     self.id(),
                     w
                 );
-                compositor.set_webview_loaded(&w);
-                compositor.set_painting_order(self);
             }
             EmbedderMsg::LoadComplete => {
                 self.window.request_redraw();

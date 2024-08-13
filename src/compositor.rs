@@ -11,7 +11,7 @@ use compositing_traits::{
 };
 use crossbeam_channel::Sender;
 use embedder_traits::Cursor;
-use euclid::{Point2D, Scale, Transform3D, Vector2D};
+use euclid::{Point2D, Scale, Size2D, Transform3D, Vector2D};
 use gleam::gl;
 use ipc_channel::ipc;
 use log::{debug, error, trace, warn};
@@ -45,7 +45,6 @@ use webrender_traits::{
 use winit::window::WindowId;
 
 use crate::touch::{TouchAction, TouchHandler};
-use crate::webview::WebView;
 use crate::window::Window;
 
 /// Data used to construct a compositor.
@@ -117,9 +116,6 @@ pub struct IOCompositor {
     /// The pixel density of the display.
     scale_factor: Scale<f32, DeviceIndependentPixel, DevicePixel>,
 
-    /// The order to paint webviews in, top most webview should be the last element.
-    painting_order: Vec<WebView>,
-
     /// The active webrender document.
     webrender_document: DocumentId,
 
@@ -127,7 +123,7 @@ pub struct IOCompositor {
     port: CompositorReceiver,
 
     /// Tracks each webview and its current pipeline
-    webviews: HashMap<TopLevelBrowsingContextId, (PipelineId, bool)>,
+    webviews: HashMap<TopLevelBrowsingContextId, PipelineId>,
 
     /// Tracks details about each active pipeline that the compositor knows about.
     pipeline_details: HashMap<PipelineId, PipelineDetails>,
@@ -390,7 +386,6 @@ impl IOCompositor {
             pending_frames: 0,
             last_animation_tick: Instant::now(),
             is_animating: false,
-            painting_order: vec![],
         };
 
         // Make sure the GL state is OK
@@ -514,7 +509,7 @@ impl IOCompositor {
             }
 
             CompositorMsg::CreateOrUpdateWebView(frame_tree) => {
-                self.create_or_update_webview(&frame_tree);
+                self.create_or_update_webview(&frame_tree, windows);
                 self.send_scroll_positions_to_layout_for_pipeline(&frame_tree.pipeline.id);
             }
 
@@ -1033,9 +1028,9 @@ impl IOCompositor {
     /// Set the root pipeline for our WebRender scene to a display list that consists of an iframe
     /// for each visible top-level browsing context, applying a transformation on the root for
     /// pinch zoom, page zoom, and HiDPI scaling.
-    fn send_root_pipeline_display_list(&mut self) {
+    pub fn send_root_pipeline_display_list(&mut self, window: &Window) {
         let mut transaction = Transaction::new();
-        self.send_root_pipeline_display_list_in_transaction(&mut transaction);
+        self.send_root_pipeline_display_list_in_transaction(&mut transaction, window);
         self.generate_frame(&mut transaction, RenderReasons::SCENE);
         self.webrender_api
             .send_transaction(self.webrender_document, transaction);
@@ -1044,7 +1039,11 @@ impl IOCompositor {
     /// Set the root pipeline for our WebRender scene to a display list that consists of an iframe
     /// for each visible top-level browsing context, applying a transformation on the root for
     /// pinch zoom, page zoom, and HiDPI scaling.
-    fn send_root_pipeline_display_list_in_transaction(&self, transaction: &mut Transaction) {
+    fn send_root_pipeline_display_list_in_transaction(
+        &self,
+        transaction: &mut Transaction,
+        window: &Window,
+    ) {
         // Every display list needs a pipeline, but we'd like to choose one that is unlikely
         // to conflict with our content pipelines, which start at (1, 1). (0, 0) is WebRender's
         // dummy pipeline, so we choose (0, 1).
@@ -1075,8 +1074,8 @@ impl IOCompositor {
 
         let root_clip_id = builder.define_clip_rect(zoom_reference_frame, scaled_viewport_rect);
         let clip_chain_id = builder.define_clip_chain(None, [root_clip_id]);
-        for webview in &self.painting_order {
-            if let Some((pipeline_id, true)) = self.webviews.get(&webview.webview_id) {
+        for webview in window.painting_order() {
+            if let Some(pipeline_id) = self.webviews.get(&webview.webview_id) {
                 let scaled_webview_rect = webview.rect.to_f32() / zoom_factor;
                 builder.push_iframe(
                     LayoutRect::from_untyped(&scaled_webview_rect.to_untyped()),
@@ -1127,28 +1126,25 @@ impl IOCompositor {
         }
     }
 
-    /// Set the webview of the compositor to completely loaded, and hence it could add to display
-    /// list.
-    pub fn set_webview_loaded(&mut self, webview_id: &TopLevelBrowsingContextId) {
-        if let Some((_, loaded)) = self.webviews.get_mut(webview_id) {
-            *loaded = true;
-        } else {
-            warn!("The compositor doesn't have {webview_id} to set its loaded state");
-        }
-    }
+    fn create_or_update_webview(
+        &mut self,
+        frame_tree: &SendableFrameTree,
 
-    fn create_or_update_webview(&mut self, frame_tree: &SendableFrameTree) {
+        windows: &mut HashMap<WindowId, Window>,
+    ) {
         let pipeline_id = frame_tree.pipeline.id;
         let webview_id = frame_tree.pipeline.top_level_browsing_context_id;
         debug!(
             "Verso Compositor is setting frame tree with pipeline {} for webview {}",
             pipeline_id, webview_id
         );
-        if let Some((old_pipeline, _)) = self.webviews.insert(webview_id, (pipeline_id, false)) {
+        if let Some(old_pipeline) = self.webviews.insert(webview_id, pipeline_id) {
             debug!("{webview_id}'s pipeline has changed from {old_pipeline} to {pipeline_id}");
         }
 
-        self.send_root_pipeline_display_list();
+        if let Some(window) = windows.get(&self.current_window) {
+            self.send_root_pipeline_display_list(window);
+        }
         self.create_or_update_pipeline_details_with_frame_tree(frame_tree, None);
         self.reset_scroll_tree_for_unattached_pipelines(frame_tree);
 
@@ -1169,8 +1165,7 @@ impl IOCompositor {
             let (webview, close_window) =
                 window.remove_webview(top_level_browsing_context_id, self);
             if let Some(webview) = webview {
-                self.set_painting_order(window);
-                if let Some((pipeline_id, _)) = self.webviews.remove(&webview.webview_id) {
+                if let Some(pipeline_id) = self.webviews.remove(&webview.webview_id) {
                     self.remove_pipeline_details_recursively(pipeline_id);
                 }
 
@@ -1295,10 +1290,31 @@ impl IOCompositor {
                 });
                 self.current_window = window.id();
                 self.scale_factor = Scale::new(window.scale_factor() as f32);
-                self.painting_order.clear();
-                window.resize(window.size(), self);
+                self.resize(window.size(), window);
             }
         }
+    }
+
+    /// Resize the rendering context and all web views. Return true if the compositor should repaint and present
+    /// after this.
+    pub fn resize(&mut self, size: Size2D<i32, DevicePixel>, window: &mut Window) -> bool {
+        let need_resize = self.on_resize_window_event(size);
+
+        if let Some(panel) = &mut window.panel {
+            let rect = DeviceIntRect::from_size(size);
+            panel.rect = rect;
+            self.on_resize_webview_event(panel.webview_id, rect);
+        }
+
+        if let Some(w) = &mut window.webview {
+            let mut rect = DeviceIntRect::from_size(size);
+            rect.min.y = rect.max.y.min(76);
+            w.rect = rect;
+            self.on_resize_webview_event(w.webview_id, rect);
+        }
+
+        self.send_root_pipeline_display_list(window);
+        need_resize
     }
 
     /// Handle the window resize event and return a boolean to tell embedder if it should further
@@ -1320,13 +1336,13 @@ impl IOCompositor {
 
     /// Handle the window scale factor event and return a boolean to tell embedder if it should further
     /// handle the scale factor event.
-    pub fn on_scale_factor_event(&mut self, scale_factor: f32) -> bool {
+    pub fn on_scale_factor_event(&mut self, scale_factor: f32, window: &Window) -> bool {
         if self.shutdown_state != ShutdownState::NotShuttingDown {
             return false;
         }
 
         self.scale_factor = Scale::new(scale_factor);
-        self.update_after_zoom_or_hidpi_change();
+        self.update_after_zoom_or_hidpi_change(window);
         self.composite_if_necessary(CompositingReason::Resize);
         true
     }
@@ -1609,7 +1625,7 @@ impl IOCompositor {
             }));
     }
 
-    fn process_pending_scroll_events(&mut self) {
+    fn process_pending_scroll_events(&mut self, window: &Window) {
         // Batch up all scroll events into one, or else we'll do way too much painting.
         let mut combined_scroll_event: Option<ScrollEvent> = None;
         let mut combined_magnification = 1.0;
@@ -1672,7 +1688,7 @@ impl IOCompositor {
 
         let mut transaction = Transaction::new();
         if zoom_changed {
-            self.send_root_pipeline_display_list_in_transaction(&mut transaction);
+            self.send_root_pipeline_display_list_in_transaction(&mut transaction, window);
         }
 
         if let Some((pipeline_id, external_id, offset)) = scroll_result {
@@ -1806,17 +1822,17 @@ impl IOCompositor {
     }
 
     /// Handle zoom reset event
-    pub fn on_zoom_reset_window_event(&mut self) {
+    pub fn on_zoom_reset_window_event(&mut self, window: &Window) {
         if self.shutdown_state != ShutdownState::NotShuttingDown {
             return;
         }
 
         self.page_zoom = Scale::new(1.0);
-        self.update_after_zoom_or_hidpi_change();
+        self.update_after_zoom_or_hidpi_change(window);
     }
 
     /// Handle zoom event in the window
-    pub fn on_zoom_window_event(&mut self, magnification: f32) {
+    pub fn on_zoom_window_event(&mut self, magnification: f32, window: &Window) {
         if self.shutdown_state != ShutdownState::NotShuttingDown {
             return;
         }
@@ -1826,11 +1842,11 @@ impl IOCompositor {
                 .max(MIN_ZOOM)
                 .min(MAX_ZOOM),
         );
-        self.update_after_zoom_or_hidpi_change();
+        self.update_after_zoom_or_hidpi_change(window);
     }
 
-    fn update_after_zoom_or_hidpi_change(&mut self) {
-        for webview in &self.painting_order {
+    fn update_after_zoom_or_hidpi_change(&mut self, window: &Window) {
+        for webview in window.painting_order() {
             self.send_window_size_message_for_top_level_browser_context(
                 webview.rect,
                 webview.webview_id,
@@ -1838,7 +1854,7 @@ impl IOCompositor {
         }
 
         // Update the root transform in WebRender to reflect the new zoom.
-        self.send_root_pipeline_display_list();
+        self.send_root_pipeline_display_list(window);
     }
 
     /// Simulate a pinch zoom
@@ -2121,7 +2137,7 @@ impl IOCompositor {
     }
 
     /// Perform composition and related actions.
-    pub fn perform_updates(&mut self) -> bool {
+    pub fn perform_updates(&mut self, windows: &mut HashMap<WindowId, Window>) -> bool {
         if self.shutdown_state == ShutdownState::FinishedShuttingDown {
             return false;
         }
@@ -2147,7 +2163,9 @@ impl IOCompositor {
         let _ = self.rendering_context.make_gl_context_current();
 
         if !self.pending_scroll_zoom_events.is_empty() {
-            self.process_pending_scroll_events()
+            if let Some(window) = windows.get(&self.current_window) {
+                self.process_pending_scroll_events(window)
+            }
         }
         self.shutdown_state != ShutdownState::FinishedShuttingDown
     }
@@ -2205,28 +2223,6 @@ impl IOCompositor {
         self.generate_frame(&mut txn, RenderReasons::TESTING);
         self.webrender_api
             .send_transaction(self.webrender_document, txn);
-    }
-
-    /// Update the painting order of the compositor.
-    pub fn set_painting_order(&mut self, window: &Window) {
-        if self.current_window == window.id() {
-            let painting_order = window.painting_order();
-            self.painting_order = painting_order;
-            self.send_root_pipeline_display_list();
-            debug!(
-                "Verso Compositor sets painting order to {:?}'s painting order {:?}",
-                window.id(),
-                self.painting_order
-                    .iter()
-                    .map(|w| w.webview_id)
-                    .collect::<Vec<_>>()
-            );
-        } else {
-            warn!(
-                "Failed to set painting order due to {:?} is not the current window",
-                window.id()
-            );
-        }
     }
 }
 
