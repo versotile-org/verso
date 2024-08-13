@@ -53,7 +53,7 @@ cargo run
 #### Flatpak
 
 For unified environment setup and package experience, we choose Flatpak to build the project from the start.
-Please follow the [Flatpak Setup](https://flatpak.org/setup/) page to install Flakpak based on your distribution.
+Please follow the [Flatpak Setup](https://flatpak.org/setup/) page to install Flatpak based on your distribution.
 
 - Install flatpak runtimes and extensions:
 
