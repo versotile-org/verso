@@ -39,11 +39,11 @@ use webrender_api::{
 use webrender_traits::display_list::{HitTestInfo, ScrollTree};
 use webrender_traits::{
     CanvasToCompositorMsg, CompositorHitTestResult, FontToCompositorMsg, ImageUpdate,
-    NetToCompositorMsg, RenderingContext, ScriptToCompositorMsg, SerializedImageUpdate,
-    UntrustedNodeAddress,
+    NetToCompositorMsg, ScriptToCompositorMsg, SerializedImageUpdate, UntrustedNodeAddress,
 };
 use winit::window::WindowId;
 
+use crate::rendering_context::RenderingContext;
 use crate::touch::{TouchAction, TouchHandler};
 use crate::window::Window;
 
@@ -451,34 +451,6 @@ impl IOCompositor {
         }
 
         self.shutdown_state = ShutdownState::FinishedShuttingDown;
-    }
-
-    /// The underlying native surface can be lost during servo's lifetime.
-    /// On Android, for example, this happens when the app is sent to background.
-    /// We need to unbind the surface so that we don't try to use it again.
-    pub fn invalidate_native_surface(&mut self) {
-        debug!("Invalidating native surface in compositor");
-        if let Err(e) = self.rendering_context.unbind_native_surface_from_context() {
-            warn!("Unbinding native surface from context failed ({:?})", e);
-        }
-    }
-
-    /// On Android, this function will be called when the app moves to foreground
-    /// and the system creates a new native surface that needs to bound to the current
-    /// context.
-    #[allow(unsafe_code)]
-    #[allow(clippy::not_unsafe_ptr_arg_deref)] // It has an unsafe block inside
-    pub fn replace_native_surface(&mut self, native_widget: *mut c_void, coords: DeviceIntSize) {
-        debug!("Replacing native surface in compositor: {native_widget:?}");
-        let connection = self.rendering_context.connection();
-        let native_widget =
-            unsafe { connection.create_native_widget_from_ptr(native_widget, coords.to_untyped()) };
-        if let Err(e) = self
-            .rendering_context
-            .bind_native_surface_to_context(native_widget)
-        {
-            warn!("Binding native surface to context failed ({:?})", e);
-        }
     }
 
     fn handle_browser_message(

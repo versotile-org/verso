@@ -13,7 +13,6 @@ use webrender_api::{
     units::{DeviceIntPoint, DeviceIntRect, DeviceIntSize, DevicePoint, LayoutVector2D},
     ScrollLocation,
 };
-use webrender_traits::RenderingContext;
 use winit::{
     dpi::PhysicalPosition,
     event::{ElementState, TouchPhase, WindowEvent},
@@ -25,6 +24,7 @@ use winit::{
 use crate::{
     compositor::{IOCompositor, MouseWindowEvent},
     keyboard::keyboard_event_from_winit,
+    rendering_context::RenderingContext,
     verso::send_to_constellation,
     webview::WebView,
 };
