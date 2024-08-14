@@ -4,7 +4,6 @@
 use verso::config::Config;
 use verso::{Result, Verso};
 use winit::application::ApplicationHandler;
-use winit::event::StartCause;
 use winit::event_loop::{self, DeviceEvents};
 use winit::event_loop::{EventLoop, EventLoopProxy};
 
@@ -14,7 +13,10 @@ struct App {
 }
 
 impl ApplicationHandler for App {
-    fn resumed(&mut self, _: &winit::event_loop::ActiveEventLoop) {}
+    fn resumed(&mut self, event_loop: &winit::event_loop::ActiveEventLoop) {
+        let config = Config::new(resources_dir_path().unwrap());
+        self.verso = Some(Verso::new(event_loop, self.proxy.clone(), config));
+    }
 
     fn window_event(
         &mut self,
@@ -26,13 +28,6 @@ impl ApplicationHandler for App {
             v.handle_winit_window_event(window_id, event);
             v.handle_servo_messages(event_loop);
         });
-    }
-
-    fn new_events(&mut self, event_loop: &winit::event_loop::ActiveEventLoop, cause: StartCause) {
-        if let StartCause::Init = cause {
-            let config = Config::new(resources_dir_path().unwrap());
-            self.verso = Some(Verso::new(event_loop, self.proxy.clone(), config));
-        }
     }
 
     fn user_event(&mut self, event_loop: &event_loop::ActiveEventLoop, _: ()) {
