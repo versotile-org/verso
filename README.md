@@ -9,7 +9,7 @@ A web browser that plays old world blues to build new world hope.
 Verso is a web browser built on top of the [Servo](https://servo.org/) web engine. We aim to explore embedding solutions for Servo while growing it into a mature browser one day.
 This means we want to experiment with multi-view and multi-window first and then build UI elements entirely from Servo itself. At the moment, [Servoshell](https://servo.org/download/) should provide a better user experience.
 
-Verso is still under development. We don't accept feature requests at the moment, and the whole navigation workflow hasn't been polished yet, either. But if you are interested, feel free to open bug issues.
+Verso is still under development. We don't accept feature requests at the moment, and the whole navigation workflow hasn't been polished yet, either. But if you are interested, feel free to open bug-fix PRs.
 
 # Usage
 
