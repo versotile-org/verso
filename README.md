@@ -55,21 +55,13 @@ cargo run
 For unified environment setup and package experience, we choose Flatpak to build the project from the start.
 Please follow the [Flatpak Setup](https://flatpak.org/setup/) page to install Flakpak based on your distribution.
 
-- Install flatpak runtimes and extensions:
-
-```sh
-flatpak install flathub org.freedesktop.Platform//23.08
-flatpak install flathub org.freedesktop.Sdk//23.08
-flatpak install flathub org.freedesktop.Sdk.Extension.rust-stable//23.08
-flatpak install flathub org.freedesktop.Sdk.Extension.llvm18//23.08
-```
 
 - Generate manifests and build:
 // TODO Exporting to a repository instead
 
 ```sh
 python3 ./flatpak-cargo-generator.py ./Cargo.lock -o cargo-sources.json
-flatpak-builder --user --install --force-clean target org.versotile.verso.yml
+flatpak-builder --user --install --install-deps-from=flathub --force-clean target org.versotile.verso.yml
 flatpak run org.versotile.verso
 ```
 
@@ -96,7 +88,7 @@ But please understand we don't triage any build issue without flatpak or nix set
 
 Nightly releases built with CrabNebula Cloud can be found at [releases](https://web.crabnebula.cloud/verso/verso-nightly/releases).
 
-> Packages are unsigned currently. If you have problem opening the app on macOS, try `xattr -d com.apple.quarantine /Applications/verso.app` after installation. 
+> Packages are unsigned currently. If you have problem opening the app on macOS, try `xattr -d com.apple.quarantine /Applications/verso.app` after installation.
 
 ## Future Work
 
