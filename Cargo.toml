@@ -60,7 +60,7 @@ raw-window-handle = { version = "0.6", features = ["std"] }
 sparkle = "0.1.26"
 surfman = { version = "0.9", features = ["chains", "sm-raw-window-handle-06"] }
 thiserror = "1.0"
-winit = { version = "0.29", features = ["rwh_06"] }
+winit = { version = "0.30", features = ["rwh_06"] }
 # Servo repo crates
 base = { git = "https://github.com/servo/servo.git", rev = "28430ba" }
 bluetooth = { git = "https://github.com/servo/servo.git", rev = "28430ba" }

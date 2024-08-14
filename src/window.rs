@@ -17,9 +17,9 @@ use webrender_traits::RenderingContext;
 use winit::{
     dpi::PhysicalPosition,
     event::{ElementState, TouchPhase, WindowEvent},
-    event_loop::EventLoopWindowTarget,
+    event_loop::ActiveEventLoop,
     keyboard::ModifiersState,
-    window::{CursorIcon, Window as WinitWindow, WindowBuilder, WindowId},
+    window::{CursorIcon, Window as WinitWindow, WindowId},
 };
 
 use crate::{
@@ -47,11 +47,11 @@ pub struct Window {
 
 impl Window {
     /// Create a Verso window from Winit window and return the rendering context.
-    pub fn new(evl: &EventLoopWindowTarget<()>) -> (Self, RenderingContext) {
-        let window = WindowBuilder::new()
+    pub fn new(evl: &ActiveEventLoop) -> (Self, RenderingContext) {
+        let window = evl
+            .create_window(WinitWindow::default_attributes())
             // .with_transparent(true)
             // .with_decorations(false)
-            .build(evl)
             .expect("Failed to create window.");
 
         let rwh = window.window_handle().expect("Failed to get window handle");
@@ -97,14 +97,11 @@ impl Window {
     }
 
     /// Create a Verso window with the rendering context.
-    pub fn new_with_compositor(
-        evl: &EventLoopWindowTarget<()>,
-        compositor: &mut IOCompositor,
-    ) -> Self {
-        let window = WindowBuilder::new()
+    pub fn new_with_compositor(evl: &ActiveEventLoop, compositor: &mut IOCompositor) -> Self {
+        let window = evl
+            .create_window(WinitWindow::default_attributes())
             // .with_transparent(true)
             // .with_decorations(false)
-            .build(evl)
             .expect("Failed to create window.");
 
         let rwh = window.window_handle().expect("Failed to get window handle");
@@ -196,7 +193,7 @@ impl Window {
                     compositor.on_mouse_window_event_class(event);
                 }
             }
-            WindowEvent::TouchpadMagnify { delta, .. } => {
+            WindowEvent::PinchGesture { delta, .. } => {
                 compositor.on_zoom_window_event(1.0 + *delta as f32, self);
             }
             WindowEvent::MouseWheel { delta, phase, .. } => {
@@ -385,7 +382,7 @@ impl Window {
             Cursor::ZoomOut => CursorIcon::ZoomOut,
             _ => CursorIcon::Default,
         };
-        self.window.set_cursor_icon(winit_cursor);
+        self.window.set_cursor(winit_cursor);
     }
 }
 

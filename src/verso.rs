@@ -40,7 +40,7 @@ use webrender_traits::*;
 use webxr_api::{LayerGrandManager, LayerGrandManagerAPI, LayerManager, LayerManagerFactory};
 use winit::{
     event::{Event, WindowEvent},
-    event_loop::{EventLoopProxy, EventLoopWindowTarget},
+    event_loop::{ActiveEventLoop, EventLoopProxy},
     window::WindowId,
 };
 
@@ -82,7 +82,7 @@ impl Verso {
     /// - Font cache
     /// - Canvas
     /// - Constellation
-    pub fn new(evl: &EventLoopWindowTarget<()>, proxy: EventLoopProxy<()>, config: Config) -> Self {
+    pub fn new(evl: &ActiveEventLoop, proxy: EventLoopProxy<()>, config: Config) -> Self {
         // Initialize configurations and Verso window
         let resource_dir = config.resource_dir.clone();
         config.init();
@@ -394,7 +394,7 @@ impl Verso {
     ///
     /// - Handle Winit's event, updating Compositor and sending messages to Constellation.
     /// - Handle Servo's messages and updating Compositor again.
-    pub fn run(&mut self, event: Event<()>, evl: &EventLoopWindowTarget<()>) {
+    pub fn run(&mut self, event: Event<()>, evl: &ActiveEventLoop) {
         self.handle_winit_event(event);
         self.handle_servo_messages(evl);
         if self.windows.is_empty() {
@@ -437,7 +437,7 @@ impl Verso {
     }
 
     /// Handle message came from Servo.
-    fn handle_servo_messages(&mut self, evl: &EventLoopWindowTarget<()>) {
+    fn handle_servo_messages(&mut self, evl: &ActiveEventLoop) {
         let mut shutdown = false;
         if let Some(compositor) = &mut self.compositor {
             // Handle Compositor's messages first
