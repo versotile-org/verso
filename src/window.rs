@@ -24,7 +24,7 @@ use winit::{
 use crate::{
     compositor::{IOCompositor, MouseWindowEvent},
     keyboard::keyboard_event_from_winit,
-    rendering_context::RenderingContext,
+    rendering::RenderingContext,
     verso::send_to_constellation,
     webview::WebView,
 };

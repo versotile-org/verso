@@ -43,7 +43,7 @@ use webrender_traits::{
 };
 use winit::window::WindowId;
 
-use crate::rendering_context::RenderingContext;
+use crate::rendering::RenderingContext;
 use crate::touch::{TouchAction, TouchHandler};
 use crate::window::Window;
 

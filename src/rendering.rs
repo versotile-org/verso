@@ -5,7 +5,6 @@ use std::ffi::c_void;
 use std::rc::Rc;
 
 use euclid::default::Size2D;
-use surfman::chains::{PreserveBuffer, SwapChain};
 use surfman::{
     Adapter, Connection, Context, ContextAttributeFlags, ContextAttributes, Device, Error, GLApi,
     GLVersion, NativeWidget, Surface, SurfaceAccess, SurfaceInfo, SurfaceType,
@@ -19,17 +18,12 @@ pub struct RenderingContext(Rc<RenderingContextData>);
 struct RenderingContextData {
     device: RefCell<Device>,
     context: RefCell<Context>,
-    // We either render to a swap buffer or to a native widget
-    swap_chain: Option<SwapChain<Device>>,
 }
 
 impl Drop for RenderingContextData {
     fn drop(&mut self) {
         let device = &mut self.device.borrow_mut();
         let context = &mut self.context.borrow_mut();
-        if let Some(ref swap_chain) = self.swap_chain {
-            let _ = swap_chain.destroy(device, context);
-        }
         let _ = device.destroy_context(context);
     }
 }
@@ -53,10 +47,6 @@ impl RenderingContext {
         let context_descriptor = device.create_context_descriptor(&context_attributes)?;
         let mut context = device.create_context(&context_descriptor, None)?;
         let surface_access = SurfaceAccess::GPUOnly;
-        let headless = match surface_type {
-            SurfaceType::Widget { .. } => false,
-            SurfaceType::Generic { .. } => true,
-        };
         let surface = device.create_surface(&context, surface_access, surface_type)?;
         device
             .bind_surface_to_context(&mut context, surface)
@@ -67,22 +57,9 @@ impl RenderingContext {
 
         device.make_context_current(&context)?;
 
-        let swap_chain = if headless {
-            Some(SwapChain::create_attached(
-                &mut device,
-                &mut context,
-                surface_access,
-            )?)
-        } else {
-            None
-        };
         let device = RefCell::new(device);
         let context = RefCell::new(context);
-        let data = RenderingContextData {
-            device,
-            context,
-            swap_chain,
-        };
+        let data = RenderingContextData { device, context };
         Ok(RenderingContext(Rc::new(data)))
     }
 
@@ -141,9 +118,6 @@ impl RenderingContext {
     pub fn resize(&self, size: Size2D<i32>) -> Result<(), Error> {
         let device = &mut self.0.device.borrow_mut();
         let context = &mut self.0.context.borrow_mut();
-        if let Some(swap_chain) = self.0.swap_chain.as_ref() {
-            return swap_chain.resize(device, context, size);
-        }
         let mut surface = device.unbind_surface_from_context(context)?.unwrap();
         device.resize_surface(context, &mut surface, size)?;
         device
@@ -158,9 +132,6 @@ impl RenderingContext {
     pub fn present(&self) -> Result<(), Error> {
         let device = &mut self.0.device.borrow_mut();
         let context = &mut self.0.context.borrow_mut();
-        if let Some(ref swap_chain) = self.0.swap_chain {
-            return swap_chain.swap_buffers(device, context, PreserveBuffer::No);
-        }
         let mut surface = device.unbind_surface_from_context(context)?.unwrap();
         device.present_surface(context, &mut surface)?;
         device
