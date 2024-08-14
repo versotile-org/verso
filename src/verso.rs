@@ -39,8 +39,8 @@ use webrender_api::*;
 use webrender_traits::*;
 use webxr_api::{LayerGrandManager, LayerGrandManagerAPI, LayerManager, LayerManagerFactory};
 use winit::{
-    event::{Event, WindowEvent},
-    event_loop::{ActiveEventLoop, EventLoopProxy},
+    event::WindowEvent,
+    event_loop::{ActiveEventLoop, ControlFlow, EventLoopProxy},
     window::WindowId,
 };
 
@@ -390,54 +390,34 @@ impl Verso {
         verso
     }
 
-    /// Run an iteration of Verso handling cycle. An iteration will perform following actions:
-    ///
-    /// - Handle Winit's event, updating Compositor and sending messages to Constellation.
-    /// - Handle Servo's messages and updating Compositor again.
-    pub fn run(&mut self, event: Event<()>, evl: &ActiveEventLoop) {
-        self.handle_winit_event(event);
-        self.handle_servo_messages(evl);
-        if self.windows.is_empty() {
-            self.compositor
-                .as_mut()
-                .map(IOCompositor::maybe_start_shutting_down);
-        }
-    }
-
-    /// Handle Winit events
-    fn handle_winit_event(&mut self, event: Event<()>) {
+    /// Handle Winit window events
+    pub fn handle_winit_window_event(&mut self, window_id: WindowId, event: WindowEvent) {
         log::trace!("Verso is handling Winit event: {event:?}");
-        match event {
-            Event::NewEvents(_) | Event::Suspended | Event::Resumed | Event::UserEvent(()) => {}
-            Event::WindowEvent { window_id, event } => {
-                if let Some(compositor) = &mut self.compositor {
-                    if let WindowEvent::CloseRequested = event {
-                        // self.windows.remove(&window_id);
-                        compositor.maybe_start_shutting_down();
-                    } else {
-                        let mut need_repaint = false;
-                        for (id, window) in &mut self.windows {
-                            if window_id == *id {
-                                need_repaint = window.handle_winit_window_event(
-                                    &self.constellation_sender,
-                                    compositor,
-                                    &event,
-                                );
-                            }
-                        }
-
-                        if need_repaint {
-                            compositor.repaint_synchronously(&mut self.windows);
-                        }
+        if let Some(compositor) = &mut self.compositor {
+            if let WindowEvent::CloseRequested = event {
+                // self.windows.remove(&window_id);
+                compositor.maybe_start_shutting_down();
+            } else {
+                let mut need_repaint = false;
+                for (id, window) in &mut self.windows {
+                    if window_id == *id {
+                        need_repaint = window.handle_winit_window_event(
+                            &self.constellation_sender,
+                            compositor,
+                            &event,
+                        );
                     }
                 }
+
+                if need_repaint {
+                    compositor.repaint_synchronously(&mut self.windows);
+                }
             }
-            e => log::trace!("Verso isn't supporting this event yet: {e:?}"),
         }
     }
 
     /// Handle message came from Servo.
-    fn handle_servo_messages(&mut self, evl: &ActiveEventLoop) {
+    pub fn handle_servo_messages(&mut self, evl: &ActiveEventLoop) {
         let mut shutdown = false;
         if let Some(compositor) = &mut self.compositor {
             // Handle Compositor's messages first
@@ -514,9 +494,22 @@ impl Verso {
             }
         }
 
+        // Check if Verso need to start shutting down.
+        if self.windows.is_empty() {
+            self.compositor
+                .as_mut()
+                .map(IOCompositor::maybe_start_shutting_down);
+        }
+
+        // Check compositor status and set control flow.
         if shutdown {
             // If Compositor has shut down, deinit and remove it.
             self.compositor.take().map(IOCompositor::deinit);
+            evl.exit();
+        } else if self.is_animating() {
+            evl.set_control_flow(ControlFlow::Poll);
+        } else {
+            evl.set_control_flow(ControlFlow::Wait);
         }
     }
 
@@ -526,11 +519,6 @@ impl Verso {
             .as_ref()
             .map(|c| c.is_animating)
             .unwrap_or(false)
-    }
-
-    /// Return true if Verso has shut down and hence there's no compositor.
-    pub fn finished_shutting_down(&self) -> bool {
-        self.compositor.is_none()
     }
 
     fn setup_logging(&self) {
