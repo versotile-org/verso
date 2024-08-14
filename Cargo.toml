@@ -56,11 +56,11 @@ gleam = "0.15"
 ipc-channel = "0.18"
 keyboard-types = "0.7"
 log = "0.4"
-raw-window-handle = { version = "0.5", features = ["std"] }
+raw-window-handle = { version = "0.6", features = ["std"] }
 sparkle = "0.1.26"
-surfman = { version = "0.9", features = ["chains", "sm-raw-window-handle-05"] }
+surfman = { version = "0.9", features = ["chains", "sm-raw-window-handle-06"] }
 thiserror = "1.0"
-winit = { version = "0.29", features = ["rwh_05"] }
+winit = { version = "0.30", features = ["rwh_06"] }
 # Servo repo crates
 base = { git = "https://github.com/servo/servo.git", rev = "28430ba" }
 bluetooth = { git = "https://github.com/servo/servo.git", rev = "28430ba" }
@@ -104,11 +104,8 @@ surfman = { version = "0.9", features = ["sm-angle-default"] }
 mozangle = { version = "0.5.1", features = ["egl", "build_dlls"] }
 
 [target.'cfg(any(target_os = "ios", target_os = "macos"))'.dependencies]
-block = "0.1"
-cocoa = "0.25"
-core-graphics = "0.23"
-objc = "0.2"
-objc_id = "0.1"
+objc2 = "0.5"
+objc2-app-kit = {version = "0.2", features = ["NSView", "NSResponder", "NSWindow"]}
 
 [[test]]
 name = "general"
