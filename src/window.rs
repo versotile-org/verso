@@ -5,7 +5,7 @@ use compositing_traits::ConstellationMsg;
 use crossbeam_channel::Sender;
 use embedder_traits::{Cursor, EmbedderMsg};
 use euclid::{Point2D, Size2D};
-use raw_window_handle::{HasRawDisplayHandle, HasRawWindowHandle};
+use raw_window_handle::{HasDisplayHandle, HasWindowHandle};
 use script_traits::{TouchEventType, WheelDelta, WheelMode};
 use surfman::Connection;
 use surfman::SurfaceType;
@@ -53,23 +53,29 @@ impl Window {
             // .with_decorations(false)
             .build(evl)
             .expect("Failed to create window.");
+
+        let rwh = window.window_handle().expect("Failed to get window handle");
         #[cfg(macos)]
         unsafe {
-            let rwh = window.raw_window_handle();
-            if let RawWindowHandle::AppKit(AppKitWindowHandle { ns_window, .. }) = rwh {
-                decorate_window(ns_window as *mut Object, LogicalPosition::new(8.0, 40.0));
+            if let RawWindowHandle::AppKit(AppKitWindowHandle { ns_view, .. }) = rwh.as_ref() {
+                decorate_window(
+                    ns_view.as_ptr() as *mut AnyObject,
+                    LogicalPosition::new(8.0, 40.0),
+                );
             }
         }
         let window_size = window.inner_size();
         let window_size = Size2D::new(window_size.width as i32, window_size.height as i32);
-        let display_handle = window.raw_display_handle();
-        let connection = Connection::from_raw_display_handle(display_handle)
-            .expect("Failed to create connection");
+        let display_handle = window
+            .display_handle()
+            .expect("Failed to get display handle");
+        let connection =
+            Connection::from_display_handle(display_handle).expect("Failed to create connection");
         let adapter = connection
             .create_adapter()
             .expect("Failed to create adapter");
         let native_widget = connection
-            .create_native_widget_from_raw_window_handle(window.raw_window_handle(), window_size)
+            .create_native_widget_from_window_handle(rwh, window_size)
             .expect("Failed to create native widget");
         let surface_type = SurfaceType::Widget { native_widget };
         let rendering_context = RenderingContext::create(&connection, &adapter, surface_type)
@@ -100,11 +106,15 @@ impl Window {
             // .with_decorations(false)
             .build(evl)
             .expect("Failed to create window.");
+
+        let rwh = window.window_handle().expect("Failed to get window handle");
         #[cfg(macos)]
         unsafe {
-            let rwh = window.raw_window_handle();
-            if let RawWindowHandle::AppKit(AppKitWindowHandle { ns_window, .. }) = rwh {
-                decorate_window(ns_window as *mut Object, LogicalPosition::new(8.0, 40.0));
+            if let RawWindowHandle::AppKit(AppKitWindowHandle { ns_view, .. }) = rwh.as_ref() {
+                decorate_window(
+                    ns_view.as_ptr() as *mut AnyObject,
+                    LogicalPosition::new(8.0, 40.0),
+                );
             }
         }
         let window_size = window.inner_size();
@@ -112,7 +122,7 @@ impl Window {
         let native_widget = compositor
             .rendering_context
             .connection()
-            .create_native_widget_from_raw_window_handle(window.raw_window_handle(), window_size)
+            .create_native_widget_from_window_handle(rwh, window_size)
             .expect("Failed to create native widget");
         let surface_type = SurfaceType::Widget { native_widget };
         let surface = compositor
@@ -381,9 +391,7 @@ impl Window {
 
 /* window decoration */
 #[cfg(macos)]
-use cocoa::appkit::{NSWindow, NSWindowStyleMask, NSWindowTitleVisibility};
-#[cfg(macos)]
-use objc::runtime::Object;
+use objc2::runtime::AnyObject;
 #[cfg(macos)]
 use raw_window_handle::{AppKitWindowHandle, RawWindowHandle};
 #[cfg(macos)]
@@ -391,15 +399,21 @@ use winit::dpi::LogicalPosition;
 
 /// Window decoration for macOS.
 #[cfg(macos)]
-pub unsafe fn decorate_window(window: *mut Object, _position: LogicalPosition<f64>) {
-    NSWindow::setTitlebarAppearsTransparent_(window, cocoa::base::YES);
-    NSWindow::setTitleVisibility_(window, NSWindowTitleVisibility::NSWindowTitleHidden);
-    NSWindow::setStyleMask_(
-        window,
-        NSWindowStyleMask::NSTitledWindowMask
-            | NSWindowStyleMask::NSFullSizeContentViewWindowMask
-            | NSWindowStyleMask::NSClosableWindowMask
-            | NSWindowStyleMask::NSResizableWindowMask
-            | NSWindowStyleMask::NSMiniaturizableWindowMask,
+pub unsafe fn decorate_window(view: *mut AnyObject, _position: LogicalPosition<f64>) {
+    use objc2::rc::Id;
+    use objc2_app_kit::{NSView, NSWindowStyleMask, NSWindowTitleVisibility};
+
+    let ns_view: Id<NSView> = unsafe { Id::retain(view.cast()) }.unwrap();
+    let window = ns_view
+        .window()
+        .expect("view was not installed in a window");
+    window.setTitlebarAppearsTransparent(true);
+    window.setTitleVisibility(NSWindowTitleVisibility::NSWindowTitleHidden);
+    window.setStyleMask(
+        NSWindowStyleMask::Titled
+            | NSWindowStyleMask::FullSizeContentView
+            | NSWindowStyleMask::Closable
+            | NSWindowStyleMask::Resizable
+            | NSWindowStyleMask::Miniaturizable,
     );
 }
