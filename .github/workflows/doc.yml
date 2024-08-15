@@ -37,17 +37,22 @@ jobs:
             libxmu-dev libxmu6 libegl1-mesa-dev llvm-dev m4 xorg-dev sway \
             python3-mako
 
+      - name: Install Nix
+        uses: cachix/install-nix-action@v27
+          with:
+            nix_path: nixpkgs=channel:nixos-unstable
+
       - name: Run sccache-cache
         uses: Mozilla-Actions/sccache-action@v0.0.5
 
       - name: Configure cache
         uses: Swatinem/rust-cache@v2
 
-      - name: Clean docs folder
-        run: cargo clean --doc
+      - name: Clean docs folder in Nix
+        run: nix develop --command cargo clean --doc
 
       - name: Build docs
-        run: cargo doc -p verso --no-deps
+        run: nix develop --command cargo doc -p verso --no-deps
 
       - name: Remove lock file
         run: rm target/doc/.lock
