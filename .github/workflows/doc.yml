@@ -51,7 +51,7 @@ jobs:
       - name: Clean docs folder in Nix
         run: nix develop --command cargo clean --doc
 
-      - name: Build docs
+      - name: Build docs in Nix
         run: nix develop --command cargo doc -p verso --no-deps
 
       - name: Remove lock file
