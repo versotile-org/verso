@@ -48,6 +48,8 @@ jobs:
         uses: cachix/install-nix-action@v27
         with:
           nix_path: nixpkgs=channel:nixos-unstable
+      
+      - name: Run nix-build
         run: nix-build
 
       - name: Clean docs folder in Nix
