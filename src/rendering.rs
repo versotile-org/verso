@@ -10,10 +10,30 @@ use surfman::{
     GLVersion, NativeWidget, Surface, SurfaceAccess, SurfaceInfo, SurfaceType,
 };
 
+mod gl {
+    #![allow(clippy::all)]
+    include!(concat!(env!("OUT_DIR"), "/gl_bindings.rs"));
+
+    pub use Gles2 as Gl;
+}
+
 /// A Verso rendering context, which holds all of the information needed
 /// to render Servo's layout, and bridges WebRender and glutin.
 #[derive(Clone)]
 pub struct RenderingContext(Rc<RenderingContextData>);
+
+struct RContext {}
+
+impl RContext {
+    // /// Create a rendering context instance.
+    // pub fn create(
+    //     connection: &Connection,
+    //     adapter: &Adapter,
+    //     surface_type: SurfaceType<NativeWidget>,
+    // ) -> Result<Self, Error> {
+    //     todo!()
+    // }
+}
 
 struct RenderingContextData {
     device: RefCell<Device>,
