@@ -5,6 +5,7 @@ use crossbeam_channel::Sender;
 use embedder_traits::{CompositorEventVariant, EmbedderMsg, PromptDefinition};
 use script_traits::TraversalDirection;
 use servo_url::ServoUrl;
+use url::Url;
 use webrender_api::units::DeviceIntRect;
 
 use crate::{compositor::IOCompositor, verso::send_to_constellation, window::Window};
@@ -173,10 +174,20 @@ impl Window {
                             let id = webview.webview_id;
 
                             if msg.starts_with("NAVIGATE_TO:") {
-                                let url =
-                                    ServoUrl::parse(msg.strip_prefix("NAVIGATE_TO:").unwrap())
-                                        .unwrap();
-                                send_to_constellation(sender, ConstellationMsg::LoadUrl(id, url));
+                                let unparsed_url = msg.strip_prefix("NAVIGATE_TO:").unwrap();
+                                let url = match Url::parse(unparsed_url) {
+                                    Ok(url_parsed) => url_parsed,
+                                    Err(e) => {
+                                        if e == url::ParseError::RelativeUrlWithoutBase
+                                        {
+                                            Url::parse(&format!("https://{}", unparsed_url)).unwrap()
+                                        } else {
+                                            panic!("Verso Panel failed to parse URL: {}", e);
+                                        }
+                                    }
+                                };
+
+                                send_to_constellation(sender, ConstellationMsg::LoadUrl(id, ServoUrl::from_url(url)));
                             } else {
                                 match msg.as_str() {
                                     "PREV" => {
