@@ -1,7 +1,6 @@
 name: Generate docs
 
 on:
-  workflow_dispatch:
   push:
     branches:
       - main
@@ -51,7 +50,6 @@ jobs:
       
       - uses: rrbutani/use-nix-shell-action@v1
         with:
-          devShell: .#default # this is the default
           file: shell.nix
 
       - name: Clean docs folder in Nix
