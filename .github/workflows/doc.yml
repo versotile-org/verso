@@ -50,7 +50,7 @@ jobs:
           nix_path: nixpkgs=channel:nixos-unstable
       
       - name: Run nix-build
-        run: nix-build
+        run: nix-build shell.nix
 
       - name: Clean docs folder in Nix
         run: nix develop --command cargo clean --doc
