@@ -8,48 +8,60 @@
     nixpkgs_gnumake_4_3.url = "github:nixos/nixpkgs?rev=6adf48f53d819a7b6e15672817fa1e78e5f4e84f";
 
     nixgl.url = "github:nix-community/nixGL?rev=489d6b095ab9d289fe11af0219a9ff00fe87c7c5";
-    nixgl.inputs.nixpgks.follows = "nixpgks";
+    nixgl.inputs.nixpkgs.follows = "nixpkgs";
 
     cargo2nix.url = "github:cargo2nix/cargo2nix/release-0.11.0";
     cargo2nix.inputs.nixpkgs.follows = "nixpkgs";
     cargo2nix.inputs.flake-utils.follows = "flake-utils";
   };
 
-  outputs = { self, flake-utils, nixpkgs, nixpkgs_gnumake_4_3, cargo2nix, ... } @inputs:
+  outputs = { self, cargo2nix, flake-utils, nixpkgs, nixpkgs_gnumake_4_3, ... } @inputs:
     let
       cargo_toml = builtins.fromTOML (builtins.readFile ./Cargo.toml);
     in
     flake-utils.lib.eachDefaultSystem (system:
       let
-        pkgs = import nixpkgs {
-          inherit system;
-          overlays = [
-            cargo2nix.overlays.default
-            (final: prev: rec {
-              llvmPackages = prev.llvmPackages_14;
-              stdenv = prev.stdenvAdapters.useMoldLinker llvmPackages.stdenv;
-            })
-          ];
-        };
+        pkgs = import nixpkgs
+          {
+            inherit system;
+            config = { allowUnfree = true; };
+            overlays = [
+              # FIXME: infinite recursion
+              # (final: prev:
+              #   let
+              #     nixgl = import inputs.nixgl {
+              #       pkgs = prev;
+              #       enable32bits = false;
+              #     };
+              #   in
+              #   nixgl.overlay final prev)
+              inputs.nixgl.overlay
+              cargo2nix.overlays.default
+            ];
+          };
 
         pkgs_gnumake_4_3 = import nixpkgs_gnumake_4_3 {
           inherit system;
-        };
-
-        nixgl = import inputs.nixgl {
-          enable32Bits = false;
         };
 
         rustPkgs = pkgs.rustBuilder.makePackageSet {
           rustVersion = "1.75.0";
           packageFun = import ./Cargo.nix;
         };
+
+        llvmPackages = pkgs.llvmPackages_14;
+
+        mkShell = pkgs.mkShell.override {
+          stdenv = pkgs.stdenvAdapters.useMoldLinker pkgs.llvmPackages_14.stdenv;
+        };
+
+        python = (pkgs.python3.withPackages (ps: with ps; [ pip pydbus mako ]));
       in
       {
         devShells = rec {
           default = dev;
 
-          dev = pkgs.mkShell {
+          dev = mkShell {
             buildInputs = with pkgs; [
               fontconfig
               freetype
@@ -60,7 +72,8 @@
               gst_all_1.gst-plugins-base
               gst_all_1.gst-plugins-bad
               gst_all_1.gst-plugins-ugly
-              rustup
+              cargo
+              rustc
               taplo
               llvmPackages.bintools
               llvmPackages.llvm
@@ -81,7 +94,7 @@
               mold
               wayland
               nixgl.auto.nixGLDefault
-              (python3.withPackages (ps: with ps; [ pip dbus mako ]))
+              python
 
               # nix
               nil
