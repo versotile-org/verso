@@ -129,8 +129,8 @@
           verso-cargo2nix = (rustPkgs.workspace.verso { });
 
           verso-nixpkgs = pkgs.rustPlatform.buildRustPackage {
-            name = cargo_toml.name;
-            version = cargo_toml.version;
+            name = cargo_toml.package.name;
+            version = cargo_toml.package.version;
             src = self;
             cargoHash = "";
             buildInputs = with pkgs; [
@@ -145,8 +145,8 @@
               nixgl.auto.nixGLDefault
             ];
             meta = {
-              description = cargo_toml.description;
-              homepage = cargo_toml.homepage;
+              description = cargo_toml.package.description;
+              homepage = cargo_toml.package.homepage;
               license = pkgs.lib.licenses.asl20;
             };
           };
