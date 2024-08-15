@@ -4,24 +4,24 @@ use winit::event::{ElementState, KeyEvent};
 use winit::keyboard::{Key as LogicalKey, KeyCode, ModifiersState, NamedKey, PhysicalKey};
 
 /// Some shortcuts use Cmd on Mac and Control on other systems.
-#[cfg(macos)]
+#[cfg(target_os = "macos")]
 pub const CMD_OR_CONTROL: Modifiers = Modifiers::META;
 /// Some shortcuts use Cmd on Mac and Control on other systems.
-#[cfg(not(macos))]
+#[cfg(not(target_os = "macos"))]
 pub const CMD_OR_CONTROL: Modifiers = Modifiers::CONTROL;
 
 /// Some shortcuts use Cmd on Mac and Alt on other systems.
-#[cfg(macos)]
+#[cfg(target_os = "macos")]
 pub const CMD_OR_ALT: Modifiers = Modifiers::META;
 /// Some shortcuts use Cmd on Mac and Alt on other systems.
-#[cfg(not(macos))]
+#[cfg(not(target_os = "macos"))]
 pub const CMD_OR_ALT: Modifiers = Modifiers::ALT;
 
 fn get_servo_key_from_winit_key(key: &LogicalKey) -> Key {
     // TODO: figure out how to map NavigateForward, NavigateBackward
     // TODO: map the remaining keys if possible
     match key {
-        LogicalKey::Character(c) => return Key::Character(c.to_string()),
+        LogicalKey::Character(c) => Key::Character(c.to_string()),
         // printable: Key1 to Key0
         // printable: A to Z
         LogicalKey::Named(NamedKey::Escape) => Key::Escape,

@@ -55,7 +55,7 @@ impl Window {
             .expect("Failed to create window.");
 
         let rwh = window.window_handle().expect("Failed to get window handle");
-        #[cfg(macos)]
+        #[cfg(target_os = "macos")]
         unsafe {
             if let RawWindowHandle::AppKit(AppKitWindowHandle { ns_view, .. }) = rwh.as_ref() {
                 decorate_window(
@@ -105,7 +105,7 @@ impl Window {
             .expect("Failed to create window.");
 
         let rwh = window.window_handle().expect("Failed to get window handle");
-        #[cfg(macos)]
+        #[cfg(target_os = "macos")]
         unsafe {
             if let RawWindowHandle::AppKit(AppKitWindowHandle { ns_view, .. }) = rwh.as_ref() {
                 decorate_window(
@@ -245,7 +245,7 @@ impl Window {
             }
             WindowEvent::ModifiersChanged(modifier) => self.modifiers_state.set(modifier.state()),
             WindowEvent::KeyboardInput { event, .. } => {
-                let event = keyboard_event_from_winit(&event, self.modifiers_state.get());
+                let event = keyboard_event_from_winit(event, self.modifiers_state.get());
                 log::trace!("Verso is handling {:?}", event);
                 let msg = ConstellationMsg::Keyboard(event);
                 send_to_constellation(sender, msg);
@@ -312,12 +312,18 @@ impl Window {
         compositor: &mut IOCompositor,
     ) -> (Option<WebView>, bool) {
         if self.panel.as_ref().filter(|w| w.webview_id == id).is_some() {
-            self.webview.as_ref().map(|w| {
+            // self.webview.as_ref().map(|w| {
+            //     send_to_constellation(
+            //         &compositor.constellation_chan,
+            //         ConstellationMsg::CloseWebView(w.webview_id),
+            //     )
+            // });
+            if let Some(w) = self.webview.as_ref() {
                 send_to_constellation(
                     &compositor.constellation_chan,
                     ConstellationMsg::CloseWebView(w.webview_id),
                 )
-            });
+            }
             (self.panel.take(), false)
         } else if self
             .webview
@@ -387,15 +393,15 @@ impl Window {
 }
 
 /* window decoration */
-#[cfg(macos)]
+#[cfg(target_os = "macos")]
 use objc2::runtime::AnyObject;
-#[cfg(macos)]
+#[cfg(target_os = "macos")]
 use raw_window_handle::{AppKitWindowHandle, RawWindowHandle};
-#[cfg(macos)]
+#[cfg(target_os = "macos")]
 use winit::dpi::LogicalPosition;
 
 /// Window decoration for macOS.
-#[cfg(macos)]
+#[cfg(target_os = "macos")]
 pub unsafe fn decorate_window(view: *mut AnyObject, _position: LogicalPosition<f64>) {
     use objc2::rc::Id;
     use objc2_app_kit::{NSView, NSWindowStyleMask, NSWindowTitleVisibility};

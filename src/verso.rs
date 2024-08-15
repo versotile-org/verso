@@ -504,7 +504,9 @@ impl Verso {
         // Check compositor status and set control flow.
         if shutdown {
             // If Compositor has shut down, deinit and remove it.
-            self.compositor.take().map(IOCompositor::deinit);
+            if let Some(compositor) = self.compositor.take() {
+                IOCompositor::deinit(compositor)
+            }
             evl.exit();
         } else if self.is_animating() {
             evl.set_control_flow(ControlFlow::Poll);
@@ -551,17 +553,17 @@ impl EventLoopWaker for Waker {
 }
 
 fn default_user_agent_string() -> &'static str {
-    #[cfg(macos)]
+    #[cfg(target_os = "macos")]
     const UA_STRING: &str =
         "Mozilla/5.0 (Macintosh; Intel Mac OS X 10.15; rv:109.0) Servo/1.0 Firefox/111.0";
-    #[cfg(ios)]
+    #[cfg(target_os = "ios")]
     const UA_STRING: &str =
         "Mozilla/5.0 (iPhone; CPU iPhone OS 16_4 like Mac OS X; rv:109.0) Servo/1.0 Firefox/111.0";
-    #[cfg(android)]
+    #[cfg(target_os = "android")]
     const UA_STRING: &str = "Mozilla/5.0 (Android; Mobile; rv:109.0) Servo/1.0 Firefox/111.0";
-    #[cfg(linux)]
+    #[cfg(target_os = "linux")]
     const UA_STRING: &str = "Mozilla/5.0 (X11; Linux x86_64; rv:109.0) Servo/1.0 Firefox/111.0";
-    #[cfg(windows)]
+    #[cfg(target_os = "windows")]
     const UA_STRING: &str =
         "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:109.0) Servo/1.0 Firefox/111.0";
 
