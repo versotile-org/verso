@@ -37,16 +37,17 @@ jobs:
             libxmu-dev libxmu6 libegl1-mesa-dev llvm-dev m4 xorg-dev sway \
             python3-mako
 
-      - name: Install Nix
-        uses: cachix/install-nix-action@v27
-        with:
-          nix_path: nixpkgs=channel:nixos-unstable
-
       - name: Run sccache-cache
         uses: Mozilla-Actions/sccache-action@v0.0.5
 
       - name: Configure cache
         uses: Swatinem/rust-cache@v2
+
+      - name: Install Nix
+        uses: cachix/install-nix-action@v27
+        with:
+          nix_path: nixpkgs=channel:nixos-unstable
+        run: nix-build
 
       - name: Clean docs folder in Nix
         run: nix develop --command cargo clean --doc
