@@ -26,8 +26,8 @@ Example: steps to reproduce the behavior:
 4. See error
 -->
 
-### Screenshots
-<!-- If applicable, add screenshots to help explain your problem. -->
+### Screenshots Or Videos
+<!-- If applicable, add screenshots or videos to help explain your problem. -->
 
 ### Environment:
 <!--
