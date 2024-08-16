@@ -114,3 +114,7 @@ harness = false
 [profile.release-lto]
 inherits = "release"
 lto = true
+
+# Tell clippy to allow e.g. #[cfg(macos)]
+[lints.clippy]
+mismatched_target_os = "allow"

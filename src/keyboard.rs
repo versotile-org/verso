@@ -4,17 +4,17 @@ use winit::event::{ElementState, KeyEvent};
 use winit::keyboard::{Key as LogicalKey, KeyCode, ModifiersState, NamedKey, PhysicalKey};
 
 /// Some shortcuts use Cmd on Mac and Control on other systems.
-#[cfg(target_os = "macos")]
+#[cfg(macos)]
 pub const CMD_OR_CONTROL: Modifiers = Modifiers::META;
 /// Some shortcuts use Cmd on Mac and Control on other systems.
-#[cfg(not(target_os = "macos"))]
+#[cfg(not(macos))]
 pub const CMD_OR_CONTROL: Modifiers = Modifiers::CONTROL;
 
 /// Some shortcuts use Cmd on Mac and Alt on other systems.
-#[cfg(target_os = "macos")]
+#[cfg(macos)]
 pub const CMD_OR_ALT: Modifiers = Modifiers::META;
 /// Some shortcuts use Cmd on Mac and Alt on other systems.
-#[cfg(not(target_os = "macos"))]
+#[cfg(not(macos))]
 pub const CMD_OR_ALT: Modifiers = Modifiers::ALT;
 
 fn get_servo_key_from_winit_key(key: &LogicalKey) -> Key {

@@ -55,7 +55,7 @@ impl Window {
             .expect("Failed to create window.");
 
         let rwh = window.window_handle().expect("Failed to get window handle");
-        #[cfg(target_os = "macos")]
+        #[cfg(macos)]
         unsafe {
             if let RawWindowHandle::AppKit(AppKitWindowHandle { ns_view, .. }) = rwh.as_ref() {
                 decorate_window(
@@ -105,7 +105,7 @@ impl Window {
             .expect("Failed to create window.");
 
         let rwh = window.window_handle().expect("Failed to get window handle");
-        #[cfg(target_os = "macos")]
+        #[cfg(macos)]
         unsafe {
             if let RawWindowHandle::AppKit(AppKitWindowHandle { ns_view, .. }) = rwh.as_ref() {
                 decorate_window(
@@ -312,12 +312,6 @@ impl Window {
         compositor: &mut IOCompositor,
     ) -> (Option<WebView>, bool) {
         if self.panel.as_ref().filter(|w| w.webview_id == id).is_some() {
-            // self.webview.as_ref().map(|w| {
-            //     send_to_constellation(
-            //         &compositor.constellation_chan,
-            //         ConstellationMsg::CloseWebView(w.webview_id),
-            //     )
-            // });
             if let Some(w) = self.webview.as_ref() {
                 send_to_constellation(
                     &compositor.constellation_chan,
@@ -393,15 +387,15 @@ impl Window {
 }
 
 /* window decoration */
-#[cfg(target_os = "macos")]
+#[cfg(macos)]
 use objc2::runtime::AnyObject;
-#[cfg(target_os = "macos")]
+#[cfg(macos)]
 use raw_window_handle::{AppKitWindowHandle, RawWindowHandle};
-#[cfg(target_os = "macos")]
+#[cfg(macos)]
 use winit::dpi::LogicalPosition;
 
 /// Window decoration for macOS.
-#[cfg(target_os = "macos")]
+#[cfg(macos)]
 pub unsafe fn decorate_window(view: *mut AnyObject, _position: LogicalPosition<f64>) {
     use objc2::rc::Id;
     use objc2_app_kit::{NSView, NSWindowStyleMask, NSWindowTitleVisibility};
