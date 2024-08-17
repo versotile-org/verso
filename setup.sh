@@ -1,38 +1,38 @@
 #!/bin/bash
-# Display a message to the user
-echo "Setting up Verso on Unix-based systems..."
 
-# Function to install packages on Linux and macOS
-install_packages() {
-    if [[ "$OSTYPE" == "linux-gnu"* ]]; then
-        echo "Detected Linux. Installing dependencies..."
-        if [ -x "$(command -v apt-get)" ]; then
-            sudo apt-get update
-            sudo apt-get install -y git python3-pip llvm cmake curl
-        elif [ -x "$(command -v yum)" ]; then
-            sudo yum install -y git python3-pip llvm cmake curl
-        fi
-    elif [[ "$OSTYPE" == "darwin"* ]]; then
-        echo "Detected macOS. Installing dependencies via Homebrew..."
-        if ! command -v brew &> /dev/null; then
-            echo "Homebrew not found. Installing Homebrew..."
-            /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
-        fi
-        brew install cmake pkg-config harfbuzz
-    else
-        echo "Unsupported OS: $OSTYPE"
-        exit 1
-    fi
-}
+# Ensure script is run as root
+if [ "$(id -u)" != "0" ]; then
+   echo "This script must be run as root (use sudo)." 
+   exit 1
+fi
 
-# Install necessary packages
-install_packages
+# Install necessary packages based on the package manager available
+if [ -x "$(command -v apt-get)" ]; then
+    echo "Detected Debian-based system. Installing dependencies using apt-get."
+    sudo apt-get update
+    sudo apt-get install -y git python3-pip llvm cmake curl
+
+elif [ -x "$(command -v yum)" ]; then
+    echo "Detected Red Hat-based system. Installing dependencies using yum."
+    sudo yum install -y git python3-pip llvm cmake curl
+
+elif [ -x "$(command -v pacman)" ]; then
+    echo "Detected Arch-based system. Installing dependencies using pacman."
+    sudo pacman -Sy --needed git python-pip llvm cmake curl
+
+elif [ -x "$(command -v brew)" ]; then
+    echo "Detected macOS. Installing dependencies using Homebrew."
+    brew install git python3 llvm cmake curl
+
+else
+    echo "Unsupported OS or package manager. Please install dependencies manually."
+    exit 1
+fi
 
 # Install Python dependencies
+echo "Installing Python dependencies..."
 pip3 install mako
 
 # Build and run the project using Cargo
+echo "Building the project..."
 cargo run
-
-# Display completion message
-echo "Setup complete."
