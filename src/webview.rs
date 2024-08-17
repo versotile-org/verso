@@ -101,14 +101,14 @@ impl Window {
                 }
             }
             EmbedderMsg::SetClipboardContents(text) => {
-                clipboard.map(|c| {
+                if let Some(c) = clipboard {
                     if let Err(e) = c.set_text(text) {
                         log::warn!(
                             "Verso WebView {webview_id:?} failed to set clipboard contents: {}",
                             e
                         );
                     }
-                });
+                }
             }
             EmbedderMsg::EventDelivered(event) => {
                 if let CompositorEventVariant::MouseButtonEvent = event {
@@ -178,16 +178,19 @@ impl Window {
                                 let url = match Url::parse(unparsed_url) {
                                     Ok(url_parsed) => url_parsed,
                                     Err(e) => {
-                                        if e == url::ParseError::RelativeUrlWithoutBase
-                                        {
-                                            Url::parse(&format!("https://{}", unparsed_url)).unwrap()
+                                        if e == url::ParseError::RelativeUrlWithoutBase {
+                                            Url::parse(&format!("https://{}", unparsed_url))
+                                                .unwrap()
                                         } else {
                                             panic!("Verso Panel failed to parse URL: {}", e);
                                         }
                                     }
                                 };
 
-                                send_to_constellation(sender, ConstellationMsg::LoadUrl(id, ServoUrl::from_url(url)));
+                                send_to_constellation(
+                                    sender,
+                                    ConstellationMsg::LoadUrl(id, ServoUrl::from_url(url)),
+                                );
                             } else {
                                 match msg.as_str() {
                                     "PREV" => {
@@ -245,11 +248,11 @@ impl Window {
                 }
             }
             EmbedderMsg::SetClipboardContents(text) => {
-                clipboard.map(|c| {
+                if let Some(c) = clipboard {
                     if let Err(e) = c.set_text(text) {
                         log::warn!("Verso Panel failed to set clipboard contents: {}", e);
                     }
-                });
+                }
             }
             e => {
                 log::trace!("Verso Panel isn't supporting this message yet: {e:?}")

@@ -24,16 +24,16 @@ impl ApplicationHandler for App {
         window_id: winit::window::WindowId,
         event: winit::event::WindowEvent,
     ) {
-        self.verso.as_mut().map(|v| {
+        if let Some(v) = self.verso.as_mut() {
             v.handle_winit_window_event(window_id, event);
             v.handle_servo_messages(event_loop);
-        });
+        }
     }
 
     fn user_event(&mut self, event_loop: &event_loop::ActiveEventLoop, _: ()) {
-        self.verso.as_mut().map(|v| {
+        if let Some(v) = self.verso.as_mut() {
             v.handle_servo_messages(event_loop);
-        });
+        }
     }
 }
 
