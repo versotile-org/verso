@@ -1,10 +1,16 @@
 use std::ffi::{c_void, CStr};
+use std::num::NonZeroU32;
 use std::rc::Rc;
 use std::{cell::RefCell, ffi::CString};
 
 use euclid::default::Size2D;
+use glutin::config::GetGlConfig;
 use glutin::context::PossiblyCurrentContext;
-use glutin::surface::{Surface as GSurface, WindowSurface};
+use glutin::prelude::PossiblyCurrentGlContext;
+use glutin::surface::{
+    GlSurface, ResizeableSurface, Surface as GSurface, SurfaceTypeTrait, SwapInterval,
+    WindowSurface,
+};
 use glutin::{
     config::{Config, ConfigTemplateBuilder, GlConfig},
     context::{ContextApi, ContextAttributesBuilder, Version},
@@ -34,7 +40,6 @@ pub struct RenderingContext(Rc<RenderingContextData>);
 
 struct RContext {
     context: PossiblyCurrentContext,
-    surface: GSurface<WindowSurface>,
     gl: gl::Gl,
 }
 
@@ -43,7 +48,7 @@ impl RContext {
     pub fn create(
         evl: &ActiveEventLoop,
         window: &Window,
-    ) -> Result<Self, Box<dyn std::error::Error>> {
+    ) -> Result<(Self, GSurface<WindowSurface>), Box<dyn std::error::Error>> {
         let template = ConfigTemplateBuilder::new()
             .with_alpha_size(8)
             .with_transparency(cfg!(macos));
@@ -96,6 +101,13 @@ impl RContext {
         // Make it current.
         let context = not_current_gl_context.make_current(&surface).unwrap();
 
+        // Try setting vsync.
+        if let Err(res) =
+            surface.set_swap_interval(&context, SwapInterval::Wait(NonZeroU32::new(1).unwrap()))
+        {
+            log::error!("Error setting vsync: {res:?}");
+        }
+
         let gl = gl::Gl::load_with(|symbol| {
             let symbol = CString::new(symbol).unwrap();
             gl_display.get_proc_address(symbol.as_c_str()).cast()
@@ -112,11 +124,52 @@ impl RContext {
             log::debug!("Shaders version on {}", shaders_version.to_string_lossy());
         }
 
-        Ok(Self {
-            context,
-            surface,
-            gl,
-        })
+        Ok((Self { context, gl }, surface))
+    }
+
+    /// Create a surface based on provided window.
+    pub fn create_surface(
+        &self,
+        window: &Window,
+    ) -> Result<GSurface<WindowSurface>, crate::errors::Error> {
+        let attrs = window
+            .build_surface_attributes(Default::default())
+            .expect("Failed to build surface attributes");
+        let config = self.context.config();
+        unsafe { Ok(config.display().create_window_surface(&config, &attrs)?) }
+    }
+
+    /// Make GL context current.
+    pub fn make_gl_context_current(
+        &self,
+        surface: GSurface<impl SurfaceTypeTrait>,
+    ) -> Result<(), crate::errors::Error> {
+        self.context.make_current(&surface)?;
+        Ok(())
+    }
+
+    /// Resize the rendering context.
+    pub fn resize(
+        &self,
+        surface: GSurface<impl SurfaceTypeTrait + ResizeableSurface>,
+        size: Size2D<i32>,
+    ) {
+        surface.resize(
+            &self.context,
+            NonZeroU32::new(size.width as u32).unwrap(),
+            NonZeroU32::new(size.height as u32).unwrap(),
+        );
+        unsafe { self.gl.Viewport(0, 0, size.width, size.height) };
+    }
+
+    /// Present the surface of the rendering context.
+    pub fn present(
+        &self,
+        surface: GSurface<impl SurfaceTypeTrait>,
+    ) -> Result<(), crate::errors::Error> {
+        self.context.make_current(&surface)?;
+        surface.swap_buffers(&self.context)?;
+        Ok(())
     }
 }
 
