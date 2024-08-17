@@ -245,7 +245,7 @@ impl Window {
             }
             WindowEvent::ModifiersChanged(modifier) => self.modifiers_state.set(modifier.state()),
             WindowEvent::KeyboardInput { event, .. } => {
-                let event = keyboard_event_from_winit(&event, self.modifiers_state.get());
+                let event = keyboard_event_from_winit(event, self.modifiers_state.get());
                 log::trace!("Verso is handling {:?}", event);
                 let msg = ConstellationMsg::Keyboard(event);
                 send_to_constellation(sender, msg);
@@ -312,12 +312,12 @@ impl Window {
         compositor: &mut IOCompositor,
     ) -> (Option<WebView>, bool) {
         if self.panel.as_ref().filter(|w| w.webview_id == id).is_some() {
-            self.webview.as_ref().map(|w| {
+            if let Some(w) = self.webview.as_ref() {
                 send_to_constellation(
                     &compositor.constellation_chan,
                     ConstellationMsg::CloseWebView(w.webview_id),
                 )
-            });
+            }
             (self.panel.take(), false)
         } else if self
             .webview

@@ -70,13 +70,19 @@ pub enum TouchAction {
     NoAction,
 }
 
-impl TouchHandler {
-    /// Create a touch handler.
-    pub fn new() -> Self {
-        TouchHandler {
+impl Default for TouchHandler {
+    fn default() -> Self {
+        Self {
             state: Nothing,
             active_touch_points: Vec::new(),
         }
+    }
+}
+
+impl TouchHandler {
+    /// Create a touch handler.
+    pub fn new() -> Self {
+        Self::default()
     }
 
     /// Handle touch down input.
