@@ -6,3 +6,4 @@ resources/
 .flatpak-builder/
 libmozjs*
 cargo-sources.json
+.direnv/
