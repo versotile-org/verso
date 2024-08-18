@@ -1958,17 +1958,6 @@ impl IOCompositor {
             }
         }
 
-        // // Bind the webrender framebuffer
-        // let framebuffer_object = self
-        //     .rendering_context
-        //     .context_surface_info()
-        //     .unwrap_or(None)
-        //     .map(|info| info.framebuffer_object)
-        //     .unwrap_or(0);
-        // self.webrender_gl
-        //     .bind_framebuffer(gl::FRAMEBUFFER, framebuffer_object);
-        // self.assert_gl_framebuffer_complete();
-
         profile(
             ProfilerCategory::Compositing,
             None,
