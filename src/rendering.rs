@@ -1,15 +1,14 @@
-use std::ffi::{c_void, CStr};
+use std::ffi::CString;
 use std::num::NonZeroU32;
 use std::rc::Rc;
-use std::{cell::RefCell, ffi::CString};
 
 use euclid::default::Size2D;
+use gleam::gl;
 use glutin::config::GetGlConfig;
 use glutin::context::PossiblyCurrentContext;
-use glutin::prelude::PossiblyCurrentGlContext;
+use glutin::prelude::{GlContext, PossiblyCurrentGlContext};
 use glutin::surface::{
-    GlSurface, ResizeableSurface, Surface as GSurface, SurfaceTypeTrait, SwapInterval,
-    WindowSurface,
+    GlSurface, ResizeableSurface, Surface, SurfaceTypeTrait, SwapInterval, WindowSurface,
 };
 use glutin::{
     config::{Config, ConfigTemplateBuilder, GlConfig},
@@ -19,36 +18,22 @@ use glutin::{
 };
 use glutin_winit::{DisplayBuilder, GlWindow};
 use raw_window_handle::HasWindowHandle;
-use surfman::{
-    Adapter, Connection, Context, ContextAttributeFlags, ContextAttributes, Device, Error, GLApi,
-    GLVersion, NativeWidget, Surface, SurfaceAccess, SurfaceInfo, SurfaceType,
-};
 use winit::event_loop::ActiveEventLoop;
 use winit::window::Window;
 
-mod gl {
-    #![allow(clippy::all)]
-    include!(concat!(env!("OUT_DIR"), "/gl_bindings.rs"));
-
-    pub use Gles2 as Gl;
-}
-
 /// A Verso rendering context, which holds all of the information needed
 /// to render Servo's layout, and bridges WebRender and glutin.
-#[derive(Clone)]
-pub struct RenderingContext(Rc<RenderingContextData>);
-
-struct RContext {
+pub struct RenderingContext {
     context: PossiblyCurrentContext,
-    gl: gl::Gl,
+    pub(crate) gl: Rc<dyn gl::Gl>,
 }
 
-impl RContext {
+impl RenderingContext {
     /// Create a rendering context instance.
     pub fn create(
         evl: &ActiveEventLoop,
         window: &Window,
-    ) -> Result<(Self, GSurface<WindowSurface>), Box<dyn std::error::Error>> {
+    ) -> Result<(Self, Surface<WindowSurface>), Box<dyn std::error::Error>> {
         let template = ConfigTemplateBuilder::new()
             .with_alpha_size(8)
             .with_transparency(cfg!(macos));
@@ -108,21 +93,27 @@ impl RContext {
             log::error!("Error setting vsync: {res:?}");
         }
 
-        let gl = gl::Gl::load_with(|symbol| {
-            let symbol = CString::new(symbol).unwrap();
-            gl_display.get_proc_address(symbol.as_c_str()).cast()
-        });
+        let gl = match context.context_api() {
+            ContextApi::OpenGl(_) => unsafe {
+                gleam::gl::GlFns::load_with(|symbol| {
+                    let symbol = CString::new(symbol).unwrap();
+                    gl_display.get_proc_address(symbol.as_c_str()) as *const _
+                })
+            },
+            ContextApi::Gles(_) => unsafe {
+                gleam::gl::GlesFns::load_with(|symbol| {
+                    let symbol = CString::new(symbol).unwrap();
+                    gl_display.get_proc_address(symbol.as_c_str()) as *const _
+                })
+            },
+        };
 
-        if let Some(renderer) = get_gl_string(&gl, gl::RENDERER) {
-            log::debug!("Running on {}", renderer.to_string_lossy());
-        }
-        if let Some(version) = get_gl_string(&gl, gl::VERSION) {
-            log::debug!("OpenGL Version {}", version.to_string_lossy());
-        }
-
-        if let Some(shaders_version) = get_gl_string(&gl, gl::SHADING_LANGUAGE_VERSION) {
-            log::debug!("Shaders version on {}", shaders_version.to_string_lossy());
-        }
+        log::debug!("Running on {}", gl.get_string(gl::RENDERER));
+        log::debug!("OpenGL Version {}", gl.get_string(gl::VERSION));
+        log::debug!(
+            "Shaders version on {}",
+            gl.get_string(gl::SHADING_LANGUAGE_VERSION)
+        );
 
         Ok((Self { context, gl }, surface))
     }
@@ -131,7 +122,7 @@ impl RContext {
     pub fn create_surface(
         &self,
         window: &Window,
-    ) -> Result<GSurface<WindowSurface>, crate::errors::Error> {
+    ) -> Result<Surface<WindowSurface>, crate::errors::Error> {
         let attrs = window
             .build_surface_attributes(Default::default())
             .expect("Failed to build surface attributes");
@@ -142,16 +133,16 @@ impl RContext {
     /// Make GL context current.
     pub fn make_gl_context_current(
         &self,
-        surface: GSurface<impl SurfaceTypeTrait>,
+        surface: &Surface<impl SurfaceTypeTrait>,
     ) -> Result<(), crate::errors::Error> {
-        self.context.make_current(&surface)?;
+        self.context.make_current(surface)?;
         Ok(())
     }
 
     /// Resize the rendering context.
     pub fn resize(
         &self,
-        surface: GSurface<impl SurfaceTypeTrait + ResizeableSurface>,
+        surface: &Surface<impl SurfaceTypeTrait + ResizeableSurface>,
         size: Size2D<i32>,
     ) {
         surface.resize(
@@ -159,151 +150,17 @@ impl RContext {
             NonZeroU32::new(size.width as u32).unwrap(),
             NonZeroU32::new(size.height as u32).unwrap(),
         );
-        unsafe { self.gl.Viewport(0, 0, size.width, size.height) };
+        self.gl.viewport(0, 0, size.width, size.height);
     }
 
     /// Present the surface of the rendering context.
     pub fn present(
         &self,
-        surface: GSurface<impl SurfaceTypeTrait>,
+        surface: &Surface<impl SurfaceTypeTrait>,
     ) -> Result<(), crate::errors::Error> {
         self.context.make_current(&surface)?;
         surface.swap_buffers(&self.context)?;
         Ok(())
-    }
-}
-
-struct RenderingContextData {
-    device: RefCell<Device>,
-    context: RefCell<Context>,
-}
-
-impl Drop for RenderingContextData {
-    fn drop(&mut self) {
-        let device = &mut self.device.borrow_mut();
-        let context = &mut self.context.borrow_mut();
-        let _ = device.destroy_context(context);
-    }
-}
-
-impl RenderingContext {
-    /// Create a rendering context instance.
-    pub fn create(
-        connection: &Connection,
-        adapter: &Adapter,
-        surface_type: SurfaceType<NativeWidget>,
-    ) -> Result<Self, Error> {
-        let mut device = connection.create_device(adapter)?;
-        let flags = ContextAttributeFlags::ALPHA
-            | ContextAttributeFlags::DEPTH
-            | ContextAttributeFlags::STENCIL;
-        let version = match connection.gl_api() {
-            GLApi::GLES => GLVersion { major: 3, minor: 0 },
-            GLApi::GL => GLVersion { major: 3, minor: 2 },
-        };
-        let context_attributes = ContextAttributes { flags, version };
-        let context_descriptor = device.create_context_descriptor(&context_attributes)?;
-        let mut context = device.create_context(&context_descriptor, None)?;
-        let surface_access = SurfaceAccess::GPUOnly;
-        let surface = device.create_surface(&context, surface_access, surface_type)?;
-        device
-            .bind_surface_to_context(&mut context, surface)
-            .map_err(|(err, mut surface)| {
-                let _ = device.destroy_surface(&mut context, &mut surface);
-                err
-            })?;
-
-        device.make_context_current(&context)?;
-
-        let device = RefCell::new(device);
-        let context = RefCell::new(context);
-        let data = RenderingContextData { device, context };
-        Ok(RenderingContext(Rc::new(data)))
-    }
-
-    /// Create a surface based on provided surface type.
-    pub fn create_surface(
-        &self,
-        surface_type: SurfaceType<NativeWidget>,
-    ) -> Result<Surface, Error> {
-        let device = &mut self.0.device.borrow_mut();
-        let context = &self.0.context.borrow();
-        let surface_access = SurfaceAccess::GPUOnly;
-        device.create_surface(context, surface_access, surface_type)
-    }
-
-    /// Destroy a surface. A surface must call this before dropping.
-    pub fn destroy_surface(&self, mut surface: Surface) -> Result<(), Error> {
-        let device = &self.0.device.borrow();
-        let context = &mut self.0.context.borrow_mut();
-        device.destroy_surface(context, &mut surface)
-    }
-
-    /// Make GL context current.
-    pub fn make_gl_context_current(&self) -> Result<(), Error> {
-        let device = &self.0.device.borrow();
-        let context = &self.0.context.borrow();
-        device.make_context_current(context)
-    }
-
-    /// Resize the rendering context.
-    pub fn resize(&self, size: Size2D<i32>) -> Result<(), Error> {
-        let device = &mut self.0.device.borrow_mut();
-        let context = &mut self.0.context.borrow_mut();
-        let mut surface = device.unbind_surface_from_context(context)?.unwrap();
-        device.resize_surface(context, &mut surface, size)?;
-        device
-            .bind_surface_to_context(context, surface)
-            .map_err(|(err, mut surface)| {
-                let _ = device.destroy_surface(context, &mut surface);
-                err
-            })
-    }
-
-    /// Present the surface of the rendering context.
-    pub fn present(&self) -> Result<(), Error> {
-        let device = &mut self.0.device.borrow_mut();
-        let context = &mut self.0.context.borrow_mut();
-        let mut surface = device.unbind_surface_from_context(context)?.unwrap();
-        device.present_surface(context, &mut surface)?;
-        device
-            .bind_surface_to_context(context, surface)
-            .map_err(|(err, mut surface)| {
-                let _ = device.destroy_surface(context, &mut surface);
-                err
-            })
-    }
-
-    /// Invoke a closure with the surface associated with the current front buffer.
-    /// This can be used to create a surfman::SurfaceTexture to blit elsewhere.
-    pub fn with_front_buffer<F: FnOnce(&Device, Surface) -> Surface>(&self, f: F) {
-        let device = &mut self.0.device.borrow_mut();
-        let context = &mut self.0.context.borrow_mut();
-        let surface = device
-            .unbind_surface_from_context(context)
-            .unwrap()
-            .unwrap();
-        let surface = f(device, surface);
-        device.bind_surface_to_context(context, surface).unwrap();
-    }
-
-    /// Get the conntection of the rendering context.
-    pub fn connection(&self) -> Connection {
-        let device = &self.0.device.borrow();
-        device.connection()
-    }
-
-    /// Get the context surface info of the rendering context.
-    pub fn context_surface_info(&self) -> Result<Option<SurfaceInfo>, Error> {
-        let device = &self.0.device.borrow();
-        let context = &self.0.context.borrow();
-        device.context_surface_info(context)
-    }
-    /// Get the proc address of the rendering context.
-    pub fn get_proc_address(&self, name: &str) -> *const c_void {
-        let device = &self.0.device.borrow();
-        let context = &self.0.context.borrow();
-        device.get_proc_address(context, name)
     }
 }
 
@@ -322,11 +179,4 @@ pub fn gl_config_picker(configs: Box<dyn Iterator<Item = Config> + '_>) -> Confi
             }
         })
         .unwrap()
-}
-
-fn get_gl_string(gl: &gl::Gl, variant: gl::types::GLenum) -> Option<&'static CStr> {
-    unsafe {
-        let s = gl.GetString(variant);
-        (!s.is_null()).then(|| CStr::from_ptr(s.cast()))
-    }
 }

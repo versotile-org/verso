@@ -5,10 +5,9 @@ use compositing_traits::ConstellationMsg;
 use crossbeam_channel::Sender;
 use embedder_traits::{Cursor, EmbedderMsg};
 use euclid::{Point2D, Size2D};
-use raw_window_handle::{HasDisplayHandle, HasWindowHandle};
+use glutin::surface::Surface;
+use glutin::surface::WindowSurface;
 use script_traits::{TouchEventType, WheelDelta, WheelMode};
-use surfman::Connection;
-use surfman::SurfaceType;
 use webrender_api::{
     units::{DeviceIntPoint, DeviceIntRect, DeviceIntSize, DevicePoint, LayoutVector2D},
     ScrollLocation,
@@ -35,6 +34,8 @@ use arboard::Clipboard;
 pub struct Window {
     /// Access to Winit window
     pub(crate) window: WinitWindow,
+    /// GL surface of the window
+    pub(crate) surface: Surface<WindowSurface>,
     /// The main control panel of this window.
     pub(crate) panel: Option<WebView>,
     /// The WebView of this window.
@@ -54,9 +55,9 @@ impl Window {
             // .with_decorations(false)
             .expect("Failed to create window.");
 
-        let rwh = window.window_handle().expect("Failed to get window handle");
         #[cfg(macos)]
         unsafe {
+            let rwh = window.window_handle().expect("Failed to get window handle");
             if let RawWindowHandle::AppKit(AppKitWindowHandle { ns_view, .. }) = rwh.as_ref() {
                 decorate_window(
                     ns_view.as_ptr() as *mut AnyObject,
@@ -64,22 +65,8 @@ impl Window {
                 );
             }
         }
-        let window_size = window.inner_size();
-        let window_size = Size2D::new(window_size.width as i32, window_size.height as i32);
-        let display_handle = window
-            .display_handle()
-            .expect("Failed to get display handle");
-        let connection =
-            Connection::from_display_handle(display_handle).expect("Failed to create connection");
-        let adapter = connection
-            .create_adapter()
-            .expect("Failed to create adapter");
-        let native_widget = connection
-            .create_native_widget_from_window_handle(rwh, window_size)
-            .expect("Failed to create native widget");
-        let surface_type = SurfaceType::Widget { native_widget };
-        let rendering_context = RenderingContext::create(&connection, &adapter, surface_type)
-            .expect("Failed to create rendering context");
+        let (rendering_context, surface) =
+            RenderingContext::create(evl, &window).expect("Failed to create rendering context");
         log::trace!("Created rendering context for window {:?}", window);
 
         let size = window.inner_size();
@@ -87,6 +74,7 @@ impl Window {
         (
             Self {
                 window,
+                surface,
                 panel: Some(WebView::new_panel(DeviceIntRect::from_size(size))),
                 webview: None,
                 mouse_position: Cell::new(PhysicalPosition::default()),
@@ -104,9 +92,9 @@ impl Window {
             // .with_decorations(false)
             .expect("Failed to create window.");
 
-        let rwh = window.window_handle().expect("Failed to get window handle");
         #[cfg(macos)]
         unsafe {
+            let rwh = window.window_handle().expect("Failed to get window handle");
             if let RawWindowHandle::AppKit(AppKitWindowHandle { ns_view, .. }) = rwh.as_ref() {
                 decorate_window(
                     ns_view.as_ptr() as *mut AnyObject,
@@ -114,21 +102,13 @@ impl Window {
                 );
             }
         }
-        let window_size = window.inner_size();
-        let window_size = Size2D::new(window_size.width as i32, window_size.height as i32);
-        let native_widget = compositor
-            .rendering_context
-            .connection()
-            .create_native_widget_from_window_handle(rwh, window_size)
-            .expect("Failed to create native widget");
-        let surface_type = SurfaceType::Widget { native_widget };
         let surface = compositor
             .rendering_context
-            .create_surface(surface_type)
-            .ok();
-        compositor.surfaces.insert(window.id(), surface);
+            .create_surface(&window)
+            .unwrap();
         Self {
             window,
+            surface,
             panel: None,
             webview: None,
             mouse_position: Cell::new(PhysicalPosition::default()),
