@@ -486,7 +486,9 @@ impl Verso {
         // Check compositor status and set control flow.
         if shutdown {
             // If Compositor has shut down, deinit and remove it.
-            self.compositor.take().map(IOCompositor::deinit);
+            if let Some(compositor) = self.compositor.take() {
+                IOCompositor::deinit(compositor)
+            }
             evl.exit();
         } else if self.is_animating() {
             evl.set_control_flow(ControlFlow::Poll);
