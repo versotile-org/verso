@@ -370,7 +370,7 @@ impl Window {
 #[cfg(macos)]
 use objc2::runtime::AnyObject;
 #[cfg(macos)]
-use raw_window_handle::{AppKitWindowHandle, RawWindowHandle};
+use raw_window_handle::{AppKitWindowHandle, HasWindowHandle, RawWindowHandle};
 #[cfg(macos)]
 use winit::dpi::LogicalPosition;
 
