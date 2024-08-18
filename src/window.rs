@@ -106,14 +106,16 @@ impl Window {
             .rendering_context
             .create_surface(&window)
             .unwrap();
-        Self {
+        let mut window = Self {
             window,
             surface,
             panel: None,
             webview: None,
             mouse_position: Cell::new(PhysicalPosition::default()),
             modifiers_state: Cell::new(ModifiersState::default()),
-        }
+        };
+        compositor.swap_current_window(&mut window);
+        window
     }
 
     /// Handle Winit window event and return a boolean to indicate if the compositor should repaint immediately.
