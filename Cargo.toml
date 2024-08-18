@@ -45,7 +45,6 @@ flatpak = []
 
 [build-dependencies]
 cfg_aliases = "0.2"
-gl_generator = "0.14"
 
 [dependencies]
 arboard = "3.4.0"
@@ -61,7 +60,6 @@ keyboard-types = "0.7"
 log = "0.4"
 raw-window-handle = { version = "0.6", features = ["std"] }
 sparkle = "0.1.26"
-surfman = { version = "0.9", features = ["chains", "sm-raw-window-handle-06"] }
 thiserror = "1.0"
 winit = { version = "0.30", features = ["rwh_06"] }
 # Servo repo crates
@@ -101,10 +99,6 @@ cargo-packager-resource-resolver = { version = "0.1.1", features = [
   "auto-detect-format",
 ], optional = true }
 url = "2.5.2"
-
-[target.'cfg(target_os = "windows")'.dependencies]
-surfman = { version = "0.9", features = ["sm-angle-default"] }
-mozangle = { version = "0.5.1", features = ["egl", "build_dlls"] }
 
 [target.'cfg(any(target_os = "ios", target_os = "macos"))'.dependencies]
 objc2 = "0.5"
