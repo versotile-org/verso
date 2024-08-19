@@ -30,7 +30,8 @@ use webrender_api::units::{
     LayoutVector2D, WorldPoint,
 };
 use webrender_api::{
-    BuiltDisplayList, DirtyRect, DisplayListPayload, DocumentId, Epoch as WebRenderEpoch,
+    BorderRadius, BoxShadowClipMode, BuiltDisplayList, ClipMode, ColorF, CommonItemProperties,
+    ComplexClipRegion, DirtyRect, DisplayListPayload, DocumentId, Epoch as WebRenderEpoch,
     ExternalScrollId, FontInstanceOptions, HitTestFlags, PipelineId as WebRenderPipelineId,
     PropertyBinding, ReferenceFrameKind, RenderReasons, SampledScrollOffset, ScrollLocation,
     SpaceAndClipInfo, SpatialId, SpatialTreeItemKey, TransformStyle,
@@ -1024,26 +1025,52 @@ impl IOCompositor {
             SpatialTreeItemKey::new(0, 0),
         );
 
-        let scaled_viewport_size = self.viewport.to_f32() / zoom_factor;
-        let scaled_viewport_size = LayoutSize::from_untyped(scaled_viewport_size.to_untyped());
-        let scaled_viewport_rect =
-            LayoutRect::from_origin_and_size(LayoutPoint::zero(), scaled_viewport_size);
-
-        let root_clip_id = builder.define_clip_rect(zoom_reference_frame, scaled_viewport_rect);
-        let clip_chain_id = builder.define_clip_chain(None, [root_clip_id]);
         for webview in window.painting_order() {
             if let Some(pipeline_id) = self.webviews.get(&webview.webview_id) {
-                let scaled_webview_rect = webview.rect.to_f32() / zoom_factor;
+                let scaled_webview_rect =
+                    LayoutRect::from_untyped(&(webview.rect.to_f32() / zoom_factor).to_untyped());
+                let complex = ComplexClipRegion::new(
+                    scaled_webview_rect,
+                    BorderRadius::uniform(10.), // TODO: add fields to webview
+                    ClipMode::Clip,
+                );
+                let root_clip_id = builder.define_clip_rounded_rect(zoom_reference_frame, complex);
+                let clip_chain_id = builder.define_clip_chain(None, [root_clip_id]);
+                let root_space_and_clip = SpaceAndClipInfo {
+                    spatial_id: zoom_reference_frame,
+                    clip_chain_id,
+                };
+
                 builder.push_iframe(
-                    LayoutRect::from_untyped(&scaled_webview_rect.to_untyped()),
-                    LayoutRect::from_untyped(&scaled_webview_rect.to_untyped()),
-                    &SpaceAndClipInfo {
-                        spatial_id: zoom_reference_frame,
-                        clip_chain_id,
-                    },
+                    scaled_webview_rect,
+                    scaled_webview_rect,
+                    &root_space_and_clip,
                     pipeline_id.into(),
                     true,
                 );
+
+                // TODO: add box shadow
+                //
+                // let root_space = SpaceAndClipInfo {
+                //     spatial_id: zoom_reference_frame,
+                //     clip_chain_id: root_clip_chain_id,
+                // };
+                // let offset = scaled_webview_rect.max.to_vector() / 2.;
+                // let color = ColorF::new(0.0, 0.0, 0.0, 1.);
+                // let blur_radius = 10.0;
+                // let spread_radius = 10.0;
+                // let box_shadow_type = BoxShadowClipMode::Outset;
+                //
+                // builder.push_box_shadow(
+                //     &CommonItemProperties::new(scaled_webview_rect / 2., root_space),
+                //     scaled_webview_rect / 2.,
+                //     offset,
+                //     color,
+                //     blur_radius,
+                //     spread_radius,
+                //     BorderRadius::uniform(10.),
+                //     box_shadow_type,
+                // );
             }
         }
 
@@ -1258,7 +1285,10 @@ impl IOCompositor {
 
         if let Some(w) = &mut window.webview {
             let mut rect = DeviceIntRect::from_size(size);
-            rect.min.y = rect.max.y.min(76);
+            rect.min.y = rect.max.y.min(100);
+            rect.min.x += 10;
+            rect.max.y -= 10;
+            rect.max.x -= 10;
             w.rect = rect;
             self.on_resize_webview_event(w.webview_id, rect);
         }
