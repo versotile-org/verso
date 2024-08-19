@@ -177,7 +177,7 @@ jobs:
 
       - name: Install Cargo Packager
         if: ${{ github.event_name == 'schedule' }}
-        run: cargo +stable install cargo-packager
+        run: cargo install cargo-packager
 
       - name: Build
         run: |
@@ -250,7 +250,7 @@ jobs:
 
       - name: Install Cargo Packager
         if: ${{ github.event_name == 'schedule' }}
-        run: cargo +stable install cargo-packager
+        run: cargo install cargo-packager
 
       - name: Build
         run: |
