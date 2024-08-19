@@ -11,4 +11,7 @@ pub enum Error {
     /// A general error that may occur while running the Winit event loop.
     #[error(transparent)]
     EventLoopError(#[from] winit::error::EventLoopError),
+    /// Glutin errors.
+    #[error(transparent)]
+    GlutinError(#[from] glutin::error::Error),
 }

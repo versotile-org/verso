@@ -24,7 +24,6 @@ use script_traits::{
 };
 use servo_geometry::DeviceIndependentPixel;
 use style_traits::{CSSPixel, DevicePixel, PinchZoomFactor};
-use surfman::Surface;
 use webrender::{RenderApi, Transaction};
 use webrender_api::units::{
     DeviceIntPoint, DeviceIntRect, DeviceIntSize, DevicePoint, LayoutPoint, LayoutRect, LayoutSize,
@@ -39,11 +38,11 @@ use webrender_api::{
 use webrender_traits::display_list::{HitTestInfo, ScrollTree};
 use webrender_traits::{
     CanvasToCompositorMsg, CompositorHitTestResult, FontToCompositorMsg, ImageUpdate,
-    NetToCompositorMsg, RenderingContext, ScriptToCompositorMsg, SerializedImageUpdate,
-    UntrustedNodeAddress,
+    NetToCompositorMsg, ScriptToCompositorMsg, SerializedImageUpdate, UntrustedNodeAddress,
 };
 use winit::window::WindowId;
 
+use crate::rendering::RenderingContext;
 use crate::touch::{TouchAction, TouchHandler};
 use crate::window::Window;
 
@@ -104,9 +103,6 @@ const MIN_ZOOM: f32 = 0.1;
 /// The compositor will communicate with Servo using messages from the Constellation,
 /// then composite the WebRender frames and present the surface to the window.
 pub struct IOCompositor {
-    /// All surfaces that Compositor currently owns.
-    pub surfaces: HashMap<WindowId, Option<Surface>>,
-
     /// The current window that Compositor is handling.
     pub current_window: WindowId,
 
@@ -176,7 +172,7 @@ pub struct IOCompositor {
     /// The webrender interface, if enabled.
     pub webrender_api: RenderApi,
 
-    /// The surfman instance that webrender targets
+    /// The glutin instance that webrender targets
     pub rendering_context: RenderingContext,
 
     /// The GL bindings for webrender
@@ -348,10 +344,7 @@ impl IOCompositor {
         exit_after_load: bool,
         convert_mouse_to_touch: bool,
     ) -> Self {
-        let mut surfaces = HashMap::new();
-        surfaces.insert(current_window, None);
         let compositor = IOCompositor {
-            surfaces,
             current_window,
             viewport,
             port: state.receiver,
@@ -394,15 +387,7 @@ impl IOCompositor {
     }
 
     /// Consume compositor itself and deinit webrender.
-    pub fn deinit(mut self) {
-        if let Err(err) = self.rendering_context.make_gl_context_current() {
-            warn!("Failed to make GL context current: {:?}", err);
-        }
-        for surface in self.surfaces.values_mut() {
-            surface
-                .take()
-                .map(|s| self.rendering_context.destroy_surface(s));
-        }
+    pub fn deinit(self) {
         self.webrender.deinit();
     }
 
@@ -451,34 +436,6 @@ impl IOCompositor {
         }
 
         self.shutdown_state = ShutdownState::FinishedShuttingDown;
-    }
-
-    /// The underlying native surface can be lost during servo's lifetime.
-    /// On Android, for example, this happens when the app is sent to background.
-    /// We need to unbind the surface so that we don't try to use it again.
-    pub fn invalidate_native_surface(&mut self) {
-        debug!("Invalidating native surface in compositor");
-        if let Err(e) = self.rendering_context.unbind_native_surface_from_context() {
-            warn!("Unbinding native surface from context failed ({:?})", e);
-        }
-    }
-
-    /// On Android, this function will be called when the app moves to foreground
-    /// and the system creates a new native surface that needs to bound to the current
-    /// context.
-    #[allow(unsafe_code)]
-    #[allow(clippy::not_unsafe_ptr_arg_deref)] // It has an unsafe block inside
-    pub fn replace_native_surface(&mut self, native_widget: *mut c_void, coords: DeviceIntSize) {
-        debug!("Replacing native surface in compositor: {native_widget:?}");
-        let connection = self.rendering_context.connection();
-        let native_widget =
-            unsafe { connection.create_native_widget_from_ptr(native_widget, coords.to_untyped()) };
-        if let Err(e) = self
-            .rendering_context
-            .bind_native_surface_to_context(native_widget)
-        {
-            warn!("Binding native surface to context failed ({:?})", e);
-        }
     }
 
     fn handle_browser_message(
@@ -1282,23 +1239,16 @@ impl IOCompositor {
                 self.current_window,
                 window.id()
             );
-            if let Some(Some(new_surface)) = self.surfaces.insert(window.id(), None) {
-                // Swap the surface
-                self.rendering_context.with_front_buffer(|_, old_surface| {
-                    self.surfaces.insert(self.current_window, Some(old_surface));
-                    new_surface
-                });
-                self.current_window = window.id();
-                self.scale_factor = Scale::new(window.scale_factor() as f32);
-                self.resize(window.size(), window);
-            }
+            self.current_window = window.id();
+            self.scale_factor = Scale::new(window.scale_factor() as f32);
+            self.resize(window.size(), window);
         }
     }
 
     /// Resize the rendering context and all web views. Return true if the compositor should repaint and present
     /// after this.
     pub fn resize(&mut self, size: Size2D<i32, DevicePixel>, window: &mut Window) -> bool {
-        let need_resize = self.on_resize_window_event(size);
+        let need_resize = self.on_resize_window_event(size, window);
 
         if let Some(panel) = &mut window.panel {
             let rect = DeviceIntRect::from_size(size);
@@ -1319,12 +1269,14 @@ impl IOCompositor {
 
     /// Handle the window resize event and return a boolean to tell embedder if it should further
     /// handle the resize event.
-    pub fn on_resize_window_event(&mut self, new_viewport: DeviceIntSize) -> bool {
+    pub fn on_resize_window_event(&mut self, new_viewport: DeviceIntSize, window: &Window) -> bool {
         if self.shutdown_state != ShutdownState::NotShuttingDown {
             return false;
         }
 
-        let _ = self.rendering_context.resize(new_viewport.to_untyped());
+        let _ = self
+            .rendering_context
+            .resize(&window.surface, new_viewport.to_untyped());
         self.viewport = new_viewport;
         let mut transaction = Transaction::new();
         transaction.set_document_view(DeviceIntRect::from_size(self.viewport));
@@ -1959,8 +1911,8 @@ impl IOCompositor {
     }
 
     /// Composite to the given target if any, or the current target otherwise.
-    pub fn composite(&mut self) {
-        match self.composite_specific_target() {
+    pub fn composite(&mut self, window: &Window) {
+        match self.composite_specific_target(window) {
             Ok(_) => {
                 if self.exit_after_load {
                     println!("Shutting down the Constellation after generating an output file or exit flag specified");
@@ -1974,8 +1926,11 @@ impl IOCompositor {
     }
 
     /// Composite to the given target if any, or the current target otherwise.
-    fn composite_specific_target(&mut self) -> Result<(), UnableToComposite> {
-        if let Err(err) = self.rendering_context.make_gl_context_current() {
+    fn composite_specific_target(&mut self, window: &Window) -> Result<(), UnableToComposite> {
+        if let Err(err) = self
+            .rendering_context
+            .make_gl_context_current(&window.surface)
+        {
             warn!("Failed to make GL context current: {:?}", err);
         }
         self.assert_no_gl_error();
@@ -1998,17 +1953,6 @@ impl IOCompositor {
                 return Err(UnableToComposite::NotReadyToPaintImage(result));
             }
         }
-
-        // Bind the webrender framebuffer
-        let framebuffer_object = self
-            .rendering_context
-            .context_surface_info()
-            .unwrap_or(None)
-            .map(|info| info.framebuffer_object)
-            .unwrap_or(0);
-        self.webrender_gl
-            .bind_framebuffer(gl::FRAMEBUFFER, framebuffer_object);
-        self.assert_gl_framebuffer_complete();
 
         profile(
             ProfilerCategory::Compositing,
@@ -2071,7 +2015,7 @@ impl IOCompositor {
             }
         }
 
-        if let Err(err) = self.rendering_context.present() {
+        if let Err(err) = self.rendering_context.present(&window.surface) {
             warn!("Failed to present surface: {:?}", err);
         }
         self.composition_request = CompositionRequest::NoCompositingNecessary;
@@ -2147,19 +2091,21 @@ impl IOCompositor {
             self.zoom_action = false;
         }
 
-        match self.composition_request {
-            CompositionRequest::NoCompositingNecessary => {}
-            CompositionRequest::CompositeNow(_) => self.composite(),
-        }
+        if let Some(window) = windows.get(&self.current_window) {
+            match self.composition_request {
+                CompositionRequest::NoCompositingNecessary => {}
+                CompositionRequest::CompositeNow(_) => self.composite(window),
+            }
 
-        // Run the WebXR main thread
-        self.webxr_main_thread.run_one_frame();
+            // Run the WebXR main thread
+            self.webxr_main_thread.run_one_frame();
 
-        // The WebXR thread may make a different context current
-        let _ = self.rendering_context.make_gl_context_current();
+            // The WebXR thread may make a different context current
+            let _ = self
+                .rendering_context
+                .make_gl_context_current(&window.surface);
 
-        if !self.pending_scroll_zoom_events.is_empty() {
-            if let Some(window) = windows.get(&self.current_window) {
+            if !self.pending_scroll_zoom_events.is_empty() {
                 self.process_pending_scroll_events(window)
             }
         }
@@ -2175,7 +2121,9 @@ impl IOCompositor {
             let need_recomposite = matches!(msg, CompositorMsg::NewWebRenderFrameReady(_));
             let keep_going = self.handle_browser_message(msg, windows);
             if need_recomposite {
-                self.composite();
+                if let Some(window) = windows.get(&self.current_window) {
+                    self.composite(window);
+                }
                 break;
             }
             if !keep_going {

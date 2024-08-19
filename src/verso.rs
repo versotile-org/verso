@@ -19,7 +19,6 @@ use devtools;
 use embedder_traits::{EmbedderMsg, EmbedderProxy, EmbedderReceiver, EventLoopWaker};
 use euclid::Scale;
 use fonts::FontCacheThread;
-use gleam::gl;
 use ipc_channel::ipc::{self, IpcSender};
 use layout_thread_2020;
 use log::{Log, Metadata, Record};
@@ -31,7 +30,6 @@ use script_traits::WindowSizeData;
 use servo_config::{opts, pref};
 use servo_url::ServoUrl;
 use style;
-use surfman::GLApi;
 use units::DeviceIntRect;
 use webgpu;
 use webrender::{create_webrender_instance, ShaderPrecacheFlags, WebRenderOptions};
@@ -101,24 +99,8 @@ impl Verso {
         // Initialize servo media with dummy backend
         servo_media::ServoMedia::init::<servo_media_dummy::DummyBackend>();
 
-        // Initialize surfman & get GL bindings
-        let webrender_gl = match rendering_context.connection().gl_api() {
-            GLApi::GL => unsafe { gl::GlFns::load_with(|s| rendering_context.get_proc_address(s)) },
-            GLApi::GLES => unsafe {
-                gl::GlesFns::load_with(|s| rendering_context.get_proc_address(s))
-            },
-        };
-
-        // Make sure the gl context is made current.
-        rendering_context.make_gl_context_current().unwrap();
-        debug_assert_eq!(webrender_gl.get_error(), gl::NO_ERROR,);
-        // Bind the webrender framebuffer
-        let framebuffer_object = rendering_context
-            .context_surface_info()
-            .unwrap_or(None)
-            .map(|info| info.framebuffer_object)
-            .unwrap_or(0);
-        webrender_gl.bind_framebuffer(gl::FRAMEBUFFER, framebuffer_object);
+        // Get GL bindings
+        let webrender_gl = rendering_context.gl.clone();
 
         // Create profiler threads
         let time_profiler_sender = profile::time::Profiler::create(
