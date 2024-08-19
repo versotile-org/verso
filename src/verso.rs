@@ -99,7 +99,7 @@ impl Verso {
         // Initialize servo media with dummy backend
         servo_media::ServoMedia::init::<servo_media_dummy::DummyBackend>();
 
-        // Initialize surfman & get GL bindings
+        // Get GL bindings
         let webrender_gl = rendering_context.gl.clone();
 
         // Create profiler threads

@@ -41,7 +41,7 @@ impl RenderingContext {
 
         log::debug!("Picked a config with {} samples", gl_config.num_samples());
 
-        // XXX This will panic on Andoird, but we care about Deskyop for now.
+        // XXX This will panic on Android, but we care about Desktop for now.
         let raw_window_handle = window.window_handle().ok().map(|handle| handle.as_raw());
         // XXX The display could be obtained from any object created by it, so we can
         // query it from the config.
@@ -49,7 +49,7 @@ impl RenderingContext {
         // The context creation part.
         let context_attributes = ContextAttributesBuilder::new().build(raw_window_handle);
         // Since glutin by default tries to create OpenGL core context, which may not be
-        // present we should try gles.
+        // present we should try GLES.
         let fallback_context_attributes = ContextAttributesBuilder::new()
             .with_context_api(ContextApi::Gles(None))
             .build(raw_window_handle);
@@ -108,9 +108,9 @@ impl RenderingContext {
             },
         };
 
-        log::debug!("Running on {}", gl.get_string(gl::RENDERER));
-        log::debug!("OpenGL Version {}", gl.get_string(gl::VERSION));
-        log::debug!(
+        println!("Running on {}", gl.get_string(gl::RENDERER));
+        println!("OpenGL Version {}", gl.get_string(gl::VERSION));
+        println!(
             "Shaders version on {}",
             gl.get_string(gl::SHADING_LANGUAGE_VERSION)
         );
