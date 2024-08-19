@@ -153,12 +153,6 @@ jobs:
       - name: Install Rust
         uses: dsherret/rust-toolchain-file@v1
 
-      - name: Install Rust toolchain for packager
-        if: ${{ github.event_name == 'schedule' }}
-        uses: actions-rust-lang/setup-rust-toolchain@v1
-        with:
-          toolchain: stable
-
       - name: Install Python
         uses: actions/setup-python@v5
         with:
@@ -177,7 +171,7 @@ jobs:
 
       - name: Install Cargo Packager
         if: ${{ github.event_name == 'schedule' }}
-        run: cargo +stable install cargo-packager
+        run: cargo install cargo-packager
 
       - name: Build
         run: |
@@ -225,12 +219,6 @@ jobs:
       - name: Install Rust
         uses: dsherret/rust-toolchain-file@v1
 
-      - name: Install Rust toolchain for packager
-        if: ${{ github.event_name == 'schedule' }}
-        uses: actions-rust-lang/setup-rust-toolchain@v1
-        with:
-          toolchain: stable
-
       - name: Install Python
         uses: actions/setup-python@v5
         with:
@@ -250,7 +238,7 @@ jobs:
 
       - name: Install Cargo Packager
         if: ${{ github.event_name == 'schedule' }}
-        run: cargo +stable install cargo-packager
+        run: cargo install cargo-packager
 
       - name: Build
         run: |
