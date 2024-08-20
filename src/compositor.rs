@@ -1061,9 +1061,9 @@ impl IOCompositor {
                     clip_chain_id: root_clip_chain_id,
                 };
                 let offset = vec2(0., 0.);
-                let color = ColorF::new(0.0, 0.0, 0.0, 0.5);
-                let blur_radius = 4.0;
-                let spread_radius = 2.0;
+                let color = ColorF::new(0.0, 0.0, 0.0, 0.4);
+                let blur_radius = 5.0;
+                let spread_radius = 0.0;
                 let box_shadow_type = BoxShadowClipMode::Outset;
 
                 builder.push_box_shadow(

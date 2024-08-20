@@ -147,7 +147,7 @@ impl Verso {
             debug_flags.set(DebugFlags::PROFILER_DBG, opts.debug.webrender_stats);
 
             let render_notifier = Box::new(RenderNotifier::new(compositor_sender.clone()));
-            let clear_color = ColorF::new(1., 1., 1., 0.);
+            let clear_color = ColorF::new(0., 0., 0., 0.);
             create_webrender_instance(
                 webrender_gl.clone(),
                 render_notifier,

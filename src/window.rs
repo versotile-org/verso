@@ -51,7 +51,9 @@ impl Window {
     pub fn new(evl: &ActiveEventLoop) -> (Self, RenderingContext) {
         let window = evl
             .create_window(
-                WinitWindow::default_attributes().with_transparent(true), // .with_decorations(false),
+                WinitWindow::default_attributes()
+                    .with_transparent(true)
+                    .with_decorations(false),
             )
             .expect("Failed to create window.");
 
