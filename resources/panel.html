@@ -13,22 +13,32 @@
             top: 0;
             left: 0;
             height: 50px;
-        }
-
-        panel .center-container {
-            position: relative;
+            line-height: 50px;
+            text-align: center;
+            display: inline-block;
             height: 100%;
         }
 
+        panel img {
+            width: 20px;
+            height: 20px;
+            cursor: pointer;
+            border-radius: 5px;
+            padding: 5px 5px;
+            margin-right: 10px;
+            vertical-align: middle;
+        }
+
+        panel img:hover {
+            background-color: #777;
+        }
+
         panel input {
-            position: absolute;
-            top: 50%;
-            left: 50%;
-            transform: translate(-50%, -50%);
             padding: 10px;
             border-radius: 5px;
             border: 1px solid #ccc;
             width: 300px;
+            vertical-align: middle;
         }
 
 
@@ -36,10 +46,33 @@
 </head>
 <body>
     <panel>
-        <div class="center-container">
-            <input type="text" placeholder="Search...">
-        </div>
+        <img src="arrow-left.png" onclick="onClickPrev()" alt="Previous Page">
+        <img src="arrow-right.png" onclick="onClickForward()" alt="Next Page">
+        <img src="refresh.png" onclick="onClickRefresh()" alt="Refresh">
+        <input type="text" onkeydown="onEnterNavigation(event)">
     </panel>
+
+    <script>
+      function onClickPrev() {
+        console.log('click prev');
+        window.prompt('PREV');
+      }
+      function onClickForward() {
+        console.log('click forward');
+        window.prompt('FORWARD');
+      }
+      function onClickRefresh() {
+        console.log('click refresh');
+        window.prompt('REFRESH');
+      }
+      function onEnterNavigation(event) {
+        if (event.key === "Enter") {
+            let url = event.target.value;
+            console.log(`navigate to url: ${url}`);
+            window.prompt(`NAVIGATE_TO:${url}`);
+        }
+      }
+    </script>
 </body>
 </html>
 
