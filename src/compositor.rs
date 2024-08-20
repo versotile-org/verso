@@ -1280,6 +1280,10 @@ impl IOCompositor {
     /// Resize the rendering context and all web views. Return true if the compositor should repaint and present
     /// after this.
     pub fn resize(&mut self, size: Size2D<i32, DevicePixel>, window: &mut Window) -> bool {
+        if size.height == 0 || size.width == 0 {
+            return false;
+        }
+
         let need_resize = self.on_resize_window_event(size, window);
 
         if let Some(panel) = &mut window.panel {
