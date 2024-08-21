@@ -2050,9 +2050,7 @@ impl IOCompositor {
             }
         }
 
-        if let Err(err) = self.rendering_context.present(&window.surface) {
-            warn!("Failed to present surface: {:?}", err);
-        }
+        window.request_redraw();
         self.composition_request = CompositionRequest::NoCompositingNecessary;
 
         self.process_animations(true);
