@@ -1293,13 +1293,9 @@ impl IOCompositor {
         }
 
         if let Some(w) = &mut window.webview {
-            let mut rect = DeviceIntRect::from_size(size);
-            rect.min.y = rect.max.y.min(100);
-            rect.min.x += 10;
-            rect.max.y -= 10;
-            rect.max.x -= 10;
-            w.rect = rect;
-            self.on_resize_webview_event(w.webview_id, rect);
+            let rect = DeviceIntRect::from_size(size);
+            w.set_size(rect);
+            self.on_resize_webview_event(w.webview_id, w.rect);
         }
 
         self.send_root_pipeline_display_list(window);
