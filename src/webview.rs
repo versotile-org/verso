@@ -264,6 +264,11 @@ impl Window {
                     }
                 }
             }
+            EmbedderMsg::EventDelivered(event) => {
+                if let CompositorEventVariant::MouseButtonEvent = event {
+                    send_to_constellation(sender, ConstellationMsg::FocusWebView(panel_id));
+                }
+            }
             e => {
                 log::trace!("Verso Panel isn't supporting this message yet: {e:?}")
             }
