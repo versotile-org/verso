@@ -45,6 +45,15 @@ impl WebView {
             rect,
         }
     }
+
+    /// Set the webview size corresponding to the window size.
+    pub fn set_size(&mut self, mut rect: DeviceIntRect) {
+        rect.min.y = rect.max.y.min(100);
+        rect.min.x += 10;
+        rect.max.y -= 10;
+        rect.max.x -= 10;
+        self.rect = rect;
+    }
 }
 
 impl Window {
@@ -153,9 +162,10 @@ impl Window {
                 let demo_url = ServoUrl::parse("https://example.com").unwrap();
                 let demo_id = WebViewId::new();
                 let size = self.size();
-                let mut rect = DeviceIntRect::from_size(size);
-                rect.min.y = rect.max.y.min(76);
-                self.webview = Some(WebView::new(demo_id, rect));
+                let rect = DeviceIntRect::from_size(size);
+                let mut webview = WebView::new(demo_id, rect);
+                webview.set_size(rect);
+                self.webview = Some(webview);
                 send_to_constellation(sender, ConstellationMsg::NewWebView(demo_url, demo_id));
                 log::debug!("Verso Window {:?} adds webview {}", self.id(), demo_id);
             }

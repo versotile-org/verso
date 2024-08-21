@@ -50,9 +50,11 @@ impl Window {
     /// Create a Verso window from Winit window and return the rendering context.
     pub fn new(evl: &ActiveEventLoop) -> (Self, RenderingContext) {
         let window = evl
-            .create_window(WinitWindow::default_attributes())
-            // .with_transparent(true)
-            // .with_decorations(false)
+            .create_window(
+                WinitWindow::default_attributes()
+                    .with_transparent(true)
+                    .with_decorations(false),
+            )
             .expect("Failed to create window.");
 
         #[cfg(macos)]
@@ -316,11 +318,11 @@ impl Window {
     /// Get the painting order of this window.
     pub fn painting_order(&self) -> Vec<&WebView> {
         let mut order = vec![];
-        if let Some(webview) = &self.webview {
-            order.push(webview);
-        }
         if let Some(panel) = &self.panel {
             order.push(panel);
+        }
+        if let Some(webview) = &self.webview {
+            order.push(webview);
         }
         order
     }
