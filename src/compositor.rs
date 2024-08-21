@@ -2050,7 +2050,6 @@ impl IOCompositor {
             }
         }
 
-        window.request_redraw();
         self.composition_request = CompositionRequest::NoCompositingNecessary;
 
         self.process_animations(true);
@@ -2127,7 +2126,10 @@ impl IOCompositor {
         if let Some(window) = windows.get(&self.current_window) {
             match self.composition_request {
                 CompositionRequest::NoCompositingNecessary => {}
-                CompositionRequest::CompositeNow(_) => self.composite(window),
+                CompositionRequest::CompositeNow(_) => {
+                    self.composite(window);
+                    window.request_redraw();
+                }
             }
 
             // Run the WebXR main thread
@@ -2156,6 +2158,9 @@ impl IOCompositor {
             if need_recomposite {
                 if let Some(window) = windows.get(&self.current_window) {
                     self.composite(window);
+                    if let Err(err) = self.rendering_context.present(&window.surface) {
+                        log::warn!("Failed to present surface: {:?}", err);
+                    }
                 }
                 break;
             }

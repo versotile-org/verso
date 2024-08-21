@@ -20,7 +20,6 @@ use winit::{
     window::{CursorIcon, Window as WinitWindow, WindowId},
 };
 
-use crate::compositor;
 use crate::{
     compositor::{IOCompositor, MouseWindowEvent},
     keyboard::keyboard_event_from_winit,
