@@ -4,7 +4,7 @@
 
 A web browser that plays old world blues to build new world hope.
 
-<img src="https://github.com/user-attachments/assets/aa84d6da-31f8-4bce-bf99-7ea83ecb1c3c" width="600" />
+<img src="https://github.com/user-attachments/assets/ca124b2b-c54c-4796-b2cb-0819228495b6" width="600" />
 
 Verso is a web browser built on top of the [Servo](https://servo.org/) web engine. We aim to explore embedding solutions for Servo while growing it into a mature browser one day.
 This means we want to experiment with multi-view and multi-window first and then build UI elements entirely from Servo itself. At the moment, [Servoshell](https://servo.org/download/) should provide a better user experience.
