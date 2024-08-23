@@ -61,26 +61,21 @@ jobs:
           ssh-key: ${{ secrets.DOCS_DEPLOY_KEY }}
           ref: docs
 
-      - name: Clean up docs directory
-        run: |
-          cp {docs/,}index.html
-          rm -r docs/*
-          mv index.html docs/
-          cp CNAME docs/
-
       - name: Download `doc`
         uses: actions/download-artifact@v4
         with:
           name: doc
-          path: docs
+          path: artifact
 
-      - name: Configure Git
+      - name: Configure git, commit changes and PUSH
         run: |
           git config user.name 'github-actions[bot]'
           git config user.email 'github-actions[bot]@users.noreply.github.com'
-
-      - name: Commit and push
-        run: |
-          git add docs
+          rm -r docs/*
+          cp -r artifact/* docs/
+          git add docs/
+          git fetch origin main:main
+          git checkout main docs/
+          git status
           git commit -m ":rocket: update docs from \`verso\` repository"
           git push origin docs
