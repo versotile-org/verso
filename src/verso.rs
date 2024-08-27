@@ -23,7 +23,7 @@ use ipc_channel::ipc::{self, IpcSender};
 use layout_thread_2020;
 use log::{Log, Metadata, Record};
 use media::{GlApi, GlContext, NativeDisplay, WindowGLContext};
-use net::resource_thread;
+use net::{protocols::ProtocolRegistry, resource_thread};
 use profile;
 use script::{self, JSEngineSetup};
 use script_traits::WindowSizeData;
@@ -244,6 +244,8 @@ impl Verso {
         let bluetooth_thread: IpcSender<BluetoothRequest> =
             BluetoothThreadFactory::new(embedder_sender.clone());
 
+        let protocols = ProtocolRegistry::with_internal_protocols();
+
         // Create resource thread pool
         let user_agent: Cow<'static, str> = default_user_agent_string().into();
         let (public_resource_threads, private_resource_threads) =
@@ -256,6 +258,7 @@ impl Verso {
                 opts.config_dir.clone(),
                 opts.certificate_path.clone(),
                 opts.ignore_certificate_errors,
+                Arc::new(protocols),
             );
 
         // Create font cache thread
