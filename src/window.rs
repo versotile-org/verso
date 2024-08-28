@@ -5,8 +5,11 @@ use compositing_traits::ConstellationMsg;
 use crossbeam_channel::Sender;
 use embedder_traits::{Cursor, EmbedderMsg};
 use euclid::{Point2D, Size2D};
-use glutin::surface::Surface;
-use glutin::surface::WindowSurface;
+use glutin::{
+    config::{ConfigTemplateBuilder, GlConfig},
+    surface::{Surface, WindowSurface},
+};
+use glutin_winit::DisplayBuilder;
 use script_traits::{TouchEventType, WheelDelta, WheelMode};
 use webrender_api::{
     units::{DeviceIntPoint, DeviceIntRect, DeviceIntSize, DevicePoint, LayoutVector2D},
@@ -23,7 +26,7 @@ use winit::{
 use crate::{
     compositor::{IOCompositor, MouseWindowEvent},
     keyboard::keyboard_event_from_winit,
-    rendering::RenderingContext,
+    rendering::{gl_config_picker, RenderingContext},
     verso::send_to_constellation,
     webview::WebView,
 };
@@ -49,13 +52,22 @@ pub struct Window {
 impl Window {
     /// Create a Verso window from Winit window and return the rendering context.
     pub fn new(evl: &ActiveEventLoop) -> (Self, RenderingContext) {
-        let window = evl
-            .create_window(
-                WinitWindow::default_attributes()
-                    .with_transparent(true)
-                    .with_decorations(false),
-            )
-            .expect("Failed to create window.");
+        let window_attributes = WinitWindow::default_attributes()
+            .with_transparent(true)
+            .with_decorations(false);
+
+        let template = ConfigTemplateBuilder::new()
+            .with_alpha_size(8)
+            .with_transparency(cfg!(macos));
+
+        let (window, gl_config) = DisplayBuilder::new()
+            .with_window_attributes(Some(window_attributes))
+            .build(evl, template, gl_config_picker)
+            .expect("Failed to create window and gl config");
+
+        let window = window.ok_or("Failed to create window").unwrap();
+
+        log::debug!("Picked a config with {} samples", gl_config.num_samples());
 
         #[cfg(macos)]
         unsafe {
@@ -67,8 +79,8 @@ impl Window {
                 );
             }
         }
-        let (rendering_context, surface) =
-            RenderingContext::create(evl, &window).expect("Failed to create rendering context");
+        let (rendering_context, surface) = RenderingContext::create(&window, &gl_config)
+            .expect("Failed to create rendering context");
         log::trace!("Created rendering context for window {:?}", window);
 
         let size = window.inner_size();
