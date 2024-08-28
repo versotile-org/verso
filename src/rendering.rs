@@ -4,21 +4,17 @@ use std::rc::Rc;
 
 use euclid::default::Size2D;
 use gleam::gl;
-use glutin::config::GetGlConfig;
-use glutin::context::PossiblyCurrentContext;
-use glutin::prelude::{GlContext, PossiblyCurrentGlContext};
-use glutin::surface::{
-    GlSurface, ResizeableSurface, Surface, SurfaceTypeTrait, SwapInterval, WindowSurface,
-};
 use glutin::{
-    config::{Config, ConfigTemplateBuilder, GlConfig},
-    context::{ContextApi, ContextAttributesBuilder, Version},
+    config::{Config, GetGlConfig, GlConfig},
+    context::{ContextApi, ContextAttributesBuilder, PossiblyCurrentContext, Version},
     display::GetGlDisplay,
-    prelude::{GlDisplay, NotCurrentGlContext},
+    prelude::{GlContext, GlDisplay, NotCurrentGlContext, PossiblyCurrentGlContext},
+    surface::{
+        GlSurface, ResizeableSurface, Surface, SurfaceTypeTrait, SwapInterval, WindowSurface,
+    },
 };
-use glutin_winit::{DisplayBuilder, GlWindow};
+use glutin_winit::GlWindow;
 use raw_window_handle::HasWindowHandle;
-use winit::event_loop::ActiveEventLoop;
 use winit::window::Window;
 
 /// A Verso rendering context, which holds all of the information needed
@@ -31,16 +27,9 @@ pub struct RenderingContext {
 impl RenderingContext {
     /// Create a rendering context instance.
     pub fn create(
-        evl: &ActiveEventLoop,
         window: &Window,
+        gl_config: &Config,
     ) -> Result<(Self, Surface<WindowSurface>), Box<dyn std::error::Error>> {
-        let template = ConfigTemplateBuilder::new()
-            .with_alpha_size(8)
-            .with_transparency(cfg!(macos));
-        let (_, gl_config) = DisplayBuilder::new().build(evl, template, gl_config_picker)?;
-
-        log::debug!("Picked a config with {} samples", gl_config.num_samples());
-
         // XXX This will panic on Android, but we care about Desktop for now.
         let raw_window_handle = window.window_handle().ok().map(|handle| handle.as_raw());
         // XXX The display could be obtained from any object created by it, so we can
@@ -60,13 +49,13 @@ impl RenderingContext {
             .build(raw_window_handle);
         let not_current_gl_context = unsafe {
             gl_display
-                .create_context(&gl_config, &context_attributes)
+                .create_context(gl_config, &context_attributes)
                 .unwrap_or_else(|_| {
                     gl_display
-                        .create_context(&gl_config, &fallback_context_attributes)
+                        .create_context(gl_config, &fallback_context_attributes)
                         .unwrap_or_else(|_| {
                             gl_display
-                                .create_context(&gl_config, &legacy_context_attributes)
+                                .create_context(gl_config, &legacy_context_attributes)
                                 .expect("failed to create context")
                         })
                 })
@@ -79,7 +68,7 @@ impl RenderingContext {
         let surface = unsafe {
             gl_config
                 .display()
-                .create_window_surface(&gl_config, &attrs)
+                .create_window_surface(gl_config, &attrs)
                 .unwrap()
         };
 
