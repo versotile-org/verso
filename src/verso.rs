@@ -383,17 +383,14 @@ impl Verso {
                 // self.windows.remove(&window_id);
                 compositor.maybe_start_shutting_down();
             } else {
-                let mut need_repaint = false;
-                for (id, window) in &mut self.windows {
-                    if window_id == *id {
-                        need_repaint = window.handle_winit_window_event(
-                            &self.constellation_sender,
-                            compositor,
-                            &event,
-                        );
-                    }
-                }
-
+                let need_repaint = match self.windows.get_mut(&window_id) {
+                    Some(window) => window.handle_winit_window_event(
+                        &self.constellation_sender,
+                        compositor,
+                        &event,
+                    ),
+                    None => false,
+                };
                 if need_repaint {
                     compositor.repaint_synchronously(&mut self.windows);
                 }
