@@ -17,104 +17,83 @@ pub const CMD_OR_ALT: Modifiers = Modifiers::META;
 #[cfg(not(macos))]
 pub const CMD_OR_ALT: Modifiers = Modifiers::ALT;
 
+/// Generate mappings from [`LogicalKey`] to [`Key`].
+macro_rules! logical_to_winit_key {
+    ($key: ident $(,$variant: ident)+) => {
+        match $key {
+            LogicalKey::Character(c) => Key::Character(c.to_string()),
+            $(LogicalKey::Named(NamedKey::$variant) => Key::$variant,)+
+            _ => Key::Unidentified,
+        }
+    };
+}
+
 fn get_servo_key_from_winit_key(key: &LogicalKey) -> Key {
     // TODO: figure out how to map NavigateForward, NavigateBackward
     // TODO: map the remaining keys if possible
-    match key {
-        LogicalKey::Character(c) => Key::Character(c.to_string()),
+    logical_to_winit_key! {
+        key,
         // printable: Key1 to Key0
         // printable: A to Z
-        LogicalKey::Named(NamedKey::Escape) => Key::Escape,
-        LogicalKey::Named(NamedKey::F1) => Key::F1,
-        LogicalKey::Named(NamedKey::F2) => Key::F2,
-        LogicalKey::Named(NamedKey::F3) => Key::F3,
-        LogicalKey::Named(NamedKey::F4) => Key::F4,
-        LogicalKey::Named(NamedKey::F5) => Key::F5,
-        LogicalKey::Named(NamedKey::F6) => Key::F6,
-        LogicalKey::Named(NamedKey::F7) => Key::F7,
-        LogicalKey::Named(NamedKey::F8) => Key::F8,
-        LogicalKey::Named(NamedKey::F9) => Key::F9,
-        LogicalKey::Named(NamedKey::F10) => Key::F10,
-        LogicalKey::Named(NamedKey::F11) => Key::F11,
-        LogicalKey::Named(NamedKey::F12) => Key::F12,
+        Escape, F1, F2, F3, F4, F5, F6, F7, F8, F9, F10, F11, F12,
         // F13 to F15 are not mapped
-        LogicalKey::Named(NamedKey::PrintScreen) => Key::PrintScreen,
+        PrintScreen,
         // Scroll not mapped
-        LogicalKey::Named(NamedKey::Pause) => Key::Pause,
-        LogicalKey::Named(NamedKey::Insert) => Key::Insert,
-        LogicalKey::Named(NamedKey::Home) => Key::Home,
-        LogicalKey::Named(NamedKey::Delete) => Key::Delete,
-        LogicalKey::Named(NamedKey::End) => Key::End,
-        LogicalKey::Named(NamedKey::PageDown) => Key::PageDown,
-        LogicalKey::Named(NamedKey::PageUp) => Key::PageUp,
-        LogicalKey::Named(NamedKey::ArrowLeft) => Key::ArrowLeft,
-        LogicalKey::Named(NamedKey::ArrowUp) => Key::ArrowUp,
-        LogicalKey::Named(NamedKey::ArrowRight) => Key::ArrowRight,
-        LogicalKey::Named(NamedKey::ArrowDown) => Key::ArrowDown,
-        LogicalKey::Named(NamedKey::Backspace) => Key::Backspace,
-        LogicalKey::Named(NamedKey::Enter) => Key::Enter,
+        Pause, Insert, Home, Delete, End, PageDown, PageUp,
+        ArrowLeft, ArrowUp, ArrowRight, ArrowDown,
+        Backspace, Enter,
         // printable: Space
-        LogicalKey::Named(NamedKey::Compose) => Key::Compose,
+        Compose,
         // Caret not mapped
-        LogicalKey::Named(NamedKey::NumLock) => Key::NumLock,
+        NumLock,
         // printable: Numpad0 to Numpad9
         // AbntC1 and AbntC2 not mapped
         // printable: Add, Apostrophe,
         // Apps, At, Ax not mapped
         // printable: Backslash,
-        LogicalKey::Named(NamedKey::LaunchApplication2) => Key::LaunchApplication2,
-        LogicalKey::Named(NamedKey::CapsLock) => Key::CapsLock,
+        LaunchApplication2, CapsLock,
         // printable: Colon, Comma,
-        LogicalKey::Named(NamedKey::Convert) => Key::Convert,
+        Convert,
         // not mapped: Decimal,
         // printable: Divide, Equals, Grave,
-        LogicalKey::Named(NamedKey::KanaMode) => Key::KanaMode,
-        LogicalKey::Named(NamedKey::KanjiMode) => Key::KanjiMode,
-        LogicalKey::Named(NamedKey::Alt) => Key::Alt,
+        KanaMode, KanjiMode, Alt,
         // printable: LBracket,
-        LogicalKey::Named(NamedKey::Control) => Key::Control,
-        LogicalKey::Named(NamedKey::Shift) => Key::Shift,
-        LogicalKey::Named(NamedKey::Meta) => Key::Meta,
-        LogicalKey::Named(NamedKey::LaunchMail) => Key::LaunchMail,
+        Control, Shift, Meta, LaunchMail,
         // not mapped: MediaSelect,
-        LogicalKey::Named(NamedKey::MediaStop) => Key::MediaStop,
+        MediaStop,
         // printable: Minus, Multiply,
-        LogicalKey::Named(NamedKey::AudioVolumeMute) => Key::AudioVolumeMute,
-        LogicalKey::Named(NamedKey::LaunchApplication1) => Key::LaunchApplication1,
+        AudioVolumeMute, LaunchApplication1,
         // not mapped: NavigateForward, NavigateBackward
-        LogicalKey::Named(NamedKey::MediaTrackNext) => Key::MediaTrackNext,
-        LogicalKey::Named(NamedKey::NonConvert) => Key::NonConvert,
+        MediaTrackNext, NonConvert,
         // printable: NumpadComma, NumpadEnter, NumpadEquals,
         // not mapped: OEM102,
         // printable: Period,
-        LogicalKey::Named(NamedKey::MediaPlayPause) => Key::MediaPlayPause,
-        LogicalKey::Named(NamedKey::Power) => Key::Power,
-        LogicalKey::Named(NamedKey::MediaTrackPrevious) => Key::MediaTrackPrevious,
+        MediaPlayPause, Power, MediaTrackPrevious,
         // printable RBracket
         // printable Semicolon, Slash
-        LogicalKey::Named(NamedKey::Standby) => Key::Standby,
+        Standby,
         // not mapped: Stop,
         // printable Subtract,
         // not mapped: Sysrq,
-        LogicalKey::Named(NamedKey::Tab) => Key::Tab,
+        Tab,
         // printable: Underline,
         // not mapped: Unlabeled,
-        LogicalKey::Named(NamedKey::AudioVolumeDown) => Key::AudioVolumeDown,
-        LogicalKey::Named(NamedKey::AudioVolumeUp) => Key::AudioVolumeUp,
-        LogicalKey::Named(NamedKey::WakeUp) => Key::WakeUp,
-        LogicalKey::Named(NamedKey::BrowserBack) => Key::BrowserBack,
-        LogicalKey::Named(NamedKey::BrowserFavorites) => Key::BrowserFavorites,
-        LogicalKey::Named(NamedKey::BrowserForward) => Key::BrowserForward,
-        LogicalKey::Named(NamedKey::BrowserHome) => Key::BrowserHome,
-        LogicalKey::Named(NamedKey::BrowserRefresh) => Key::BrowserRefresh,
-        LogicalKey::Named(NamedKey::BrowserSearch) => Key::BrowserSearch,
-        LogicalKey::Named(NamedKey::BrowserStop) => Key::BrowserStop,
+        AudioVolumeDown, AudioVolumeUp, WakeUp, BrowserBack, BrowserFavorites, BrowserForward, BrowserHome, BrowserRefresh, BrowserSearch, BrowserStop,
         // printable Yen,
-        LogicalKey::Named(NamedKey::Copy) => Key::Copy,
-        LogicalKey::Named(NamedKey::Paste) => Key::Paste,
-        LogicalKey::Named(NamedKey::Cut) => Key::Cut,
-        _ => Key::Unidentified,
+        Copy,
+        Paste,
+        Cut
     }
+}
+
+/// Maps [`KeyCode`] to [`Location`].
+macro_rules! map_key_location {
+    ($key_code: ident $(, $location: ident : $k1: ident $(| $kn: ident)*)+) => {
+        match $key_code {
+            $(KeyCode::$k1 $(| KeyCode::$kn)* => Location::$location,)+
+            _ => Location::Standard,
+        }
+    };
 }
 
 fn get_servo_location_from_physical_key(physical_key: PhysicalKey) -> Location {
@@ -124,27 +103,25 @@ fn get_servo_location_from_physical_key(physical_key: PhysicalKey) -> Location {
         return Location::Standard;
     };
 
-    // TODO: add more numpad keys
-    match key_code {
-        KeyCode::ShiftLeft | KeyCode::ControlLeft | KeyCode::AltLeft | KeyCode::SuperLeft => {
-            Location::Left
+    // TODO: Map more locations
+    map_key_location!(
+        key_code,
+        Left: ShiftLeft | ControlLeft | AltLeft | SuperLeft,
+        Right: ShiftRight | ControlRight | AltRight | SuperRight,
+        Numpad: Numpad0 | Numpad1 | Numpad2 | Numpad3 | Numpad4 | Numpad5 | Numpad6 | Numpad7 | Numpad8 | Numpad9
+            | NumpadComma | NumpadEnter | NumpadEqual | NumpadAdd | NumpadSubtract | NumpadMultiply | NumpadDivide
+            | NumpadDecimal | NumpadBackspace | NumpadStar
+    )
+}
+
+/// Maps [`PhysicalKey`] to [`Code`].
+macro_rules! physical_key_to_code {
+    ($key_code: ident $(, $pk: ident)+) => {
+        match $key_code {
+            $(KeyCode::$pk => Code::$pk,)+
+            _ => Code::Unidentified,
         }
-        KeyCode::ShiftRight | KeyCode::ControlRight | KeyCode::AltRight | KeyCode::SuperRight => {
-            Location::Right
-        }
-        KeyCode::Numpad0
-        | KeyCode::Numpad1
-        | KeyCode::Numpad2
-        | KeyCode::Numpad3
-        | KeyCode::Numpad4
-        | KeyCode::Numpad5
-        | KeyCode::Numpad6
-        | KeyCode::Numpad7
-        | KeyCode::Numpad8
-        | KeyCode::Numpad9 => Location::Numpad,
-        KeyCode::NumpadComma | KeyCode::NumpadEnter | KeyCode::NumpadEqual => Location::Numpad,
-        _ => Location::Standard,
-    }
+    };
 }
 
 fn get_servo_code_from_physical_key(physical_key: PhysicalKey) -> Code {
@@ -155,90 +132,23 @@ fn get_servo_code_from_physical_key(physical_key: PhysicalKey) -> Code {
     };
 
     // TODO: Map more codes
-    match key_code {
-        KeyCode::Escape => Code::Escape,
-        KeyCode::Digit1 => Code::Digit1,
-        KeyCode::Digit2 => Code::Digit2,
-        KeyCode::Digit3 => Code::Digit3,
-        KeyCode::Digit4 => Code::Digit4,
-        KeyCode::Digit5 => Code::Digit5,
-        KeyCode::Digit6 => Code::Digit6,
-        KeyCode::Digit7 => Code::Digit7,
-        KeyCode::Digit8 => Code::Digit8,
-        KeyCode::Digit9 => Code::Digit9,
-        KeyCode::Digit0 => Code::Digit0,
-
-        KeyCode::Backspace => Code::Backspace,
-        KeyCode::Tab => Code::Tab,
-        KeyCode::KeyQ => Code::KeyQ,
-        KeyCode::KeyW => Code::KeyW,
-        KeyCode::KeyE => Code::KeyE,
-        KeyCode::KeyR => Code::KeyR,
-        KeyCode::KeyT => Code::KeyT,
-        KeyCode::KeyY => Code::KeyY,
-        KeyCode::KeyU => Code::KeyU,
-        KeyCode::KeyI => Code::KeyI,
-        KeyCode::KeyO => Code::KeyO,
-        KeyCode::KeyP => Code::KeyP,
-        KeyCode::BracketLeft => Code::BracketLeft,
-        KeyCode::BracketRight => Code::BracketRight,
-        KeyCode::Enter => Code::Enter,
-
-        KeyCode::KeyA => Code::KeyA,
-        KeyCode::KeyS => Code::KeyS,
-        KeyCode::KeyD => Code::KeyD,
-        KeyCode::KeyF => Code::KeyF,
-        KeyCode::KeyG => Code::KeyG,
-        KeyCode::KeyH => Code::KeyH,
-        KeyCode::KeyJ => Code::KeyJ,
-        KeyCode::KeyK => Code::KeyK,
-        KeyCode::KeyL => Code::KeyL,
-        KeyCode::Semicolon => Code::Semicolon,
-        KeyCode::Quote => Code::Quote,
-
-        KeyCode::ShiftLeft => Code::ShiftLeft,
-        KeyCode::Backslash => Code::Backslash,
-        KeyCode::KeyZ => Code::KeyZ,
-        KeyCode::KeyX => Code::KeyX,
-        KeyCode::KeyC => Code::KeyC,
-        KeyCode::KeyV => Code::KeyV,
-        KeyCode::KeyB => Code::KeyB,
-        KeyCode::KeyN => Code::KeyN,
-        KeyCode::KeyM => Code::KeyM,
-        KeyCode::Comma => Code::Comma,
-        KeyCode::Period => Code::Period,
-        KeyCode::Slash => Code::Slash,
-        KeyCode::ShiftRight => Code::ShiftRight,
-
-        KeyCode::Space => Code::Space,
-
-        KeyCode::F1 => Code::F1,
-        KeyCode::F2 => Code::F2,
-        KeyCode::F3 => Code::F3,
-        KeyCode::F4 => Code::F4,
-        KeyCode::F5 => Code::F5,
-        KeyCode::F6 => Code::F6,
-        KeyCode::F7 => Code::F7,
-        KeyCode::F8 => Code::F8,
-        KeyCode::F9 => Code::F9,
-        KeyCode::F10 => Code::F10,
-
-        KeyCode::F11 => Code::F11,
-        KeyCode::F12 => Code::F12,
-
-        KeyCode::ArrowUp => Code::ArrowUp,
-        KeyCode::PageUp => Code::PageUp,
-        KeyCode::ArrowLeft => Code::ArrowLeft,
-        KeyCode::ArrowRight => Code::ArrowRight,
-
-        KeyCode::Home => Code::Home,
-        KeyCode::End => Code::End,
-        KeyCode::ArrowDown => Code::ArrowDown,
-        KeyCode::PageDown => Code::PageDown,
-        KeyCode::Insert => Code::Insert,
-        KeyCode::Delete => Code::Delete,
-
-        _ => Code::Unidentified,
+    physical_key_to_code! {key_code,
+        Escape, F1, F2, F3, F4, F5, F6, F7, F8, F9, F10, F11, F12,
+        Backquote, Digit1, Digit2, Digit3, Digit4, Digit5, Digit6, Digit7, Digit8, Digit9, Digit0, Minus, Equal, Backspace,
+        Tab, KeyQ, KeyW, KeyE, KeyR, KeyT, KeyY, KeyU, KeyI, KeyO, KeyP, BracketLeft, BracketRight, Backslash,
+        CapsLock, KeyA, KeyS, KeyD, KeyF, KeyG, KeyH, KeyJ, KeyK, KeyL, Semicolon, Quote, Enter,
+        ShiftLeft, KeyZ, KeyX, KeyC, KeyV, KeyB, KeyN, KeyM, Comma, Period, Slash, ShiftRight,
+        ControlLeft, AltLeft, Space, AltRight, ControlRight,
+        PrintScreen, ScrollLock, Pause,
+        Insert, Home, PageUp,
+        Delete, End, PageDown,
+        ArrowUp, ArrowLeft, ArrowDown, ArrowRight,
+        NumLock, NumpadDivide, NumpadMultiply, NumpadStar, NumpadSubtract,
+        Numpad7, Numpad8, Numpad9, NumpadAdd,
+        Numpad4, Numpad5, Numpad6,
+        Numpad1, Numpad2, Numpad3, NumpadEnter,
+        Numpad0, NumpadDecimal,
+        NumpadParenLeft, NumpadParenRight, NumpadComma, NumpadHash, NumpadBackspace
     }
 }
 
