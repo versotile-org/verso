@@ -17,12 +17,34 @@ pub const CMD_OR_ALT: Modifiers = Modifiers::META;
 #[cfg(not(macos))]
 pub const CMD_OR_ALT: Modifiers = Modifiers::ALT;
 
-/// Generate mappings from [`LogicalKey`] to [`Key`].
+/// Maps [`LogicalKey`] to [`Key`].
+///
+/// Example:
+/// 1. `One-one mappings`:
+/// ```
+///     logical_to_winit_key!(a, Escape, F1, F2,...)
+/// ```
+/// matches [`NamedKey::Escape`] => [`Key::Escape`], [`NamedKey::F1`] => [`Key::F1`], [`NamedKey::F2`] => [`Key::F2`],...
+///
+/// 2. `Custom mappings`:
+/// ```
+///    logical_to_winit_key!(a, Escape, F1 => F2, F3)
+/// ```
+/// matches [`NamedKey::Escape`] => [`Key::Escape`], [`NamedKey::F1`] => [`Key::F2`], [`NamedKey::F3`] => [`Key::F3`],...
 macro_rules! logical_to_winit_key {
-    ($key: ident $(,$variant: ident)+) => {
+    // Matches an optional token
+    (@opt $_: ident, $optional: ident) => {
+        Key::$optional
+    };
+
+    (@opt $variant: ident) => {
+        Key::$variant
+    };
+
+    ($key: ident $(,$variant: ident $(=> $matchto: ident)?)+) => {
         match $key {
             LogicalKey::Character(c) => Key::Character(c.to_string()),
-            $(LogicalKey::Named(NamedKey::$variant) => Key::$variant,)+
+            $(LogicalKey::Named(NamedKey::$variant) => logical_to_winit_key!(@opt $variant $(, $matchto)?),)+
             _ => Key::Unidentified,
         }
     };
@@ -115,10 +137,32 @@ fn get_servo_location_from_physical_key(physical_key: PhysicalKey) -> Location {
 }
 
 /// Maps [`PhysicalKey`] to [`Code`].
+///
+/// Example:
+/// 1. `One-one mappings`:
+/// ```
+///     physical_key_to_code!(a, Escape, F1, F2,...)
+/// ```
+/// matches [`KeyCode::Escape`] => [`Code::Escape`], [`KeyCode::F1`] => [`Code::F1`], [`KeyCode::F2`] => [`Code::F2`],...
+///
+/// 2. `Custom mappings`:
+/// ```
+///    physical_key_to_code!(a, Escape, F1 => F2, F3)
+/// ```
+/// matches [`KeyCode::Escape`] => [`Code::Escape`], [`KeyCode::F1`] => [`Code::F2`], [`KeyCode::F3`] => [`Code::F3`],...
 macro_rules! physical_key_to_code {
-    ($key_code: ident $(, $pk: ident)+) => {
+    // Matches an optional token
+    (@opt $_: ident, $optional: ident) => {
+        Code::$optional
+    };
+
+    (@opt $variant: ident) => {
+        Code::$variant
+    };
+
+    ($key_code: ident $(, $pk: ident $(=> $matchto: ident)?)+) => {
         match $key_code {
-            $(KeyCode::$pk => Code::$pk,)+
+            $(KeyCode::$pk => physical_key_to_code!(@opt $pk $(, $matchto)?),)+
             _ => Code::Unidentified,
         }
     };
