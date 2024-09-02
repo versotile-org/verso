@@ -224,7 +224,9 @@ impl Window {
                                         // TODO Set EmbedderMsg::Status to None
                                     }
                                     "REFRESH" => {
-                                        // send_to_constellation(sender, ConstellationMsg::Reload(id));
+                                        send_to_constellation(sender, ConstellationMsg::Reload(id));
+                                    }
+                                    "NEW_WINDOW" => {
                                         return true;
                                     }
                                     "MINIMIZE" => {
