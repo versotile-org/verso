@@ -1,9 +1,13 @@
 use arboard::Clipboard;
-use base::id::{PipelineNamespace, PipelineNamespaceId, WebViewId};
+use base::id::{BrowsingContextId, PipelineNamespace, PipelineNamespaceId, WebViewId};
 use compositing_traits::ConstellationMsg;
 use crossbeam_channel::Sender;
 use embedder_traits::{CompositorEventVariant, EmbedderMsg, PromptDefinition};
-use script_traits::TraversalDirection;
+use ipc_channel::ipc;
+use script_traits::{
+    webdriver_msg::{WebDriverJSResult, WebDriverScriptCommand},
+    TraversalDirection, WebDriverCommandMsg,
+};
 use servo_url::ServoUrl;
 use url::Url;
 use webrender_api::units::DeviceIntRect;
@@ -117,6 +121,23 @@ impl Window {
                             e
                         );
                     }
+                }
+            }
+            EmbedderMsg::HistoryChanged(list, index) => {
+                let url = list.get(index).unwrap();
+                if let Some(panel) = self.panel.as_ref() {
+                    let (tx, rx) = ipc::channel::<WebDriverJSResult>().unwrap();
+                    send_to_constellation(
+                        sender,
+                        ConstellationMsg::WebDriverCommand(WebDriverCommandMsg::ScriptCommand(
+                            BrowsingContextId::from(panel.webview_id),
+                            WebDriverScriptCommand::ExecuteScript(
+                                format!("window.navbar.setNavbarUrl('{}')", url.as_str()),
+                                tx,
+                            ),
+                        )),
+                    );
+                    let _ = rx.recv();
                 }
             }
             EmbedderMsg::EventDelivered(event) => {
