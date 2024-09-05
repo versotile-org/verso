@@ -325,13 +325,13 @@ impl PipelineDetails {
 
         self.scroll_tree = new_scroll_tree;
         for node in self.scroll_tree.nodes.iter_mut() {
-            match node.external_id() {
-                Some(external_id) => match old_scroll_offsets.get(&external_id) {
-                    Some(new_offset) => node.set_offset(*new_offset),
-                    None => continue,
-                },
-                _ => continue,
-            };
+            if let Some(new_offset) = node
+                .external_id()
+                .as_ref()
+                .and_then(|id| old_scroll_offsets.get(id))
+            {
+                node.set_offset(*new_offset);
+            }
         }
     }
 }
@@ -346,7 +346,7 @@ impl IOCompositor {
         exit_after_load: bool,
         convert_mouse_to_touch: bool,
     ) -> Self {
-        let compositor = IOCompositor {
+        let compositor = Self {
             current_window,
             viewport,
             port: state.receiver,
@@ -394,15 +394,15 @@ impl IOCompositor {
     }
 
     fn update_cursor(&mut self, result: CompositorHitTestResult) {
-        let cursor = match result.cursor {
-            Some(cursor) if cursor != self.cursor => cursor,
-            _ => return,
-        };
-
-        self.cursor = cursor;
-        let msg = ConstellationMsg::SetCursor(cursor);
-        if let Err(e) = self.constellation_chan.send(msg) {
-            warn!("Sending event to constellation failed ({:?}).", e);
+        match result.cursor {
+            Some(cursor) if cursor != self.cursor => {
+                self.cursor = cursor;
+                let msg = ConstellationMsg::SetCursor(self.cursor);
+                if let Err(e) = self.constellation_chan.send(msg) {
+                    warn!("Sending event to constellation failed ({e:?}).");
+                }
+            }
+            _ => {}
         }
     }
 
@@ -417,7 +417,7 @@ impl IOCompositor {
     fn start_shutting_down(&mut self) {
         debug!("Compositor sending Exit message to Constellation");
         if let Err(e) = self.constellation_chan.send(ConstellationMsg::Exit) {
-            warn!("Sending exit message to constellation failed ({:?}).", e);
+            warn!("Sending exit message to constellation failed ({e:?}).");
         }
 
         self.shutdown_state = ShutdownState::ShuttingDown;
@@ -500,7 +500,7 @@ impl IOCompositor {
             CompositorMsg::CreatePng(_page_rect, reply) => {
                 // TODO create image
                 if let Err(e) = reply.send(None) {
-                    warn!("Sending reply to create png failed ({:?}).", e);
+                    warn!("Sending reply to create png failed ({e:?}).");
                 }
             }
 
@@ -509,11 +509,11 @@ impl IOCompositor {
                     self.ready_to_save_state,
                     ReadyState::WaitingForConstellationReply
                 );
-                if is_ready && self.pending_frames == 0 {
-                    self.ready_to_save_state = ReadyState::ReadyToSaveImage;
+                self.ready_to_save_state = if is_ready && self.pending_frames == 0 {
+                    ReadyState::ReadyToSaveImage
                 } else {
-                    self.ready_to_save_state = ReadyState::Unknown;
-                }
+                    ReadyState::Unknown
+                };
                 self.composite_if_necessary(CompositingReason::Headless);
             }
 
@@ -523,7 +523,7 @@ impl IOCompositor {
             }
 
             CompositorMsg::PipelineExited(pipeline_id, sender) => {
-                debug!("Compositor got pipeline exited: {:?}", pipeline_id);
+                debug!("Compositor got pipeline exited: {pipeline_id:?}");
                 self.remove_pipeline_root_layer(pipeline_id);
                 let _ = sender.send(());
             }
@@ -572,24 +572,21 @@ impl IOCompositor {
             CompositorMsg::GetClientWindow(req) => {
                 // TODO get real size
                 if let Err(e) = req.send((self.viewport, Point2D::new(0, 0))) {
-                    warn!("Sending response to get client window failed ({:?}).", e);
+                    warn!("Sending response to get client window failed ({e:?}).");
                 }
             }
 
             CompositorMsg::GetScreenSize(req) => {
                 // TODO get real size
                 if let Err(e) = req.send(self.viewport) {
-                    warn!("Sending response to get screen size failed ({:?}).", e);
+                    warn!("Sending response to get screen size failed ({e:?}).");
                 }
             }
 
             CompositorMsg::GetScreenAvailSize(req) => {
                 // TODO get real size
                 if let Err(e) = req.send(self.viewport) {
-                    warn!(
-                        "Sending response to get screen avail size failed ({:?}).",
-                        e
-                    );
+                    warn!("Sending response to get screen avail size failed ({e:?}).");
                 }
             }
 
@@ -739,14 +736,14 @@ impl IOCompositor {
                         SerializedImageUpdate::AddImage(key, desc, data) => {
                             match data.to_image_data() {
                                 Ok(data) => txn.add_image(key, desc, data, None),
-                                Err(e) => warn!("error when sending image data: {:?}", e),
+                                Err(e) => warn!("error when sending image data: {e:?}"),
                             }
                         }
                         SerializedImageUpdate::DeleteImage(key) => txn.delete_image(key),
                         SerializedImageUpdate::UpdateImage(key, desc, data) => {
                             match data.to_image_data() {
                                 Ok(data) => txn.update_image(key, desc, data, &DirtyRect::All),
-                                Err(e) => warn!("error when sending image data: {:?}", e),
+                                Err(e) => warn!("error when sending image data: {e:?}"),
                             }
                         }
                     }
@@ -871,7 +868,7 @@ impl IOCompositor {
                 return false;
             }
             CompositorMsg::PipelineExited(pipeline_id, sender) => {
-                debug!("Compositor got pipeline exited: {:?}", pipeline_id);
+                debug!("Compositor got pipeline exited: {pipeline_id:?}");
                 self.remove_pipeline_root_layer(pipeline_id);
                 let _ = sender.send(());
             }
@@ -892,20 +889,17 @@ impl IOCompositor {
             }
             CompositorMsg::GetClientWindow(sender) => {
                 if let Err(e) = sender.send((self.viewport, Point2D::new(0, 0))) {
-                    warn!("Sending response to get client window failed ({:?}).", e);
+                    warn!("Sending response to get client window failed ({e:?}).");
                 }
             }
             CompositorMsg::GetScreenSize(sender) => {
                 if let Err(e) = sender.send(self.viewport) {
-                    warn!("Sending response to get screen size failed ({:?}).", e);
+                    warn!("Sending response to get screen size failed ({e:?}).");
                 }
             }
             CompositorMsg::GetScreenAvailSize(sender) => {
                 if let Err(e) = sender.send(self.viewport) {
-                    warn!(
-                        "Sending response to get screen avail size failed ({:?}).",
-                        e
-                    );
+                    warn!("Sending response to get screen avail size failed ({e:?}).");
                 }
             }
             CompositorMsg::NewWebRenderFrameReady(_) => {
@@ -917,7 +911,7 @@ impl IOCompositor {
             }
 
             _ => {
-                debug!("Ignoring message ({:?} while shutting down", msg);
+                debug!("Ignoring message ({msg:?} while shutting down");
             }
         }
         true
@@ -975,10 +969,7 @@ impl IOCompositor {
         match self.pipeline_details.get(&pipeline_id) {
             Some(details) => details.pipeline.as_ref(),
             None => {
-                warn!(
-                    "Compositor layer has an unknown pipeline ({:?}).",
-                    pipeline_id
-                );
+                warn!("Compositor layer has an unknown pipeline ({pipeline_id:?}).");
                 None
             }
         }
@@ -1125,8 +1116,7 @@ impl IOCompositor {
         let pipeline_id = frame_tree.pipeline.id;
         let webview_id = frame_tree.pipeline.top_level_browsing_context_id;
         debug!(
-            "Verso Compositor is setting frame tree with pipeline {} for webview {}",
-            pipeline_id, webview_id
+            "Verso Compositor is setting frame tree with pipeline {pipeline_id} for webview {webview_id}"
         );
         if let Some(old_pipeline) = self.webviews.insert(webview_id, pipeline_id) {
             debug!("{webview_id}'s pipeline has changed from {old_pipeline} to {pipeline_id}");
@@ -1200,7 +1190,7 @@ impl IOCompositor {
             WindowSizeType::Resize,
         );
         if let Err(e) = self.constellation_chan.send(msg) {
-            warn!("Sending window resize to constellation failed ({:?}).", e);
+            warn!("Sending window resize to constellation failed ({e:?}).");
         }
     }
 
@@ -1310,8 +1300,7 @@ impl IOCompositor {
             return false;
         }
 
-        let _ = self
-            .rendering_context
+        self.rendering_context
             .resize(&window.surface, new_viewport.to_untyped());
         self.viewport = new_viewport;
         let mut transaction = Transaction::new();
@@ -1354,22 +1343,16 @@ impl IOCompositor {
     }
 
     fn dispatch_mouse_window_event_class(&mut self, mouse_window_event: MouseWindowEvent) {
-        let point = match mouse_window_event {
-            MouseWindowEvent::Click(_, p) => p,
-            MouseWindowEvent::MouseDown(_, p) => p,
-            MouseWindowEvent::MouseUp(_, p) => p,
+        let (point, button, event_type) = match mouse_window_event {
+            MouseWindowEvent::Click(button, p) => (p, button, MouseEventType::Click),
+            MouseWindowEvent::MouseDown(button, p) => (p, button, MouseEventType::MouseDown),
+            MouseWindowEvent::MouseUp(button, p) => (p, button, MouseEventType::MouseUp),
         };
 
         let Some(result) = self.hit_test_at_point(point) else {
             // TODO: Notify embedder that the event failed to hit test to any webview.
             // TODO: Also notify embedder if an event hits a webview but isn’t consumed?
             return;
-        };
-
-        let (button, event_type) = match mouse_window_event {
-            MouseWindowEvent::Click(button, _) => (button, MouseEventType::Click),
-            MouseWindowEvent::MouseDown(button, _) => (button, MouseEventType::MouseDown),
-            MouseWindowEvent::MouseUp(button, _) => (button, MouseEventType::MouseUp),
         };
 
         let event_to_send = MouseButtonEvent(
@@ -1383,7 +1366,7 @@ impl IOCompositor {
 
         let msg = ConstellationMsg::ForwardEvent(result.pipeline_id, event_to_send);
         if let Err(e) = self.constellation_chan.send(msg) {
-            warn!("Sending event to constellation failed ({:?}).", e);
+            warn!("Sending event to constellation failed ({e:?}).");
         }
     }
 
@@ -1461,7 +1444,7 @@ impl IOCompositor {
         let event = MouseMoveEvent(result.point_in_viewport, Some(result.node.into()), 0);
         let msg = ConstellationMsg::ForwardEvent(result.pipeline_id, event);
         if let Err(e) = self.constellation_chan.send(msg) {
-            warn!("Sending event to constellation failed ({:?}).", e);
+            warn!("Sending event to constellation failed ({e:?}).");
         }
         self.update_cursor(result);
     }
@@ -1481,7 +1464,7 @@ impl IOCompositor {
             );
             let msg = ConstellationMsg::ForwardEvent(result.pipeline_id, event);
             if let Err(e) = self.constellation_chan.send(msg) {
-                warn!("Sending event to constellation failed ({:?}).", e);
+                warn!("Sending event to constellation failed ({e:?}).");
             }
         }
     }
@@ -1491,7 +1474,7 @@ impl IOCompositor {
             let event = WheelEvent(delta, result.point_in_viewport, Some(result.node.into()));
             let msg = ConstellationMsg::ForwardEvent(result.pipeline_id, event);
             if let Err(e) = self.constellation_chan.send(msg) {
-                warn!("Sending event to constellation failed ({:?}).", e);
+                warn!("Sending event to constellation failed ({e:?}).");
             }
         }
     }
@@ -1507,12 +1490,14 @@ impl IOCompositor {
             return;
         }
 
-        match event_type {
-            TouchEventType::Down => self.on_touch_down(identifier, location),
-            TouchEventType::Move => self.on_touch_move(identifier, location),
-            TouchEventType::Up => self.on_touch_up(identifier, location),
-            TouchEventType::Cancel => self.on_touch_cancel(identifier, location),
-        }
+        let handler = match event_type {
+            TouchEventType::Down => Self::on_touch_down,
+            TouchEventType::Move => Self::on_touch_move,
+            TouchEventType::Up => Self::on_touch_up,
+            TouchEventType::Cancel => Self::on_touch_cancel,
+        };
+
+        handler(self, identifier, location);
     }
 
     fn on_touch_down(&mut self, identifier: TouchId, point: DevicePoint) {
@@ -1791,7 +1776,7 @@ impl IOCompositor {
 
         let msg = ConstellationMsg::TickAnimation(pipeline_id, tick_type);
         if let Err(e) = self.constellation_chan.send(msg) {
-            warn!("Sending tick to constellation failed ({:?}).", e);
+            warn!("Sending tick to constellation failed ({e:?}).");
         }
     }
 
@@ -1821,11 +1806,8 @@ impl IOCompositor {
             return;
         }
 
-        self.page_zoom = Scale::new(
-            (self.page_zoom.get() * magnification)
-                .max(MIN_ZOOM)
-                .min(MAX_ZOOM),
-        );
+        self.page_zoom =
+            Scale::new((self.page_zoom.get() * magnification).clamp(MIN_ZOOM, MAX_ZOOM));
         self.update_after_zoom_or_hidpi_change(window);
     }
 
@@ -1876,18 +1858,9 @@ impl IOCompositor {
 
     // Check if any pipelines currently have active animations or animation callbacks.
     fn animations_active(&self) -> bool {
-        for details in self.pipeline_details.values() {
-            // If animations are currently running, then don't bother checking
-            // with the constellation if the output image is stable.
-            if details.animations_running {
-                return true;
-            }
-            if details.animation_callbacks_running {
-                return true;
-            }
-        }
-
-        false
+        self.pipeline_details
+            .values()
+            .any(|details| details.animations_running || details.animation_callbacks_running)
     }
 
     /// Returns true if any animation callbacks (ie `requestAnimationFrame`) are waiting for a response.
@@ -1924,7 +1897,7 @@ impl IOCompositor {
                 // if it's safe to output the image.
                 let msg = ConstellationMsg::IsReadyToSaveImage(pipeline_epochs);
                 if let Err(e) = self.constellation_chan.send(msg) {
-                    warn!("Sending ready to save to constellation failed ({:?}).", e);
+                    warn!("Sending ready to save to constellation failed ({e:?}).");
                 }
                 self.ready_to_save_state = ReadyState::WaitingForConstellationReply;
                 Err(NotReadyToPaint::JustNotifiedConstellation)
@@ -1967,7 +1940,7 @@ impl IOCompositor {
             .rendering_context
             .make_gl_context_current(&window.surface)
         {
-            warn!("Failed to make GL context current: {:?}", err);
+            warn!("Failed to make GL context current: {err:?}");
         }
         self.assert_no_gl_error();
 
@@ -2020,10 +1993,7 @@ impl IOCompositor {
                     // and check if it is the one layout is expecting,
                     let epoch = Epoch(epoch);
                     if *pending_epoch != epoch {
-                        warn!(
-                            "{}: paint metrics: pending {:?} should be {:?}",
-                            id, pending_epoch, epoch
-                        );
+                        warn!("{id}: paint metrics: pending {pending_epoch:?} should be {epoch:?}");
                         continue;
                     }
                     // in which case, we remove it from the list of pending metrics,
@@ -2114,11 +2084,10 @@ impl IOCompositor {
         let now = SystemTime::now()
             .duration_since(UNIX_EPOCH)
             .unwrap_or_default()
-            .as_secs() as f64;
+            .as_secs_f64();
         // If a pinch-zoom happened recently, ask for tiles at the new resolution
-        if self.zoom_action && now - self.zoom_time > 0.3 {
-            self.zoom_action = false;
-        }
+        const RECENT_DURATION: f64 = 0.3;
+        self.zoom_action = !self.zoom_action || now - self.zoom_time > RECENT_DURATION;
 
         if let Some(window) = windows.get(&self.current_window) {
             match self.composition_request {
@@ -2156,7 +2125,7 @@ impl IOCompositor {
                 if let Some(window) = windows.get(&self.current_window) {
                     self.composite(window);
                     if let Err(err) = self.rendering_context.present(&window.surface) {
-                        log::warn!("Failed to present surface: {:?}", err);
+                        log::warn!("Failed to present surface: {err:?}");
                     }
                 }
                 break;
@@ -2173,10 +2142,10 @@ impl IOCompositor {
 
     fn set_pinch_zoom_level(&mut self, mut zoom: f32) -> bool {
         if let Some(min) = self.min_viewport_zoom {
-            zoom = f32::max(min.get(), zoom);
+            zoom = min.get().max(zoom);
         }
         if let Some(max) = self.max_viewport_zoom {
-            zoom = f32::min(max.get(), zoom);
+            zoom = max.get().min(zoom);
         }
 
         let old_zoom = std::mem::replace(&mut self.viewport_zoom, PinchZoomFactor::new(zoom));

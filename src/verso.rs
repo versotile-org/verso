@@ -136,14 +136,9 @@ impl Verso {
         };
 
         // Create dev tools thread
-        let devtools_sender = if opts.devtools_server_enabled {
-            Some(devtools::start_server(
-                opts.devtools_port,
-                embedder_sender.clone(),
-            ))
-        } else {
-            None
-        };
+        let devtools_sender = opts
+            .devtools_server_enabled
+            .then(|| devtools::start_server(opts.devtools_port, embedder_sender.clone()));
 
         // Create Webrender threads
         let (mut webrender, webrender_api_sender) = {

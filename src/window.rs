@@ -81,7 +81,7 @@ impl Window {
         }
         let (rendering_context, surface) = RenderingContext::create(&window, &gl_config)
             .expect("Failed to create rendering context");
-        log::trace!("Created rendering context for window {:?}", window);
+        log::trace!("Created rendering context for window {window:?}");
 
         let size = window.inner_size();
         let size = Size2D::new(size.width as i32, size.height as i32);
@@ -142,7 +142,7 @@ impl Window {
         match event {
             WindowEvent::RedrawRequested => {
                 if let Err(err) = compositor.rendering_context.present(&self.surface) {
-                    log::warn!("Failed to present surface: {:?}", err);
+                    log::warn!("Failed to present surface: {err:?}");
                 }
             }
             WindowEvent::Focused(focused) => {
@@ -247,7 +247,7 @@ impl Window {
             WindowEvent::ModifiersChanged(modifier) => self.modifiers_state.set(modifier.state()),
             WindowEvent::KeyboardInput { event, .. } => {
                 let event = keyboard_event_from_winit(event, self.modifiers_state.get());
-                log::trace!("Verso is handling {:?}", event);
+                log::trace!("Verso is handling {event:?}");
                 let msg = ConstellationMsg::Keyboard(event);
                 send_to_constellation(sender, msg);
             }

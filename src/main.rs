@@ -1,5 +1,6 @@
 // Prevent console window from appearing on Windows
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
+#![deny(clippy::pedantic)]
 
 use verso::config::Config;
 use verso::{Result, Verso};
@@ -30,7 +31,7 @@ impl ApplicationHandler for App {
         }
     }
 
-    fn user_event(&mut self, event_loop: &event_loop::ActiveEventLoop, _: ()) {
+    fn user_event(&mut self, event_loop: &event_loop::ActiveEventLoop, (): ()) {
         if let Some(v) = self.verso.as_mut() {
             v.handle_servo_messages(event_loop);
         }

@@ -99,8 +99,7 @@ impl Window {
                     .map(|c| {
                         c.get_text().unwrap_or_else(|e| {
                             log::warn!(
-                                "Verso WebView {webview_id:?} failed to get clipboard content: {}",
-                                e
+                                "Verso WebView {webview_id:?} failed to get clipboard content: {e}"
                             );
                             String::new()
                         })
@@ -108,8 +107,7 @@ impl Window {
                     .unwrap_or_default();
                 if let Err(e) = sender.send(contents) {
                     log::warn!(
-                        "Verso WebView {webview_id:?} failed to send clipboard content: {}",
-                        e
+                        "Verso WebView {webview_id:?} failed to send clipboard content: {e}"
                     );
                 }
             }
@@ -117,8 +115,7 @@ impl Window {
                 if let Some(c) = clipboard {
                     if let Err(e) = c.set_text(text) {
                         log::warn!(
-                            "Verso WebView {webview_id:?} failed to set clipboard contents: {}",
-                            e
+                            "Verso WebView {webview_id:?} failed to set clipboard contents: {e}"
                         );
                     }
                 }

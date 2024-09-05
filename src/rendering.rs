@@ -3,7 +3,7 @@ use std::num::NonZeroU32;
 use std::rc::Rc;
 
 use euclid::default::Size2D;
-use gleam::gl;
+use gleam::gl::{self, Gl};
 use glutin::{
     config::{Config, GetGlConfig, GlConfig},
     context::{ContextApi, ContextAttributesBuilder, PossiblyCurrentContext, Version},
@@ -82,20 +82,17 @@ impl RenderingContext {
             log::error!("Error setting vsync: {res:?}");
         }
 
-        let gl = match context.context_api() {
-            ContextApi::OpenGl(_) => unsafe {
-                gleam::gl::GlFns::load_with(|symbol| {
-                    let symbol = CString::new(symbol).unwrap();
-                    gl_display.get_proc_address(symbol.as_c_str()) as *const _
-                })
-            },
-            ContextApi::Gles(_) => unsafe {
-                gleam::gl::GlesFns::load_with(|symbol| {
-                    let symbol = CString::new(symbol).unwrap();
-                    gl_display.get_proc_address(symbol.as_c_str()) as *const _
-                })
-            },
+        let loader: unsafe fn(_) -> Rc<dyn Gl> = match context.context_api() {
+            ContextApi::OpenGl(_) => gleam::gl::GlFns::load_with,
+            ContextApi::Gles(_) => gleam::gl::GlesFns::load_with,
         };
+
+        let loader_fn = |symbol: &str| {
+            let symbol = CString::new(symbol).unwrap();
+            gl_display.get_proc_address(symbol.as_c_str()) as *const _
+        };
+
+        let gl = unsafe { loader(loader_fn) };
 
         println!("Running on {}", gl.get_string(gl::RENDERER));
         println!("OpenGL Version {}", gl.get_string(gl::VERSION));
@@ -147,7 +144,7 @@ impl RenderingContext {
         &self,
         surface: &Surface<impl SurfaceTypeTrait>,
     ) -> Result<(), crate::errors::Error> {
-        self.context.make_current(&surface)?;
+        self.context.make_current(surface)?;
         surface.swap_buffers(&self.context)?;
         Ok(())
     }

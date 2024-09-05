@@ -207,7 +207,7 @@ fn get_modifiers(mods: ModifiersState) -> Modifiers {
 
 /// Convert Winit's KeyEvent to Servo's KeyboardEvent
 pub fn keyboard_event_from_winit(input: &KeyEvent, state: ModifiersState) -> KeyboardEvent {
-    info!("winit keyboard input: {:?}", input);
+    info!("winit keyboard input: {input:?}");
     KeyboardEvent {
         state: match input.state {
             ElementState::Pressed => KeyState::Down,
