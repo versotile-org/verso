@@ -75,8 +75,7 @@ impl Verso {
     /// - WebGL: Disabled
     /// - WebXR: Disabled
     /// - Bluetooth: Enabled
-    /// - Public Resource: Enabled
-    /// - Private Resource: Enabled
+    /// - Resource: Enabled
     /// - Storage: Enabled
     /// - Font Cache: Enabled
     /// - Canvas: Enabled
