@@ -294,7 +294,7 @@ checksum = "0c4b4d0bd25bd0b74681c0ad21497610ce1b7c91b1022cd21c80c6fbdd9476b0"
 [[package]]
 name = "background_hang_monitor"
 version = "0.0.1"
-source = "git+https://github.com/servo/servo.git?rev=35ca050#35ca050bfb82b27cac0fe142768a4876759fced0"
+source = "git+https://github.com/servo/servo.git?rev=4d0bef0#4d0bef0ac3d31a7ea5933b2fa8bc2118d0452ea9"
 dependencies = [
  "background_hang_monitor_api",
  "backtrace",
@@ -312,7 +312,7 @@ dependencies = [
 [[package]]
 name = "background_hang_monitor_api"
 version = "0.0.1"
-source = "git+https://github.com/servo/servo.git?rev=35ca050#35ca050bfb82b27cac0fe142768a4876759fced0"
+source = "git+https://github.com/servo/servo.git?rev=4d0bef0#4d0bef0ac3d31a7ea5933b2fa8bc2118d0452ea9"
 dependencies = [
  "base",
  "ipc-channel",
@@ -342,16 +342,20 @@ dependencies = [
 [[package]]
 name = "base"
 version = "0.0.1"
-source = "git+https://github.com/servo/servo.git?rev=35ca050#35ca050bfb82b27cac0fe142768a4876759fced0"
+source = "git+https://github.com/servo/servo.git?rev=4d0bef0#4d0bef0ac3d31a7ea5933b2fa8bc2118d0452ea9"
 dependencies = [
  "crossbeam-channel",
  "ipc-channel",
+ "libc",
+ "mach2",
  "malloc_size_of",
  "malloc_size_of_derive",
  "parking_lot",
  "serde",
  "size_of_test",
+ "time 0.3.36",
  "webrender_api",
+ "windows-sys 0.59.0",
 ]
 
 [[package]]
@@ -453,7 +457,7 @@ dependencies = [
 [[package]]
 name = "bluetooth"
 version = "0.0.1"
-source = "git+https://github.com/servo/servo.git?rev=35ca050#35ca050bfb82b27cac0fe142768a4876759fced0"
+source = "git+https://github.com/servo/servo.git?rev=4d0bef0#4d0bef0ac3d31a7ea5933b2fa8bc2118d0452ea9"
 dependencies = [
  "bitflags 2.6.0",
  "bluetooth_traits",
@@ -469,7 +473,7 @@ dependencies = [
 [[package]]
 name = "bluetooth_traits"
 version = "0.0.1"
-source = "git+https://github.com/servo/servo.git?rev=35ca050#35ca050bfb82b27cac0fe142768a4876759fced0"
+source = "git+https://github.com/servo/servo.git?rev=4d0bef0#4d0bef0ac3d31a7ea5933b2fa8bc2118d0452ea9"
 dependencies = [
  "embedder_traits",
  "ipc-channel",
@@ -532,9 +536,9 @@ checksum = "28346c117b50270785fbc123bd6e4ecad20d0c6d5f43d081dc80a3abcc62be64"
 
 [[package]]
 name = "bytemuck"
-version = "1.17.1"
+version = "1.18.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "773d90827bc3feecfb67fab12e24de0749aad83c74b9504ecde46237b5cd24e2"
+checksum = "94bbb0ad554ad961ddc5da507a12a29b14e4ae5bda06b19f575a3e6079d2e2ae"
 
 [[package]]
 name = "byteorder"
@@ -593,7 +597,7 @@ dependencies = [
 [[package]]
 name = "canvas"
 version = "0.0.1"
-source = "git+https://github.com/servo/servo.git?rev=35ca050#35ca050bfb82b27cac0fe142768a4876759fced0"
+source = "git+https://github.com/servo/servo.git?rev=4d0bef0#4d0bef0ac3d31a7ea5933b2fa8bc2118d0452ea9"
 dependencies = [
  "app_units",
  "bitflags 2.6.0",
@@ -632,7 +636,7 @@ dependencies = [
 [[package]]
 name = "canvas_traits"
 version = "0.0.1"
-source = "git+https://github.com/servo/servo.git?rev=35ca050#35ca050bfb82b27cac0fe142768a4876759fced0"
+source = "git+https://github.com/servo/servo.git?rev=4d0bef0#4d0bef0ac3d31a7ea5933b2fa8bc2118d0452ea9"
 dependencies = [
  "base",
  "crossbeam-channel",
@@ -652,9 +656,9 @@ dependencies = [
 
 [[package]]
 name = "cargo-packager-resource-resolver"
-version = "0.1.1"
+version = "0.1.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "5b5ef5863f81afa1b45d1b7e01b319d9e940c9be5615bc0a988421987d35c9f8"
+checksum = "c54b2cc2601d3f8d89a8d2e0edd4ef9e2685b29f6cc810964e7454c04e474ba2"
 dependencies = [
  "cargo-packager-utils",
  "heck",
@@ -664,18 +668,18 @@ dependencies = [
 
 [[package]]
 name = "cargo-packager-utils"
-version = "0.1.0"
+version = "0.1.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d435b1a5799cfee502f151f857a0b415a04d3834562d83fea2bb8c6e33bfc167"
+checksum = "b43458dd2ee3cdab3f5b105acd80791383b730380c929018701313d7d299d4e8"
 dependencies = [
  "ctor",
 ]
 
 [[package]]
 name = "cc"
-version = "1.1.15"
+version = "1.1.16"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "57b6a275aa2903740dc87da01c62040406b8812552e97129a63ea8850a17c6e6"
+checksum = "e9d013ecb737093c0e86b151a7b837993cf9ec6c502946cfb44bedc392421e0b"
 dependencies = [
  "jobserver",
  "libc",
@@ -734,6 +738,7 @@ dependencies = [
  "iana-time-zone",
  "js-sys",
  "num-traits",
+ "serde",
  "wasm-bindgen",
  "windows-targets 0.52.6",
 ]
@@ -833,7 +838,7 @@ dependencies = [
 [[package]]
 name = "compositing_traits"
 version = "0.0.1"
-source = "git+https://github.com/servo/servo.git?rev=35ca050#35ca050bfb82b27cac0fe142768a4876759fced0"
+source = "git+https://github.com/servo/servo.git?rev=4d0bef0#4d0bef0ac3d31a7ea5933b2fa8bc2118d0452ea9"
 dependencies = [
  "base",
  "crossbeam-channel",
@@ -863,7 +868,7 @@ dependencies = [
 [[package]]
 name = "constellation"
 version = "0.0.1"
-source = "git+https://github.com/servo/servo.git?rev=35ca050#35ca050bfb82b27cac0fe142768a4876759fced0"
+source = "git+https://github.com/servo/servo.git?rev=4d0bef0#4d0bef0ac3d31a7ea5933b2fa8bc2118d0452ea9"
 dependencies = [
  "background_hang_monitor",
  "background_hang_monitor_api",
@@ -895,6 +900,7 @@ dependencies = [
  "servo_rand",
  "servo_url",
  "style_traits",
+ "tracing",
  "webgpu",
  "webrender",
  "webrender_api",
@@ -1001,9 +1007,9 @@ dependencies = [
 
 [[package]]
 name = "cpufeatures"
-version = "0.2.13"
+version = "0.2.14"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "51e852e6dc9a5bed1fae92dd2375037bf2b768725bf3be87811edee3249d09ad"
+checksum = "608697df725056feaccfa42cffdaeeec3fccc4ffc38358ecd19b243e716a78e0"
 dependencies = [
  "libc",
 ]
@@ -1156,7 +1162,7 @@ checksum = "5c297a1c74b71ae29df00c3e22dd9534821d60eb9af5a0192823fa2acea70c2a"
 [[package]]
 name = "deny_public_fields"
 version = "0.0.1"
-source = "git+https://github.com/servo/servo.git?rev=35ca050#35ca050bfb82b27cac0fe142768a4876759fced0"
+source = "git+https://github.com/servo/servo.git?rev=4d0bef0#4d0bef0ac3d31a7ea5933b2fa8bc2118d0452ea9"
 dependencies = [
  "syn",
  "synstructure",
@@ -1169,6 +1175,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "b42b6fa04a440b495c8b04d0e71b707c585f83cb9cb28cf8cd0d976c315e31b4"
 dependencies = [
  "powerfmt",
+ "serde",
 ]
 
 [[package]]
@@ -1197,7 +1204,7 @@ dependencies = [
 [[package]]
 name = "devtools"
 version = "0.0.1"
-source = "git+https://github.com/servo/servo.git?rev=35ca050#35ca050bfb82b27cac0fe142768a4876759fced0"
+source = "git+https://github.com/servo/servo.git?rev=4d0bef0#4d0bef0ac3d31a7ea5933b2fa8bc2118d0452ea9"
 dependencies = [
  "base",
  "chrono",
@@ -1219,7 +1226,7 @@ dependencies = [
 [[package]]
 name = "devtools_traits"
 version = "0.0.1"
-source = "git+https://github.com/servo/servo.git?rev=35ca050#35ca050bfb82b27cac0fe142768a4876759fced0"
+source = "git+https://github.com/servo/servo.git?rev=4d0bef0#4d0bef0ac3d31a7ea5933b2fa8bc2118d0452ea9"
 dependencies = [
  "base",
  "bitflags 2.6.0",
@@ -1346,7 +1353,7 @@ dependencies = [
 [[package]]
 name = "dom_struct"
 version = "0.0.1"
-source = "git+https://github.com/servo/servo.git?rev=35ca050#35ca050bfb82b27cac0fe142768a4876759fced0"
+source = "git+https://github.com/servo/servo.git?rev=4d0bef0#4d0bef0ac3d31a7ea5933b2fa8bc2118d0452ea9"
 dependencies = [
  "quote",
  "syn",
@@ -1355,7 +1362,7 @@ dependencies = [
 [[package]]
 name = "domobject_derive"
 version = "0.0.1"
-source = "git+https://github.com/servo/servo.git?rev=35ca050#35ca050bfb82b27cac0fe142768a4876759fced0"
+source = "git+https://github.com/servo/servo.git?rev=4d0bef0#4d0bef0ac3d31a7ea5933b2fa8bc2118d0452ea9"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -1412,7 +1419,7 @@ checksum = "60b1af1c220855b6ceac025d3f6ecdd2b7c4894bfe9cd9bda4fbb4bc7c0d4cf0"
 [[package]]
 name = "embedder_traits"
 version = "0.0.1"
-source = "git+https://github.com/servo/servo.git?rev=35ca050#35ca050bfb82b27cac0fe142768a4876759fced0"
+source = "git+https://github.com/servo/servo.git?rev=4d0bef0#4d0bef0ac3d31a7ea5933b2fa8bc2118d0452ea9"
 dependencies = [
  "base",
  "cfg-if",
@@ -1641,7 +1648,7 @@ dependencies = [
 [[package]]
 name = "fonts"
 version = "0.0.1"
-source = "git+https://github.com/servo/servo.git?rev=35ca050#35ca050bfb82b27cac0fe142768a4876759fced0"
+source = "git+https://github.com/servo/servo.git?rev=4d0bef0#4d0bef0ac3d31a7ea5933b2fa8bc2118d0452ea9"
 dependencies = [
  "app_units",
  "atomic_refcell",
@@ -1693,7 +1700,7 @@ dependencies = [
 [[package]]
 name = "fonts_traits"
 version = "0.0.1"
-source = "git+https://github.com/servo/servo.git?rev=35ca050#35ca050bfb82b27cac0fe142768a4876759fced0"
+source = "git+https://github.com/servo/servo.git?rev=4d0bef0#4d0bef0ac3d31a7ea5933b2fa8bc2118d0452ea9"
 dependencies = [
  "ipc-channel",
  "malloc_size_of",
@@ -2027,7 +2034,7 @@ dependencies = [
  "objc2-foundation",
  "once_cell",
  "raw-window-handle",
- "wayland-sys 0.31.4",
+ "wayland-sys 0.31.5",
  "windows-sys 0.52.0",
  "x11-dl",
 ]
@@ -2204,9 +2211,9 @@ dependencies = [
 
 [[package]]
 name = "heck"
-version = "0.4.1"
+version = "0.5.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "95505c38b4572b2d910cecb0281560f54b440a19336cbbcb27bf6ce6adc6f5a8"
+checksum = "2304e00983f87ffb38b55b444b5e3b60a884b5d30c0fca7d82fe33449bbe55ea"
 
 [[package]]
 name = "hermit-abi"
@@ -2338,7 +2345,7 @@ dependencies = [
 [[package]]
 name = "hyper_serde"
 version = "0.13.2"
-source = "git+https://github.com/servo/servo.git?rev=35ca050#35ca050bfb82b27cac0fe142768a4876759fced0"
+source = "git+https://github.com/servo/servo.git?rev=4d0bef0#4d0bef0ac3d31a7ea5933b2fa8bc2118d0452ea9"
 dependencies = [
  "cookie 0.18.1",
  "headers",
@@ -2844,9 +2851,9 @@ checksum = "76a49eaebc8750bcba241df1e1e47ebb51b81eb35c65e8f11ffa0aebac353f7f"
 
 [[package]]
 name = "indexmap"
-version = "2.4.0"
+version = "2.5.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "93ead53efc7ea8ed3cfb0c79fc8023fbb782a5432b52830b6518941cebe6505c"
+checksum = "68b900aa2f7301e21c36462b170ee99994de34dff39a4a6a528e80e7376d07e5"
 dependencies = [
  "equivalent",
  "hashbrown",
@@ -2966,7 +2973,7 @@ dependencies = [
 [[package]]
 name = "jstraceable_derive"
 version = "0.0.1"
-source = "git+https://github.com/servo/servo.git?rev=35ca050#35ca050bfb82b27cac0fe142768a4876759fced0"
+source = "git+https://github.com/servo/servo.git?rev=4d0bef0#4d0bef0ac3d31a7ea5933b2fa8bc2118d0452ea9"
 dependencies = [
  "proc-macro2",
  "syn",
@@ -3004,7 +3011,7 @@ checksum = "e2db585e1d738fc771bf08a151420d3ed193d9d895a36df7f6f8a9456b911ddc"
 [[package]]
 name = "layout_2020"
 version = "0.0.1"
-source = "git+https://github.com/servo/servo.git?rev=35ca050#35ca050bfb82b27cac0fe142768a4876759fced0"
+source = "git+https://github.com/servo/servo.git?rev=4d0bef0#4d0bef0ac3d31a7ea5933b2fa8bc2118d0452ea9"
 dependencies = [
  "app_units",
  "atomic_refcell",
@@ -3049,7 +3056,7 @@ dependencies = [
 [[package]]
 name = "layout_thread_2020"
 version = "0.0.1"
-source = "git+https://github.com/servo/servo.git?rev=35ca050#35ca050bfb82b27cac0fe142768a4876759fced0"
+source = "git+https://github.com/servo/servo.git?rev=4d0bef0#4d0bef0ac3d31a7ea5933b2fa8bc2118d0452ea9"
 dependencies = [
  "app_units",
  "base",
@@ -3318,7 +3325,7 @@ checksum = "2532096657941c2fea9c289d370a250971c689d4f143798ff67113ec042024a5"
 [[package]]
 name = "media"
 version = "0.0.1"
-source = "git+https://github.com/servo/servo.git?rev=35ca050#35ca050bfb82b27cac0fe142768a4876759fced0"
+source = "git+https://github.com/servo/servo.git?rev=4d0bef0#4d0bef0ac3d31a7ea5933b2fa8bc2118d0452ea9"
 dependencies = [
  "euclid",
  "fnv",
@@ -3378,7 +3385,7 @@ dependencies = [
 [[package]]
 name = "metrics"
 version = "0.0.1"
-source = "git+https://github.com/servo/servo.git?rev=35ca050#35ca050bfb82b27cac0fe142768a4876759fced0"
+source = "git+https://github.com/servo/servo.git?rev=4d0bef0#4d0bef0ac3d31a7ea5933b2fa8bc2118d0452ea9"
 dependencies = [
  "base",
  "fonts_traits",
@@ -3501,7 +3508,7 @@ dependencies = [
 [[package]]
 name = "naga"
 version = "22.0.0"
-source = "git+https://github.com/gfx-rs/wgpu?rev=34bb9e4ceb45a5b1cfc5df6aa2b2e201cc55372c#34bb9e4ceb45a5b1cfc5df6aa2b2e201cc55372c"
+source = "git+https://github.com/gfx-rs/wgpu?rev=0e352f5b3448236b6cbebcd146d0606b00cb3806#0e352f5b3448236b6cbebcd146d0606b00cb3806"
 dependencies = [
  "arrayvec",
  "bit-set",
@@ -3561,7 +3568,7 @@ dependencies = [
 [[package]]
 name = "net"
 version = "0.0.1"
-source = "git+https://github.com/servo/servo.git?rev=35ca050#35ca050bfb82b27cac0fe142768a4876759fced0"
+source = "git+https://github.com/servo/servo.git?rev=4d0bef0#4d0bef0ac3d31a7ea5933b2fa8bc2118d0452ea9"
 dependencies = [
  "async-recursion",
  "async-tungstenite",
@@ -3621,7 +3628,7 @@ dependencies = [
 [[package]]
 name = "net_traits"
 version = "0.0.1"
-source = "git+https://github.com/servo/servo.git?rev=35ca050#35ca050bfb82b27cac0fe142768a4876759fced0"
+source = "git+https://github.com/servo/servo.git?rev=4d0bef0#4d0bef0ac3d31a7ea5933b2fa8bc2118d0452ea9"
 dependencies = [
  "base",
  "content-security-policy",
@@ -4273,7 +4280,7 @@ checksum = "8b870d8c151b6f2fb93e84a13146138f05d02ed11c7e7c54f8826aaaf7c9f184"
 [[package]]
 name = "pixels"
 version = "0.0.1"
-source = "git+https://github.com/servo/servo.git?rev=35ca050#35ca050bfb82b27cac0fe142768a4876759fced0"
+source = "git+https://github.com/servo/servo.git?rev=4d0bef0#4d0bef0ac3d31a7ea5933b2fa8bc2118d0452ea9"
 dependencies = [
  "euclid",
  "image 0.24.9",
@@ -4378,8 +4385,9 @@ dependencies = [
 [[package]]
 name = "profile"
 version = "0.0.1"
-source = "git+https://github.com/servo/servo.git?rev=35ca050#35ca050bfb82b27cac0fe142768a4876759fced0"
+source = "git+https://github.com/servo/servo.git?rev=4d0bef0#4d0bef0ac3d31a7ea5933b2fa8bc2118d0452ea9"
 dependencies = [
+ "base",
  "ipc-channel",
  "libc",
  "profile_traits",
@@ -4389,20 +4397,22 @@ dependencies = [
  "servo_config",
  "task_info",
  "tikv-jemalloc-sys",
+ "time 0.3.36",
 ]
 
 [[package]]
 name = "profile_traits"
 version = "0.0.1"
-source = "git+https://github.com/servo/servo.git?rev=35ca050#35ca050bfb82b27cac0fe142768a4876759fced0"
+source = "git+https://github.com/servo/servo.git?rev=4d0bef0#4d0bef0ac3d31a7ea5933b2fa8bc2118d0452ea9"
 dependencies = [
+ "base",
  "crossbeam-channel",
  "ipc-channel",
  "log",
  "serde",
  "servo_config",
  "signpost",
- "time 0.1.45",
+ "time 0.3.36",
 ]
 
 [[package]]
@@ -4422,9 +4432,9 @@ dependencies = [
 
 [[package]]
 name = "quick-xml"
-version = "0.34.0"
+version = "0.36.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "6f24d770aeca0eacb81ac29dfbc55ebcc09312fdd1f8bbecdc7e4a84e000e3b4"
+checksum = "96a05e2e8efddfa51a84ca47cec303fac86c8541b686d37cac5efc0e094417bc"
 dependencies = [
  "memchr",
 ]
@@ -4480,7 +4490,7 @@ dependencies = [
 [[package]]
 name = "range"
 version = "0.0.1"
-source = "git+https://github.com/servo/servo.git?rev=35ca050#35ca050bfb82b27cac0fe142768a4876759fced0"
+source = "git+https://github.com/servo/servo.git?rev=4d0bef0#4d0bef0ac3d31a7ea5933b2fa8bc2118d0452ea9"
 dependencies = [
  "malloc_size_of",
  "malloc_size_of_derive",
@@ -4663,9 +4673,9 @@ dependencies = [
 
 [[package]]
 name = "rustix"
-version = "0.38.35"
+version = "0.38.36"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a85d50532239da68e9addb745ba38ff4612a242c1c7ceea689c4bc7c2f43c36f"
+checksum = "3f55e80d50763938498dd5ebb18647174e0c76dc38c5505294bb224624f30f36"
 dependencies = [
  "bitflags 2.6.0",
  "errno",
@@ -4721,15 +4731,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "scc"
-version = "2.1.16"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "aeb7ac86243095b70a7920639507b71d51a63390d1ba26c4f60a552fbb914a37"
-dependencies = [
- "sdd",
-]
-
-[[package]]
 name = "scoped-tls"
 version = "1.0.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -4744,7 +4745,7 @@ checksum = "94143f37725109f92c262ed2cf5e59bce7498c01bcc1502d7b9afe439a4e9f49"
 [[package]]
 name = "script"
 version = "0.0.1"
-source = "git+https://github.com/servo/servo.git?rev=35ca050#35ca050bfb82b27cac0fe142768a4876759fced0"
+source = "git+https://github.com/servo/servo.git?rev=4d0bef0#4d0bef0ac3d31a7ea5933b2fa8bc2118d0452ea9"
 dependencies = [
  "app_units",
  "arrayvec",
@@ -4829,6 +4830,7 @@ dependencies = [
  "tempfile",
  "tendril",
  "time 0.1.45",
+ "time 0.3.36",
  "unicode-bidi",
  "unicode-segmentation",
  "url",
@@ -4845,7 +4847,7 @@ dependencies = [
 [[package]]
 name = "script_layout_interface"
 version = "0.0.1"
-source = "git+https://github.com/servo/servo.git?rev=35ca050#35ca050bfb82b27cac0fe142768a4876759fced0"
+source = "git+https://github.com/servo/servo.git?rev=4d0bef0#4d0bef0ac3d31a7ea5933b2fa8bc2118d0452ea9"
 dependencies = [
  "app_units",
  "atomic_refcell",
@@ -4880,7 +4882,7 @@ dependencies = [
 [[package]]
 name = "script_traits"
 version = "0.0.1"
-source = "git+https://github.com/servo/servo.git?rev=35ca050#35ca050bfb82b27cac0fe142768a4876759fced0"
+source = "git+https://github.com/servo/servo.git?rev=4d0bef0#4d0bef0ac3d31a7ea5933b2fa8bc2118d0452ea9"
 dependencies = [
  "background_hang_monitor_api",
  "base",
@@ -4942,12 +4944,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "sdd"
-version = "3.0.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "0495e4577c672de8254beb68d01a9b62d0e8a13c099edecdbedccce3223cd29f"
-
-[[package]]
 name = "selectors"
 version = "0.24.0"
 source = "git+https://github.com/servo/stylo?branch=2024-07-16#65f8d1316a0966401bcfb9fa7dd5e3659a1605b2"
@@ -5005,9 +5001,9 @@ dependencies = [
 
 [[package]]
 name = "serde_json"
-version = "1.0.127"
+version = "1.0.128"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "8043c06d9f82bd7271361ed64f415fe5e12a77fdb52e573e7f06a516dea329ad"
+checksum = "6ff5456707a1de34e7e37f2a6fd3d3f808c318259cbd01ab6377795054b483d8"
 dependencies = [
  "itoa",
  "memchr",
@@ -5025,31 +5021,6 @@ dependencies = [
  "itoa",
  "ryu",
  "serde",
-]
-
-[[package]]
-name = "serial_test"
-version = "3.1.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "4b4b487fe2acf240a021cf57c6b2b4903b1e78ca0ecd862a71b71d2a51fed77d"
-dependencies = [
- "futures",
- "log",
- "once_cell",
- "parking_lot",
- "scc",
- "serial_test_derive",
-]
-
-[[package]]
-name = "serial_test_derive"
-version = "3.1.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "82fe9db325bcef1fbcde82e078a5cc4efdf787e96b3b9cf45b50b529f2083d67"
-dependencies = [
- "proc-macro2",
- "quote",
- "syn",
 ]
 
 [[package]]
@@ -5163,7 +5134,7 @@ dependencies = [
 [[package]]
 name = "servo_allocator"
 version = "0.0.1"
-source = "git+https://github.com/servo/servo.git?rev=35ca050#35ca050bfb82b27cac0fe142768a4876759fced0"
+source = "git+https://github.com/servo/servo.git?rev=4d0bef0#4d0bef0ac3d31a7ea5933b2fa8bc2118d0452ea9"
 dependencies = [
  "libc",
  "tikv-jemalloc-sys",
@@ -5192,7 +5163,7 @@ dependencies = [
 [[package]]
 name = "servo_config"
 version = "0.0.1"
-source = "git+https://github.com/servo/servo.git?rev=35ca050#35ca050bfb82b27cac0fe142768a4876759fced0"
+source = "git+https://github.com/servo/servo.git?rev=4d0bef0#4d0bef0ac3d31a7ea5933b2fa8bc2118d0452ea9"
 dependencies = [
  "dirs",
  "embedder_traits",
@@ -5212,7 +5183,7 @@ dependencies = [
 [[package]]
 name = "servo_config_plugins"
 version = "0.0.1"
-source = "git+https://github.com/servo/servo.git?rev=35ca050#35ca050bfb82b27cac0fe142768a4876759fced0"
+source = "git+https://github.com/servo/servo.git?rev=4d0bef0#4d0bef0ac3d31a7ea5933b2fa8bc2118d0452ea9"
 dependencies = [
  "itertools 0.13.0",
  "proc-macro2",
@@ -5223,7 +5194,7 @@ dependencies = [
 [[package]]
 name = "servo_geometry"
 version = "0.0.1"
-source = "git+https://github.com/servo/servo.git?rev=35ca050#35ca050bfb82b27cac0fe142768a4876759fced0"
+source = "git+https://github.com/servo/servo.git?rev=4d0bef0#4d0bef0ac3d31a7ea5933b2fa8bc2118d0452ea9"
 dependencies = [
  "app_units",
  "euclid",
@@ -5235,7 +5206,7 @@ dependencies = [
 [[package]]
 name = "servo_rand"
 version = "0.0.1"
-source = "git+https://github.com/servo/servo.git?rev=35ca050#35ca050bfb82b27cac0fe142768a4876759fced0"
+source = "git+https://github.com/servo/servo.git?rev=4d0bef0#4d0bef0ac3d31a7ea5933b2fa8bc2118d0452ea9"
 dependencies = [
  "log",
  "rand",
@@ -5247,7 +5218,7 @@ dependencies = [
 [[package]]
 name = "servo_url"
 version = "0.0.1"
-source = "git+https://github.com/servo/servo.git?rev=35ca050#35ca050bfb82b27cac0fe142768a4876759fced0"
+source = "git+https://github.com/servo/servo.git?rev=4d0bef0#4d0bef0ac3d31a7ea5933b2fa8bc2118d0452ea9"
 dependencies = [
  "malloc_size_of",
  "malloc_size_of_derive",
@@ -5605,12 +5576,12 @@ dependencies = [
 
 [[package]]
 name = "surfman"
-version = "0.9.7"
+version = "0.9.8"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "6160d797855bc381e63c076cea21697b76c9d67887e83961941834572c2f2dcd"
+checksum = "bb5f2d85c044920e1f2aaf5ad3795ae3b935025297271f2eadb021931571b4c3"
 dependencies = [
- "bitflags 1.3.2",
- "cfg_aliases 0.1.1",
+ "bitflags 2.6.0",
+ "cfg_aliases 0.2.1",
  "cgl",
  "cocoa",
  "core-foundation",
@@ -5626,7 +5597,6 @@ dependencies = [
  "metal 0.24.0",
  "objc",
  "raw-window-handle",
- "serial_test",
  "servo-display-link",
  "sparkle",
  "wayland-sys 0.30.1",
@@ -5655,9 +5625,9 @@ checksum = "e454d048db5527d000bfddb77bd072bbf3a1e2ae785f16d9bd116e07c2ab45eb"
 
 [[package]]
 name = "syn"
-version = "2.0.76"
+version = "2.0.77"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "578e081a14e0cefc3279b0472138c513f37b41a08d5a3cca9b6e4e8ceb6cd525"
+checksum = "9f35bcdf61fd8e7be6caf75f429fdca8beb3ed76584befb503b1569faee373ed"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -5695,7 +5665,7 @@ dependencies = [
 [[package]]
 name = "task_info"
 version = "0.0.1"
-source = "git+https://github.com/servo/servo.git?rev=35ca050#35ca050bfb82b27cac0fe142768a4876759fced0"
+source = "git+https://github.com/servo/servo.git?rev=4d0bef0#4d0bef0ac3d31a7ea5933b2fa8bc2118d0452ea9"
 dependencies = [
  "cc",
 ]
@@ -5956,9 +5926,9 @@ dependencies = [
 
 [[package]]
 name = "tokio-stream"
-version = "0.1.15"
+version = "0.1.16"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "267ac89e0bec6e691e5813911606935d77c476ff49024f98abcea3e7b15e37af"
+checksum = "4f4e6ce100d0eb49a2734f8c0812bcd324cf357d21810932c5df6b96ef2b86f1"
 dependencies = [
  "futures-core",
  "pin-project-lite",
@@ -5967,9 +5937,9 @@ dependencies = [
 
 [[package]]
 name = "tokio-util"
-version = "0.7.11"
+version = "0.7.12"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "9cf6b47b3771c49ac75ad09a6162f53ad4b8088b76ac60e8ec1455b31a189fe1"
+checksum = "61e7c3654c13bcd040d4a03abee2c75b1d14a37b423cf5a813ceae1cc903ec6a"
 dependencies = [
  "bytes",
  "futures-core",
@@ -6015,7 +5985,19 @@ checksum = "c3523ab5a71916ccf420eebdf5521fcef02141234bbc0b8a49f2fdc4544364ef"
 dependencies = [
  "log",
  "pin-project-lite",
+ "tracing-attributes",
  "tracing-core",
+]
+
+[[package]]
+name = "tracing-attributes"
+version = "0.1.27"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "34704c8d6ebcbc939824180af020566b01a7c01f80641264eba0999f6c2b6be7"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn",
 ]
 
 [[package]]
@@ -6427,23 +6409,23 @@ checksum = "c62a0a307cb4a311d3a07867860911ca130c3494e8c2719593806c08bc5d0484"
 
 [[package]]
 name = "wayland-backend"
-version = "0.3.6"
+version = "0.3.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f90e11ce2ca99c97b940ee83edbae9da2d56a08f9ea8158550fd77fa31722993"
+checksum = "056535ced7a150d45159d3a8dc30f91a2e2d588ca0b23f70e56033622b8016f6"
 dependencies = [
  "cc",
  "downcast-rs",
  "rustix",
  "scoped-tls",
  "smallvec",
- "wayland-sys 0.31.4",
+ "wayland-sys 0.31.5",
 ]
 
 [[package]]
 name = "wayland-client"
-version = "0.31.5"
+version = "0.31.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "7e321577a0a165911bdcfb39cf029302479d7527b517ee58ab0f6ad09edf0943"
+checksum = "e3f45d1222915ef1fd2057220c1d9d9624b7654443ea35c3877f7a52bd0a5a2d"
 dependencies = [
  "bitflags 2.6.0",
  "rustix",
@@ -6464,9 +6446,9 @@ dependencies = [
 
 [[package]]
 name = "wayland-cursor"
-version = "0.31.5"
+version = "0.31.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "6ef9489a8df197ebf3a8ce8a7a7f0a2320035c3743f3c1bd0bdbccf07ce64f95"
+checksum = "3a94697e66e76c85923b0d28a0c251e8f0666f58fc47d316c0f4da6da75d37cb"
 dependencies = [
  "rustix",
  "wayland-client",
@@ -6475,9 +6457,9 @@ dependencies = [
 
 [[package]]
 name = "wayland-protocols"
-version = "0.32.3"
+version = "0.32.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "62989625a776e827cc0f15d41444a3cea5205b963c3a25be48ae1b52d6b4daaa"
+checksum = "2b5755d77ae9040bb872a25026555ce4cb0ae75fd923e90d25fba07d81057de0"
 dependencies = [
  "bitflags 2.6.0",
  "wayland-backend",
@@ -6487,9 +6469,9 @@ dependencies = [
 
 [[package]]
 name = "wayland-protocols-plasma"
-version = "0.3.3"
+version = "0.3.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f79f2d57c7fcc6ab4d602adba364bf59a5c24de57bd194486bf9b8360e06bfc4"
+checksum = "8a0a41a6875e585172495f7a96dfa42ca7e0213868f4f15c313f7c33221a7eff"
 dependencies = [
  "bitflags 2.6.0",
  "wayland-backend",
@@ -6500,9 +6482,9 @@ dependencies = [
 
 [[package]]
 name = "wayland-protocols-wlr"
-version = "0.3.3"
+version = "0.3.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "fd993de54a40a40fbe5601d9f1fbcaef0aebcc5fda447d7dc8f6dcbaae4f8953"
+checksum = "dad87b5fd1b1d3ca2f792df8f686a2a11e3fe1077b71096f7a175ab699f89109"
 dependencies = [
  "bitflags 2.6.0",
  "wayland-backend",
@@ -6513,9 +6495,9 @@ dependencies = [
 
 [[package]]
 name = "wayland-scanner"
-version = "0.31.4"
+version = "0.31.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d7b56f89937f1cf2ee1f1259cf2936a17a1f45d8f0aa1019fae6d470d304cfa6"
+checksum = "597f2001b2e5fc1121e3d5b9791d3e78f05ba6bfa4641053846248e3a13661c3"
 dependencies = [
  "proc-macro2",
  "quick-xml",
@@ -6536,9 +6518,9 @@ dependencies = [
 
 [[package]]
 name = "wayland-sys"
-version = "0.31.4"
+version = "0.31.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "43676fe2daf68754ecf1d72026e4e6c15483198b5d24e888b74d3f22f887a148"
+checksum = "efa8ac0d8e8ed3e3b5c9fc92c7881406a268e11555abe36493efabe649a29e09"
 dependencies = [
  "dlib",
  "log",
@@ -6591,7 +6573,7 @@ dependencies = [
 [[package]]
 name = "webdriver_server"
 version = "0.0.1"
-source = "git+https://github.com/servo/servo.git?rev=35ca050#35ca050bfb82b27cac0fe142768a4876759fced0"
+source = "git+https://github.com/servo/servo.git?rev=4d0bef0#4d0bef0ac3d31a7ea5933b2fa8bc2118d0452ea9"
 dependencies = [
  "base",
  "base64",
@@ -6619,7 +6601,7 @@ dependencies = [
 [[package]]
 name = "webgpu"
 version = "0.0.1"
-source = "git+https://github.com/servo/servo.git?rev=35ca050#35ca050bfb82b27cac0fe142768a4876759fced0"
+source = "git+https://github.com/servo/servo.git?rev=4d0bef0#4d0bef0ac3d31a7ea5933b2fa8bc2118d0452ea9"
 dependencies = [
  "arrayvec",
  "base",
@@ -6709,7 +6691,7 @@ dependencies = [
 [[package]]
 name = "webrender_traits"
 version = "0.0.1"
-source = "git+https://github.com/servo/servo.git?rev=35ca050#35ca050bfb82b27cac0fe142768a4876759fced0"
+source = "git+https://github.com/servo/servo.git?rev=4d0bef0#4d0bef0ac3d31a7ea5933b2fa8bc2118d0452ea9"
 dependencies = [
  "base",
  "crossbeam-channel",
@@ -6757,7 +6739,7 @@ checksum = "53a85b86a771b1c87058196170769dd264f66c0782acf1ae6cc51bfd64b39082"
 [[package]]
 name = "wgpu-core"
 version = "22.0.0"
-source = "git+https://github.com/gfx-rs/wgpu?rev=34bb9e4ceb45a5b1cfc5df6aa2b2e201cc55372c#34bb9e4ceb45a5b1cfc5df6aa2b2e201cc55372c"
+source = "git+https://github.com/gfx-rs/wgpu?rev=0e352f5b3448236b6cbebcd146d0606b00cb3806#0e352f5b3448236b6cbebcd146d0606b00cb3806"
 dependencies = [
  "arrayvec",
  "bit-vec",
@@ -6782,7 +6764,7 @@ dependencies = [
 [[package]]
 name = "wgpu-hal"
 version = "22.0.0"
-source = "git+https://github.com/gfx-rs/wgpu?rev=34bb9e4ceb45a5b1cfc5df6aa2b2e201cc55372c#34bb9e4ceb45a5b1cfc5df6aa2b2e201cc55372c"
+source = "git+https://github.com/gfx-rs/wgpu?rev=0e352f5b3448236b6cbebcd146d0606b00cb3806#0e352f5b3448236b6cbebcd146d0606b00cb3806"
 dependencies = [
  "android_system_properties",
  "arrayvec",
@@ -6824,7 +6806,7 @@ dependencies = [
 [[package]]
 name = "wgpu-types"
 version = "22.0.0"
-source = "git+https://github.com/gfx-rs/wgpu?rev=34bb9e4ceb45a5b1cfc5df6aa2b2e201cc55372c#34bb9e4ceb45a5b1cfc5df6aa2b2e201cc55372c"
+source = "git+https://github.com/gfx-rs/wgpu?rev=0e352f5b3448236b6cbebcd146d0606b00cb3806#0e352f5b3448236b6cbebcd146d0606b00cb3806"
 dependencies = [
  "bitflags 2.6.0",
  "js-sys",
