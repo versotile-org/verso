@@ -2009,10 +2009,6 @@ impl IOCompositor {
         // ones that the paint metrics recorder is expecting. In that case, we get the current
         // time, inform layout about it and remove the pending metric from the list.
         if !self.pending_paint_metrics.is_empty() {
-            let paint_time = SystemTime::now()
-                .duration_since(UNIX_EPOCH)
-                .unwrap_or_default()
-                .as_nanos() as u64;
             let mut to_remove = Vec::new();
             // For each pending paint metrics pipeline id
             for (id, pending_epoch) in &self.pending_paint_metrics {
@@ -2038,7 +2034,7 @@ impl IOCompositor {
                             pipeline
                                 .script_chan
                                 .send(ConstellationControlMsg::SetEpochPaintTime(
-                                    *id, epoch, CrossProcessInstant(paint_time),
+                                    *id, epoch, CrossProcessInstant::now(),
                                 ))
                         {
                             warn!("Sending RequestLayoutPaintMetric message to layout failed ({e:?}).");
