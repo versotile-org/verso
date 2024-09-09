@@ -67,19 +67,20 @@ pub struct Verso {
 impl Verso {
     /// Create a Verso instance from Winit's window and event loop proxy.
     ///
-    /// // TODO list the flag to toggle them and ways to disable by default
-    /// Following threads will be created while initializing Verso:
-    /// - Time Profiler
-    /// - Memory Profiler
-    /// - DevTools
-    /// - Webrender threads
-    /// - WebGL
-    /// - WebXR
-    /// - Bluetooth
-    /// - Resource threads
-    /// - Font cache
-    /// - Canvas
-    /// - Constellation
+    /// Following threads will be created while initializing Verso based on configurations:
+    /// - Time Profiler: Enabled
+    /// - Memory Profiler: Enabled
+    /// - DevTools: `Opts::devtools_server_enabled`
+    /// - Webrender: Enabled
+    /// - WebGL: Disabled
+    /// - WebXR: Disabled
+    /// - Bluetooth: Enabled
+    /// - Resource: Enabled
+    /// - Storage: Enabled
+    /// - Font Cache: Enabled
+    /// - Canvas: Enabled
+    /// - Constellation: Enabled
+    /// - Image Cache: Enabled
     pub fn new(evl: &ActiveEventLoop, proxy: EventLoopProxy<()>, config: Config) -> Self {
         // Initialize configurations and Verso window
         let resource_dir = config.resource_dir.clone();
@@ -97,6 +98,9 @@ impl Verso {
             .store(opts.nonincremental_layout, Ordering::Relaxed);
 
         // Initialize servo media with dummy backend
+        // This will create a thread to initialize a global static of servo media.
+        // The thread will be closed once the static is initialzed.
+        // TODO: This is used by content process. Spawn it there once if we have multiprocess mode.
         servo_media::ServoMedia::init::<servo_media_dummy::DummyBackend>();
 
         // Get GL bindings
@@ -244,6 +248,7 @@ impl Verso {
         let bluetooth_thread: IpcSender<BluetoothRequest> =
             BluetoothThreadFactory::new(embedder_sender.clone());
 
+        // Register URL scheme protocols
         let protocols = ProtocolRegistry::with_internal_protocols();
 
         // Create resource thread pool
