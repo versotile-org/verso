@@ -3,6 +3,7 @@ use std::ffi::c_void;
 use std::rc::Rc;
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
+use base::cross_process_instant::CrossProcessInstant;
 use base::id::{PipelineId, TopLevelBrowsingContextId};
 use base::{Epoch, WebRenderEpochToU16};
 use compositing_traits::{
@@ -2037,7 +2038,7 @@ impl IOCompositor {
                             pipeline
                                 .script_chan
                                 .send(ConstellationControlMsg::SetEpochPaintTime(
-                                    *id, epoch, paint_time,
+                                    *id, epoch, CrossProcessInstant(paint_time),
                                 ))
                         {
                             warn!("Sending RequestLayoutPaintMetric message to layout failed ({e:?}).");
