@@ -63,28 +63,28 @@ sparkle = "0.1.26"
 thiserror = "1.0"
 winit = { version = "0.30", features = ["rwh_06"] }
 # Servo repo crates
-base = { git = "https://github.com/servo/servo.git", rev = "4d0bef0" }
-bluetooth = { git = "https://github.com/servo/servo.git", rev = "4d0bef0" }
-bluetooth_traits = { git = "https://github.com/servo/servo.git", rev = "4d0bef0" }
-canvas = { git = "https://github.com/servo/servo.git", rev = "4d0bef0" }
-compositing_traits = { git = "https://github.com/servo/servo.git", rev = "4d0bef0" }
-constellation = { git = "https://github.com/servo/servo.git", rev = "4d0bef0" }
-devtools = { git = "https://github.com/servo/servo.git", rev = "4d0bef0" }
-embedder_traits = { git = "https://github.com/servo/servo.git", rev = "4d0bef0" }
-fonts = { git = "https://github.com/servo/servo.git", rev = "4d0bef0" }
-layout_thread_2020 = { git = "https://github.com/servo/servo.git", rev = "4d0bef0" }
-media = { git = "https://github.com/servo/servo.git", rev = "4d0bef0" }
-net = { git = "https://github.com/servo/servo.git", rev = "4d0bef0" }
-profile = { git = "https://github.com/servo/servo.git", rev = "4d0bef0" }
-profile_traits = { git = "https://github.com/servo/servo.git", rev = "4d0bef0" }
-script = { git = "https://github.com/servo/servo.git", rev = "4d0bef0" }
-script_traits = { git = "https://github.com/servo/servo.git", rev = "4d0bef0" }
-servo_config = { git = "https://github.com/servo/servo.git", rev = "4d0bef0" }
-servo_geometry = { git = "https://github.com/servo/servo.git", rev = "4d0bef0" }
-servo_url = { git = "https://github.com/servo/servo.git", rev = "4d0bef0" }
-webdriver_server = { git = "https://github.com/servo/servo.git", rev = "4d0bef0" }
-webrender_traits = { git = "https://github.com/servo/servo.git", rev = "4d0bef0" }
-webgpu = { git = "https://github.com/servo/servo.git", rev = "4d0bef0" }
+base = { git = "https://github.com/servo/servo.git", rev = "9f2306f" }
+bluetooth = { git = "https://github.com/servo/servo.git", rev = "9f2306f" }
+bluetooth_traits = { git = "https://github.com/servo/servo.git", rev = "9f2306f" }
+canvas = { git = "https://github.com/servo/servo.git", rev = "9f2306f" }
+compositing_traits = { git = "https://github.com/servo/servo.git", rev = "9f2306f" }
+constellation = { git = "https://github.com/servo/servo.git", rev = "9f2306f" }
+devtools = { git = "https://github.com/servo/servo.git", rev = "9f2306f" }
+embedder_traits = { git = "https://github.com/servo/servo.git", rev = "9f2306f" }
+fonts = { git = "https://github.com/servo/servo.git", rev = "9f2306f" }
+layout_thread_2020 = { git = "https://github.com/servo/servo.git", rev = "9f2306f" }
+media = { git = "https://github.com/servo/servo.git", rev = "9f2306f" }
+net = { git = "https://github.com/servo/servo.git", rev = "9f2306f" }
+profile = { git = "https://github.com/servo/servo.git", rev = "9f2306f" }
+profile_traits = { git = "https://github.com/servo/servo.git", rev = "9f2306f" }
+script = { git = "https://github.com/servo/servo.git", rev = "9f2306f" }
+script_traits = { git = "https://github.com/servo/servo.git", rev = "9f2306f" }
+servo_config = { git = "https://github.com/servo/servo.git", rev = "9f2306f" }
+servo_geometry = { git = "https://github.com/servo/servo.git", rev = "9f2306f" }
+servo_url = { git = "https://github.com/servo/servo.git", rev = "9f2306f" }
+webdriver_server = { git = "https://github.com/servo/servo.git", rev = "9f2306f" }
+webrender_traits = { git = "https://github.com/servo/servo.git", rev = "9f2306f" }
+webgpu = { git = "https://github.com/servo/servo.git", rev = "9f2306f" }
 # Servo org crates
 servo-media = { git = "https://github.com/servo/media" }
 servo-media-dummy = { git = "https://github.com/servo/media" }
