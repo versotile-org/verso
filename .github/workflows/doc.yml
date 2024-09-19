@@ -57,7 +57,7 @@ jobs:
       - name: Checkout `docs` repository
         uses: actions/checkout@v4
         with:
-          repository: versotile-org/docs.versotile.org
+          repository: versotile-org/www-docs
           ssh-key: ${{ secrets.DOCS_DEPLOY_KEY }}
           ref: docs
 
