@@ -8,42 +8,35 @@ on:
 
 jobs:
   build:
-    runs-on: ubuntu-latest
-    env:
-      RUSTC_WRAPPER: sccache
-      CCACHE: sccache
-      SCCACHE_GHA_ENABLED: 'true'
-      LIBCLANG_PATH: /usr/lib/llvm-14/lib
+    runs-on: ubuntu-24.04
+    permissions:
+      actions: write # for purging
     steps:
-      - name: Checkout branch
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
+      - uses: nixbuild/nix-quick-install-action@v28
 
-      - name: Run sccache-cache
-        uses: Mozilla-Actions/sccache-action@v0.0.5
-
-      - name: Configure cache
-        uses: Swatinem/rust-cache@v2
-
-      - name: Install Nix
-        uses: cachix/install-nix-action@v27
+      - name: "Restore and cache Nix store"
+        uses: nix-community/cache-nix-action@v5
         with:
-          nix_path: nixpkgs=channel:nixos-unstable
-      
-      - name: Setup Nix Shell
-        uses: rrbutani/use-nix-shell-action@v1
-        with:
-          file: shell.nix
+          paths: |
+            ~/.cargo
+            target/debug/
+          primary-key: nix-${{ runner.os }}-${{ hashFiles('**/*.nix', 'Cargo.lock', 'Cargo.toml') }}
+          restore-prefixes-first-match: nix-${{ runner.os }}-
+          gc-max-store-size-linux: 1073741824
 
-      - name: Clean docs folder
-        run: cargo clean --doc
+      - name: "Add Nix channel"
+        run: |
+          nix-channel --add https://nixos.org/channels/nixos-24.05 nixpkgs
+          nix-channel --update nixpkgs
 
-      - name: Build docs
-        run: cargo doc -p verso --no-deps
+      - name: "Build Verso docs"
+        run: nix-shell shell.nix --run 'cargo doc -p verso --no-deps'
 
-      - name: Remove lock file
+      - name: "Remove doc lock file"
         run: rm target/doc/.lock
 
-      - name: Upload `doc`
+      - name: "Upload `doc` artifact"
         uses: actions/upload-artifact@v4
         with:
           name: doc
@@ -54,20 +47,20 @@ jobs:
     runs-on: ubuntu-latest
     needs: build
     steps:
-      - name: Checkout `docs` repository
+      - name: "Checkout `docs` repository"
         uses: actions/checkout@v4
         with:
           repository: versotile-org/www-docs
           ssh-key: ${{ secrets.DOCS_DEPLOY_KEY }}
           ref: docs
 
-      - name: Download `doc`
+      - name: "Download `doc` artifact"
         uses: actions/download-artifact@v4
         with:
           name: doc
           path: artifact
 
-      - name: Configure git, commit changes and PUSH
+      - name: "Configure git, commit changes and PUSH"
         run: |
           git config user.name 'github-actions[bot]'
           git config user.email 'github-actions[bot]@users.noreply.github.com'
@@ -77,5 +70,5 @@ jobs:
           git fetch origin main:main
           git checkout main docs/
           git status
-          git commit -m ":rocket: update docs from \`verso\` repository"
+          git commit -m ":rocket: update docs from \`verso\` repository" || exit 0
           git push origin docs
