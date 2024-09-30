@@ -443,7 +443,7 @@ impl IOCompositor {
     fn handle_browser_message(
         &mut self,
         msg: CompositorMsg,
-        windows: &mut HashMap<WindowId, Window>,
+        windows: &mut HashMap<WindowId, (Window, DocumentId)>,
     ) -> bool {
         match self.shutdown_state {
             ShutdownState::NotShuttingDown => {}
@@ -1119,8 +1119,7 @@ impl IOCompositor {
     fn create_or_update_webview(
         &mut self,
         frame_tree: &SendableFrameTree,
-
-        windows: &mut HashMap<WindowId, Window>,
+        windows: &mut HashMap<WindowId, (Window, DocumentId)>,
     ) {
         let pipeline_id = frame_tree.pipeline.id;
         let webview_id = frame_tree.pipeline.top_level_browsing_context_id;
@@ -1132,7 +1131,7 @@ impl IOCompositor {
             debug!("{webview_id}'s pipeline has changed from {old_pipeline} to {pipeline_id}");
         }
 
-        if let Some(window) = windows.get(&self.current_window) {
+        if let Some((window, _)) = windows.get(&self.current_window) {
             self.send_root_pipeline_display_list(window);
         }
         self.create_or_update_pipeline_details_with_frame_tree(frame_tree, None);
@@ -1144,14 +1143,14 @@ impl IOCompositor {
     fn remove_webview(
         &mut self,
         top_level_browsing_context_id: TopLevelBrowsingContextId,
-        windows: &mut HashMap<WindowId, Window>,
+        windows: &mut HashMap<WindowId, (Window, DocumentId)>,
     ) {
         debug!(
             "Verso Compositor is removing webview {}",
             top_level_browsing_context_id
         );
         let mut window_id = None;
-        for window in windows.values_mut() {
+        for (window, _) in windows.values_mut() {
             let (webview, close_window) =
                 window.remove_webview(top_level_browsing_context_id, self);
             if let Some(webview) = webview {
@@ -2034,7 +2033,9 @@ impl IOCompositor {
                             pipeline
                                 .script_chan
                                 .send(ConstellationControlMsg::SetEpochPaintTime(
-                                    *id, epoch, CrossProcessInstant::now(),
+                                    *id,
+                                    epoch,
+                                    CrossProcessInstant::now(),
                                 ))
                         {
                             warn!("Sending RequestLayoutPaintMetric message to layout failed ({e:?}).");
@@ -2079,7 +2080,10 @@ impl IOCompositor {
     }
 
     /// Receive and handle compositor messages.
-    pub fn receive_messages(&mut self, windows: &mut HashMap<WindowId, Window>) -> bool {
+    pub fn receive_messages(
+        &mut self,
+        windows: &mut HashMap<WindowId, (Window, DocumentId)>,
+    ) -> bool {
         // Check for new messages coming from the other threads in the system.
         let mut compositor_messages = vec![];
         let mut found_recomposite_msg = false;
@@ -2106,7 +2110,10 @@ impl IOCompositor {
     }
 
     /// Perform composition and related actions.
-    pub fn perform_updates(&mut self, windows: &mut HashMap<WindowId, Window>) -> bool {
+    pub fn perform_updates(
+        &mut self,
+        windows: &mut HashMap<WindowId, (Window, DocumentId)>,
+    ) -> bool {
         if self.shutdown_state == ShutdownState::FinishedShuttingDown {
             return false;
         }
@@ -2120,7 +2127,7 @@ impl IOCompositor {
             self.zoom_action = false;
         }
 
-        if let Some(window) = windows.get(&self.current_window) {
+        if let Some((window, _)) = windows.get(&self.current_window) {
             match self.composition_request {
                 CompositionRequest::NoCompositingNecessary => {}
                 CompositionRequest::CompositeNow(_) => {
@@ -2147,13 +2154,13 @@ impl IOCompositor {
     /// paint is not scheduled the compositor will hang forever.
     ///
     /// This is used when resizing the window.
-    pub fn repaint_synchronously(&mut self, windows: &mut HashMap<WindowId, Window>) {
+    pub fn repaint_synchronously(&mut self, windows: &mut HashMap<WindowId, (Window, DocumentId)>) {
         while self.shutdown_state != ShutdownState::ShuttingDown {
             let msg = self.port.recv_compositor_msg();
             let need_recomposite = matches!(msg, CompositorMsg::NewWebRenderFrameReady(_));
             let keep_going = self.handle_browser_message(msg, windows);
             if need_recomposite {
-                if let Some(window) = windows.get(&self.current_window) {
+                if let Some((window, _)) = windows.get(&self.current_window) {
                     self.composite(window);
                     if let Err(err) = self.rendering_context.present(&window.surface) {
                         log::warn!("Failed to present surface: {:?}", err);

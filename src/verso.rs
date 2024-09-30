@@ -51,7 +51,7 @@ use crate::{
 
 /// Main entry point of Verso browser.
 pub struct Verso {
-    windows: HashMap<WindowId, Window>,
+    windows: HashMap<WindowId, (Window, DocumentId)>,
     compositor: Option<IOCompositor>,
     constellation_sender: Sender<ConstellationMsg>,
     embedder_receiver: EmbedderReceiver,
@@ -363,7 +363,7 @@ impl Verso {
         );
 
         let mut windows = HashMap::new();
-        windows.insert(window.id(), window);
+        windows.insert(window.id(), (window, webrender_document));
 
         // Create Verso instance
         let verso = Verso {
@@ -389,7 +389,7 @@ impl Verso {
                 compositor.maybe_start_shutting_down();
             } else {
                 let need_repaint = match self.windows.get_mut(&window_id) {
-                    Some(window) => window.handle_winit_window_event(
+                    Some(window) => window.0.handle_winit_window_event(
                         &self.constellation_sender,
                         compositor,
                         &event,
@@ -419,7 +419,7 @@ impl Verso {
                     match compositor.shutdown_state {
                         ShutdownState::NotShuttingDown => {
                             if let Some(id) = webview_id {
-                                for window in self.windows.values_mut() {
+                                for (window, document) in self.windows.values_mut() {
                                     if window.has_webview(id) {
                                         if window.handle_servo_message(
                                             id,
@@ -441,7 +441,9 @@ impl Verso {
                                             );
                                             let rect = DeviceIntRect::from_size(window.size());
                                             window.panel = Some(WebView::new(panel_id, rect));
-                                            self.windows.insert(window.id(), window);
+                                            let webrender_document = document.clone();
+                                            self.windows
+                                                .insert(window.id(), (window, webrender_document));
                                         }
                                         break;
                                     }
@@ -455,7 +457,7 @@ impl Verso {
                                         if let Some(window) =
                                             self.windows.get(&compositor.current_window)
                                         {
-                                            window.set_cursor_icon(cursor);
+                                            window.0.set_cursor_icon(cursor);
                                         }
                                     }
                                     EmbedderMsg::Shutdown | EmbedderMsg::ReadyToPresent(_) => {}
