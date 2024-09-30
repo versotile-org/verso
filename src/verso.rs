@@ -18,8 +18,8 @@ use crossbeam_channel::{unbounded, Sender};
 use devtools;
 use embedder_traits::{EmbedderMsg, EmbedderProxy, EmbedderReceiver, EventLoopWaker};
 use euclid::Scale;
-use fonts::FontCacheThread;
-use ipc_channel::ipc::{self, IpcSender};
+use fonts::SystemFontService;
+use ipc_channel::ipc::{IpcSender, IpcSharedMemory};
 use layout_thread_2020;
 use log::{Log, Metadata, Record};
 use media::{GlApi, GlContext, NativeDisplay, WindowGLContext};
@@ -267,14 +267,17 @@ impl Verso {
             );
 
         // Create font cache thread
-        let font_cache_thread = FontCacheThread::new(Box::new(WebRenderFontApiCompositorProxy(
-            compositor_sender.clone(),
-        )));
+        let system_font_service = Arc::new(
+            SystemFontService::spawn(Box::new(WebRenderFontApiCompositorProxy(
+                compositor_sender.clone(),
+            )))
+            .to_proxy(),
+        );
 
         // Create canvas thread
         let (canvas_create_sender, canvas_ipc_sender) = CanvasPaintThread::start(
             Box::new(CanvasWebrenderApi(compositor_sender.clone())),
-            font_cache_thread.clone(),
+            system_font_service.clone(),
             public_resource_threads.clone(),
         );
 
@@ -285,7 +288,7 @@ impl Verso {
             embedder_proxy: embedder_sender,
             devtools_sender,
             bluetooth_thread,
-            font_cache_thread,
+            system_font_service,
             public_resource_threads,
             private_resource_threads,
             time_profiler_chan: time_profiler_sender.clone(),
@@ -597,61 +600,32 @@ impl WebRenderFontApi for WebRenderFontApiCompositorProxy {
         flags: FontInstanceFlags,
     ) -> FontInstanceKey {
         let (sender, receiver) = unbounded();
-        self.0
-            .send(CompositorMsg::Forwarded(ForwardedToCompositorMsg::Font(
-                FontToCompositorMsg::AddFontInstance(font_key, size, flags, sender),
-            )));
+        self.0.send(CompositorMsg::Forwarded(
+            ForwardedToCompositorMsg::SystemFontService(FontToCompositorMsg::AddFontInstance(
+                font_key, size, flags, sender,
+            )),
+        ));
         receiver.recv().unwrap()
     }
 
-    fn add_font(&self, data: Arc<Vec<u8>>, index: u32) -> FontKey {
+    fn add_font(&self, data: Arc<IpcSharedMemory>, index: u32) -> FontKey {
         let (sender, receiver) = unbounded();
-        let (bytes_sender, bytes_receiver) =
-            ipc::bytes_channel().expect("failed to create IPC channel");
-        self.0
-            .send(CompositorMsg::Forwarded(ForwardedToCompositorMsg::Font(
-                FontToCompositorMsg::AddFont(sender, index, bytes_receiver),
-            )));
-        let _ = bytes_sender.send(&data);
+        self.0.send(CompositorMsg::Forwarded(
+            ForwardedToCompositorMsg::SystemFontService(FontToCompositorMsg::AddFont(
+                sender, index, data,
+            )),
+        ));
         receiver.recv().unwrap()
     }
 
     fn add_system_font(&self, handle: NativeFontHandle) -> FontKey {
         let (sender, receiver) = unbounded();
-        self.0
-            .send(CompositorMsg::Forwarded(ForwardedToCompositorMsg::Font(
-                FontToCompositorMsg::AddSystemFont(sender, handle),
-            )));
+        self.0.send(CompositorMsg::Forwarded(
+            ForwardedToCompositorMsg::SystemFontService(FontToCompositorMsg::AddSystemFont(
+                sender, handle,
+            )),
+        ));
         receiver.recv().unwrap()
-    }
-
-    fn forward_add_font_message(
-        &self,
-        bytes_receiver: ipc::IpcBytesReceiver,
-        font_index: u32,
-        result_sender: IpcSender<FontKey>,
-    ) {
-        let (sender, receiver) = unbounded();
-        self.0
-            .send(CompositorMsg::Forwarded(ForwardedToCompositorMsg::Font(
-                FontToCompositorMsg::AddFont(sender, font_index, bytes_receiver),
-            )));
-        let _ = result_sender.send(receiver.recv().unwrap());
-    }
-
-    fn forward_add_font_instance_message(
-        &self,
-        font_key: FontKey,
-        size: f32,
-        flags: FontInstanceFlags,
-        result_sender: IpcSender<FontInstanceKey>,
-    ) {
-        let (sender, receiver) = unbounded();
-        self.0
-            .send(CompositorMsg::Forwarded(ForwardedToCompositorMsg::Font(
-                FontToCompositorMsg::AddFontInstance(font_key, size, flags, sender),
-            )));
-        let _ = result_sender.send(receiver.recv().unwrap());
     }
 }
 
