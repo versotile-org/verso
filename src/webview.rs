@@ -257,6 +257,9 @@ impl Window {
                                         let is_maximized = self.window.is_maximized();
                                         self.window.set_maximized(!is_maximized);
                                     }
+                                    "DRAG_WINDOW" => {
+                                        self.window.drag_window();
+                                    }
                                     e => log::trace!(
                                         "Verso Panel isn't supporting this prompt message yet: {e}"
                                     ),
