@@ -433,7 +433,7 @@ impl Window {
         };
 
         let window_size = self.window.outer_size();
-        let border_size = 10.0 * self.window.scale_factor();
+        let border_size = 5.0 * self.window.scale_factor();
 
         let x_direction = if mouse_position.x < border_size {
             ResizeDirection::West
