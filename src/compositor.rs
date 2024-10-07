@@ -530,7 +530,7 @@ impl IOCompositor {
                 let _ = sender.send(());
             }
 
-            CompositorMsg::NewWebRenderFrameReady(recomposite_needed) => {
+            CompositorMsg::NewWebRenderFrameReady(_document_id, recomposite_needed) => {
                 self.pending_frames -= 1;
 
                 if recomposite_needed {
@@ -758,20 +758,20 @@ impl IOCompositor {
             }
 
             ForwardedToCompositorMsg::Layout(ScriptToCompositorMsg::AddFont(
+                font_key,
                 data,
                 index,
-                key_sender,
             )) => {
-                let _ = key_sender.send(self.add_font(index, data));
+                self.add_font(font_key, index, data);
             }
 
             ForwardedToCompositorMsg::Layout(ScriptToCompositorMsg::AddFontInstance(
+                font_instance_key,
                 font_key,
                 size,
                 flags,
-                sender,
             )) => {
-                let _ = sender.send(self.add_font_instance(font_key, size, flags));
+                self.add_font_instance(font_instance_key, font_key, size, flags);
             }
 
             ForwardedToCompositorMsg::Layout(ScriptToCompositorMsg::RemoveFonts(
@@ -791,6 +791,20 @@ impl IOCompositor {
                     .send_transaction(self.webrender_document, transaction);
             }
 
+            ForwardedToCompositorMsg::SystemFontService(FontToCompositorMsg::GenerateKeys(
+                number_of_font_keys,
+                number_of_font_instance_keys,
+                result_sender,
+            )) => {
+                let font_keys = (0..number_of_font_keys)
+                    .map(|_| self.webrender_api.generate_font_key())
+                    .collect();
+                let font_instance_keys = (0..number_of_font_instance_keys)
+                    .map(|_| self.webrender_api.generate_font_instance_key())
+                    .collect();
+                let _ = result_sender.send((font_keys, font_instance_keys));
+            }
+
             ForwardedToCompositorMsg::Net(NetToCompositorMsg::AddImage(key, desc, data)) => {
                 let mut txn = Transaction::new();
                 txn.add_image(key, desc, data, None);
@@ -799,32 +813,30 @@ impl IOCompositor {
             }
 
             ForwardedToCompositorMsg::SystemFontService(FontToCompositorMsg::AddFontInstance(
+                font_instance_key,
                 font_key,
                 size,
                 flags,
-                sender,
             )) => {
-                let _ = sender.send(self.add_font_instance(font_key, size, flags));
+                self.add_font_instance(font_instance_key, font_key, size, flags);
             }
 
             ForwardedToCompositorMsg::SystemFontService(FontToCompositorMsg::AddFont(
-                key_sender,
+                font_key,
                 index,
                 data,
             )) => {
-                let _ = key_sender.send(self.add_font(index, data));
+                self.add_font(font_key, index, data);
             }
 
             ForwardedToCompositorMsg::SystemFontService(FontToCompositorMsg::AddSystemFont(
-                key_sender,
+                font_key,
                 native_handle,
             )) => {
-                let font_key = self.webrender_api.generate_font_key();
                 let mut transaction = Transaction::new();
                 transaction.add_native_font(font_key, native_handle);
                 self.webrender_api
                     .send_transaction(self.webrender_document, transaction);
-                let _ = key_sender.send(font_key);
             }
 
             ForwardedToCompositorMsg::Canvas(CanvasToCompositorMsg::GenerateKey(sender)) => {
@@ -870,21 +882,6 @@ impl IOCompositor {
                 self.remove_pipeline_root_layer(pipeline_id);
                 let _ = sender.send(());
             }
-            CompositorMsg::Forwarded(ForwardedToCompositorMsg::SystemFontService(
-                FontToCompositorMsg::AddFontInstance(_, _, _, sender),
-            )) => {
-                let _ = sender.send(self.webrender_api.generate_font_instance_key());
-            }
-            CompositorMsg::Forwarded(ForwardedToCompositorMsg::Layout(
-                ScriptToCompositorMsg::AddFontInstance(_, _, _, sender),
-            )) => {
-                let _ = sender.send(self.webrender_api.generate_font_instance_key());
-            }
-            CompositorMsg::Forwarded(ForwardedToCompositorMsg::SystemFontService(
-                FontToCompositorMsg::AddFont(sender, _, _),
-            )) => {
-                let _ = sender.send(self.webrender_api.generate_font_key());
-            }
             CompositorMsg::Forwarded(ForwardedToCompositorMsg::Canvas(
                 CanvasToCompositorMsg::GenerateKey(sender),
             )) => {
@@ -908,7 +905,7 @@ impl IOCompositor {
                     );
                 }
             }
-            CompositorMsg::NewWebRenderFrameReady(_) => {
+            CompositorMsg::NewWebRenderFrameReady(..) => {
                 // Subtract from the number of pending frames, but do not do any compositing.
                 self.pending_frames -= 1;
             }
@@ -2087,12 +2084,12 @@ impl IOCompositor {
         let mut found_recomposite_msg = false;
         while let Some(msg) = self.port.try_recv_compositor_msg() {
             match msg {
-                CompositorMsg::NewWebRenderFrameReady(_) if found_recomposite_msg => {
+                CompositorMsg::NewWebRenderFrameReady(..) if found_recomposite_msg => {
                     // Only take one of duplicate NewWebRendeFrameReady messages, but do subtract
                     // one frame from the pending frames.
                     self.pending_frames -= 1;
                 }
-                CompositorMsg::NewWebRenderFrameReady(_) => {
+                CompositorMsg::NewWebRenderFrameReady(..) => {
                     found_recomposite_msg = true;
                     compositor_messages.push(msg)
                 }
@@ -2152,7 +2149,7 @@ impl IOCompositor {
     pub fn repaint_synchronously(&mut self, windows: &mut HashMap<WindowId, Window>) {
         while self.shutdown_state != ShutdownState::ShuttingDown {
             let msg = self.port.recv_compositor_msg();
-            let need_recomposite = matches!(msg, CompositorMsg::NewWebRenderFrameReady(_));
+            let need_recomposite = matches!(msg, CompositorMsg::NewWebRenderFrameReady(..));
             let keep_going = self.handle_browser_message(msg, windows);
             if need_recomposite {
                 if let Some(window) = windows.get(&self.current_window) {
@@ -2208,11 +2205,11 @@ impl IOCompositor {
 
     fn add_font_instance(
         &mut self,
+        instance_key: FontInstanceKey,
         font_key: FontKey,
         size: f32,
         flags: FontInstanceFlags,
-    ) -> FontInstanceKey {
-        let instance_key = self.webrender_api.generate_font_instance_key();
+    ) {
         let mut transaction = Transaction::new();
         let font_instance_options = FontInstanceOptions {
             flags,
@@ -2228,16 +2225,13 @@ impl IOCompositor {
         );
         self.webrender_api
             .send_transaction(self.webrender_document, transaction);
-        instance_key
     }
 
-    fn add_font(&mut self, index: u32, data: Arc<IpcSharedMemory>) -> FontKey {
-        let font_key = self.webrender_api.generate_font_key();
+    fn add_font(&mut self, font_key: FontKey, index: u32, data: Arc<IpcSharedMemory>) {
         let mut transaction = Transaction::new();
         transaction.add_raw_font(font_key, (**data).into(), index);
         self.webrender_api
             .send_transaction(self.webrender_document, transaction);
-        font_key
     }
 }
 
