@@ -20,7 +20,7 @@ use winit::{
     event::{ElementState, TouchPhase, WindowEvent},
     event_loop::ActiveEventLoop,
     keyboard::ModifiersState,
-    window::{CursorIcon, Window as WinitWindow, WindowId},
+    window::{CursorIcon, ResizeDirection, Window as WinitWindow, WindowId},
 };
 
 use crate::{
@@ -44,7 +44,7 @@ pub struct Window {
     /// The WebView of this window.
     pub(crate) webview: Option<WebView>,
     /// The mouse physical position in the web view.
-    mouse_position: Cell<PhysicalPosition<f64>>,
+    mouse_position: Cell<Option<PhysicalPosition<f64>>>,
     /// Modifiers state of the keyboard.
     modifiers_state: Cell<ModifiersState>,
 }
@@ -91,7 +91,7 @@ impl Window {
                 surface,
                 panel: Some(WebView::new_panel(DeviceIntRect::from_size(size))),
                 webview: None,
-                mouse_position: Cell::new(PhysicalPosition::default()),
+                mouse_position: Default::default(),
                 modifiers_state: Cell::new(ModifiersState::default()),
             },
             rendering_context,
@@ -125,7 +125,7 @@ impl Window {
             surface,
             panel: None,
             webview: None,
-            mouse_position: Cell::new(PhysicalPosition::default()),
+            mouse_position: Default::default(),
             modifiers_state: Cell::new(ModifiersState::default()),
         };
         compositor.swap_current_window(&mut window);
@@ -160,12 +160,39 @@ impl Window {
             WindowEvent::CursorEntered { .. } => {
                 compositor.swap_current_window(self);
             }
+            WindowEvent::CursorLeft { .. } => {
+                self.mouse_position.set(None);
+            }
             WindowEvent::CursorMoved { position, .. } => {
                 let cursor: DevicePoint = DevicePoint::new(position.x as f32, position.y as f32);
-                self.mouse_position.set(*position);
+                self.mouse_position.set(Some(*position));
                 compositor.on_mouse_window_move_event_class(cursor);
+
+                // handle Windows and Linux non-decoration window resize cursor
+                #[cfg(any(linux, target_os = "windows"))]
+                {
+                    let direction = self.get_drag_resize_direction();
+                    self.set_drag_resize_cursor(direction);
+                }
             }
             WindowEvent::MouseInput { state, button, .. } => {
+                let position = match self.mouse_position.get() {
+                    Some(position) => Point2D::new(position.x as f32, position.y as f32),
+                    None => {
+                        log::trace!("Mouse position is None, skipping MouseInput event.");
+                        return false;
+                    }
+                };
+
+                // handle Windows and Linux non-decoration window resize
+                #[cfg(any(linux, target_os = "windows"))]
+                {
+                    if *state == ElementState::Pressed && *button == winit::event::MouseButton::Left
+                    {
+                        self.drag_resize_window();
+                    }
+                }
+
                 let button: script_traits::MouseButton = match button {
                     winit::event::MouseButton::Left => script_traits::MouseButton::Left,
                     winit::event::MouseButton::Right => script_traits::MouseButton::Right,
@@ -177,10 +204,6 @@ impl Window {
                         return false;
                     }
                 };
-                let position = Point2D::new(
-                    self.mouse_position.get().x as f32,
-                    self.mouse_position.get().y as f32,
-                );
 
                 let event: MouseWindowEvent = match state {
                     ElementState::Pressed => MouseWindowEvent::MouseDown(button, position),
@@ -198,6 +221,14 @@ impl Window {
                 compositor.on_zoom_window_event(1.0 + *delta as f32, self);
             }
             WindowEvent::MouseWheel { delta, phase, .. } => {
+                let position = match self.mouse_position.get() {
+                    Some(position) => position,
+                    None => {
+                        log::trace!("Mouse position is None, skipping MouseWheel event.");
+                        return false;
+                    }
+                };
+
                 // FIXME: Pixels per line, should be configurable (from browser setting?) and vary by zoom level.
                 const LINE_HEIGHT: f32 = 38.0;
 
@@ -214,10 +245,7 @@ impl Window {
                 // Wheel Event
                 compositor.on_wheel_event(
                     WheelDelta { x, y, z: 0.0, mode },
-                    DevicePoint::new(
-                        self.mouse_position.get().x as f32,
-                        self.mouse_position.get().y as f32,
-                    ),
+                    DevicePoint::new(position.x as f32, position.y as f32),
                 );
 
                 // Scroll Event
@@ -237,10 +265,7 @@ impl Window {
 
                 compositor.on_scroll_event(
                     ScrollLocation::Delta(LayoutVector2D::new(x as f32, y as f32)),
-                    DeviceIntPoint::new(
-                        self.mouse_position.get().x as i32,
-                        self.mouse_position.get().y as i32,
-                    ),
+                    DeviceIntPoint::new(position.x as i32, position.y as i32),
                     phase,
                 );
             }
@@ -384,6 +409,82 @@ impl Window {
             _ => CursorIcon::Default,
         };
         self.window.set_cursor(winit_cursor);
+    }
+}
+
+impl Window {
+    /// Drag resize the window.
+    fn drag_resize_window(&self) {
+        if let Some(direction) = self.get_drag_resize_direction() {
+            if let Err(err) = self.window.drag_resize_window(direction) {
+                log::error!("Failed to drag-resize window: {:?}", err);
+            }
+        }
+    }
+
+    /// Get drag-resize direction.
+    fn get_drag_resize_direction(&self) -> Option<ResizeDirection> {
+        let mouse_position = match self.mouse_position.get() {
+            Some(position) => position,
+            None => {
+                log::trace!("Mouse position is None, skipping drag-resize window");
+                return None;
+            }
+        };
+
+        let window_size = self.window.outer_size();
+        let border_size = 5.0 * self.window.scale_factor();
+
+        let x_direction = if mouse_position.x < border_size {
+            ResizeDirection::West
+        } else if mouse_position.x > (window_size.width as f64 - border_size) {
+            ResizeDirection::East
+        } else {
+            // Use arbitrary direction instead of None for simplicity.
+            ResizeDirection::SouthEast
+        };
+
+        let y_direction = if mouse_position.y < border_size {
+            ResizeDirection::North
+        } else if mouse_position.y > (window_size.height as f64 - border_size) {
+            ResizeDirection::South
+        } else {
+            // Use arbitrary direction instead of None for simplicity.
+            ResizeDirection::SouthEast
+        };
+
+        let direction = match (x_direction, y_direction) {
+            (ResizeDirection::East, ResizeDirection::North) => ResizeDirection::NorthEast,
+            (ResizeDirection::East, ResizeDirection::South) => ResizeDirection::SouthEast,
+            (ResizeDirection::West, ResizeDirection::North) => ResizeDirection::NorthWest,
+            (ResizeDirection::West, ResizeDirection::South) => ResizeDirection::SouthWest,
+            (ResizeDirection::East, _) => ResizeDirection::East,
+            (ResizeDirection::West, _) => ResizeDirection::West,
+            (_, ResizeDirection::South) => ResizeDirection::South,
+            (_, ResizeDirection::North) => ResizeDirection::North,
+            _ => return None,
+        };
+
+        Some(direction)
+    }
+
+    /// Set drag-resize cursor when mouse is hover on the border of the window.
+    fn set_drag_resize_cursor(&self, direction: Option<ResizeDirection>) {
+        let cursor = match direction {
+            Some(direction) => match direction {
+                ResizeDirection::East => CursorIcon::EResize,
+                ResizeDirection::West => CursorIcon::WResize,
+                ResizeDirection::South => CursorIcon::SResize,
+                ResizeDirection::North => CursorIcon::NResize,
+                ResizeDirection::NorthEast => CursorIcon::NeResize,
+                ResizeDirection::NorthWest => CursorIcon::NwResize,
+                ResizeDirection::SouthEast => CursorIcon::SeResize,
+                ResizeDirection::SouthWest => CursorIcon::SwResize,
+            },
+            None => CursorIcon::Default,
+        };
+
+        self.window.set_cursor(cursor);
     }
 }
 
