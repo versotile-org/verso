@@ -88,9 +88,15 @@ webgpu = { git = "https://github.com/servo/servo.git", rev = "f8933a5" }
 # Servo org crates
 servo-media = { git = "https://github.com/servo/media" }
 servo-media-dummy = { git = "https://github.com/servo/media" }
-style = { git = "https://github.com/servo/stylo", branch = "2024-09-02", features = ["servo"] }
-style_traits = { git = "https://github.com/servo/stylo", branch = "2024-09-02", features = ["servo"] }
-webrender = { git = "https://github.com/servo/webrender", branch = "0.65", features = ["capture"] }
+style = { git = "https://github.com/servo/stylo", branch = "2024-09-02", features = [
+  "servo",
+] }
+style_traits = { git = "https://github.com/servo/stylo", branch = "2024-09-02", features = [
+  "servo",
+] }
+webrender = { git = "https://github.com/servo/webrender", branch = "0.65", features = [
+  "capture",
+] }
 webrender_api = { git = "https://github.com/servo/webrender", branch = "0.65" }
 webxr = { git = "https://github.com/servo/webxr", features = ["headless"] }
 webxr-api = { git = "https://github.com/servo/webxr" }
@@ -99,10 +105,16 @@ cargo-packager-resource-resolver = { version = "0.1.1", features = [
   "auto-detect-format",
 ], optional = true }
 url = "2.5.2"
+muda = "0.15.1"
 
 [target.'cfg(any(target_os = "ios", target_os = "macos"))'.dependencies]
 objc2 = "0.5"
-objc2-app-kit = {version = "0.2", features = ["NSView", "NSResponder", "NSWindow"]}
+objc2-foundation = { version = "0.2.2", features = ["NSThread"] }
+objc2-app-kit = { version = "0.2", features = [
+  "NSView",
+  "NSResponder",
+  "NSWindow",
+] }
 
 [[test]]
 name = "general"

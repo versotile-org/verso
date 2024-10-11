@@ -10,6 +10,8 @@ use glutin::{
     surface::{Surface, WindowSurface},
 };
 use glutin_winit::DisplayBuilder;
+use muda::{MenuEvent, MenuEventReceiver};
+use raw_window_handle::HasWindowHandle;
 use script_traits::{TouchEventType, WheelDelta, WheelMode};
 use webrender_api::{
     units::{DeviceIntPoint, DeviceIntRect, DeviceIntSize, DevicePoint, LayoutVector2D},
@@ -25,6 +27,7 @@ use winit::{
 
 use crate::{
     compositor::{IOCompositor, MouseWindowEvent},
+    context_menu::VersoContextMenu,
     keyboard::keyboard_event_from_winit,
     rendering::{gl_config_picker, RenderingContext},
     verso::send_to_constellation,
@@ -47,6 +50,8 @@ pub struct Window {
     mouse_position: Cell<PhysicalPosition<f64>>,
     /// Modifiers state of the keyboard.
     modifiers_state: Cell<ModifiersState>,
+    /// Context menu evnet receiver (muda)
+    context_menu_receiver: MenuEventReceiver,
 }
 
 impl Window {
@@ -93,6 +98,7 @@ impl Window {
                 webview: None,
                 mouse_position: Cell::new(PhysicalPosition::default()),
                 modifiers_state: Cell::new(ModifiersState::default()),
+                context_menu_receiver: MenuEvent::receiver().clone(),
             },
             rendering_context,
         )
@@ -127,6 +133,7 @@ impl Window {
             webview: None,
             mouse_position: Cell::new(PhysicalPosition::default()),
             modifiers_state: Cell::new(ModifiersState::default()),
+            context_menu_receiver: MenuEvent::receiver().clone(),
         };
         compositor.swap_current_window(&mut window);
         window
@@ -139,6 +146,10 @@ impl Window {
         compositor: &mut IOCompositor,
         event: &winit::event::WindowEvent,
     ) -> bool {
+        if let Ok(event) = self.context_menu_receiver.try_recv() {
+            println!("{event:?}");
+        }
+
         match event {
             WindowEvent::RedrawRequested => {
                 if let Err(err) = compositor.rendering_context.present(&self.surface) {
@@ -166,6 +177,12 @@ impl Window {
                 compositor.on_mouse_window_move_event_class(cursor);
             }
             WindowEvent::MouseInput { state, button, .. } => {
+                if *button == winit::event::MouseButton::Right && *state == ElementState::Pressed {
+                    dbg!("create a context menu");
+                    let context_menu = VersoContextMenu::new();
+                    context_menu.show(self.window.window_handle().unwrap());
+                }
+
                 let button: script_traits::MouseButton = match button {
                     winit::event::MouseButton::Left => script_traits::MouseButton::Left,
                     winit::event::MouseButton::Right => script_traits::MouseButton::Right,
