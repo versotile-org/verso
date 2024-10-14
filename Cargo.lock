@@ -6277,6 +6277,7 @@ dependencies = [
  "style_traits",
  "thiserror",
  "url",
+ "versoview_messages",
  "webdriver_server",
  "webgpu",
  "webrender",
@@ -6285,6 +6286,23 @@ dependencies = [
  "webxr",
  "webxr-api",
  "winit",
+]
+
+[[package]]
+name = "versoview"
+version = "0.0.1"
+dependencies = [
+ "ipc-channel",
+ "serde",
+ "versoview_messages",
+]
+
+[[package]]
+name = "versoview_messages"
+version = "0.0.1"
+dependencies = [
+ "ipc-channel",
+ "serde",
 ]
 
 [[package]]

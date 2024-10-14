@@ -1,0 +1,9 @@
+[package]
+name = "versoview"
+version = "0.0.1"
+edition = "2021"
+
+[dependencies]
+ipc-channel = { workspace = true }
+serde = { workspace = true }
+versoview_messages = { path = "../versoview_messages" }

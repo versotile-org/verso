@@ -1,4 +1,9 @@
-workspace = {}
+[workspace]
+members = ["versoview", "versoview_messages"]
+
+[workspace.dependencies]
+ipc-channel = "0.18.2"
+serde = { version = "1.0", features = ["derive"] }
 
 [package]
 name = "verso"
@@ -55,7 +60,7 @@ getopts = "0.2.17"
 gleam = "0.15"
 glutin = "0.32.0"
 glutin-winit = "0.5.0"
-ipc-channel = "0.18"
+ipc-channel = { workspace = true }
 keyboard-types = "0.7"
 log = "0.4"
 raw-window-handle = { version = "0.6", features = ["std"] }
@@ -99,6 +104,7 @@ cargo-packager-resource-resolver = { version = "0.1.1", features = [
   "auto-detect-format",
 ], optional = true }
 url = "2.5.2"
+versoview_messages = { path = "./versoview_messages" }
 
 [target.'cfg(any(target_os = "ios", target_os = "macos"))'.dependencies]
 objc2 = "0.5"
