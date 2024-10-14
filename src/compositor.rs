@@ -9,7 +9,7 @@ use base::id::{PipelineId, TopLevelBrowsingContextId};
 use base::{Epoch, WebRenderEpochToU16};
 use compositing_traits::{
     CompositionPipeline, CompositorMsg, CompositorProxy, CompositorReceiver, ConstellationMsg,
-    ForwardedToCompositorMsg, SendableFrameTree,
+    SendableFrameTree,
 };
 use crossbeam_channel::Sender;
 use embedder_traits::Cursor;
@@ -41,8 +41,7 @@ use webrender_api::{
 };
 use webrender_traits::display_list::{HitTestInfo, ScrollTree};
 use webrender_traits::{
-    CanvasToCompositorMsg, CompositorHitTestResult, FontToCompositorMsg, ImageUpdate,
-    NetToCompositorMsg, ScriptToCompositorMsg, SerializedImageUpdate, UntrustedNodeAddress,
+    CompositorHitTestResult, CrossProcessCompositorMessage, ImageUpdate, UntrustedNodeAddress
 };
 use winit::window::WindowId;
 
@@ -571,33 +570,9 @@ impl IOCompositor {
                 self.pending_paint_metrics.insert(pipeline_id, epoch);
             }
 
-            CompositorMsg::GetClientWindow(req) => {
-                // TODO get real size
-                if let Err(e) = req.send((self.viewport, Point2D::new(0, 0))) {
-                    warn!("Sending response to get client window failed ({:?}).", e);
-                }
-            }
-
-            CompositorMsg::GetScreenSize(req) => {
-                // TODO get real size
-                if let Err(e) = req.send(self.viewport) {
-                    warn!("Sending response to get screen size failed ({:?}).", e);
-                }
-            }
-
-            CompositorMsg::GetScreenAvailSize(req) => {
-                // TODO get real size
-                if let Err(e) = req.send(self.viewport) {
-                    warn!(
-                        "Sending response to get screen avail size failed ({:?}).",
-                        e
-                    );
-                }
-            }
-
-            CompositorMsg::Forwarded(msg) => {
-                self.handle_webrender_message(msg);
-            }
+            CompositorMsg::CrossProcess(cross_proces_message) => {
+                self.handle_cross_process_message(cross_proces_message);
+            },
         }
 
         true
@@ -605,11 +580,9 @@ impl IOCompositor {
 
     /// Accept messages from content processes that need to be relayed to the WebRender
     /// instance in the parent process.
-    fn handle_webrender_message(&mut self, msg: ForwardedToCompositorMsg) {
+    fn handle_cross_process_message(&mut self, msg: CrossProcessCompositorMessage) {
         match msg {
-            ForwardedToCompositorMsg::Layout(ScriptToCompositorMsg::SendInitialTransaction(
-                pipeline,
-            )) => {
+            CrossProcessCompositorMessage::SendInitialTransaction(pipeline) => {
                 let mut txn = Transaction::new();
                 txn.set_display_list(WebRenderEpoch(0), (pipeline, Default::default()));
                 self.generate_frame(&mut txn, RenderReasons::SCENE);
@@ -617,11 +590,11 @@ impl IOCompositor {
                     .send_transaction(self.webrender_document, txn);
             }
 
-            ForwardedToCompositorMsg::Layout(ScriptToCompositorMsg::SendScrollNode(
+            CrossProcessCompositorMessage::SendScrollNode(
                 pipeline_id,
                 point,
                 external_scroll_id,
-            )) => {
+            ) => {
                 let pipeline_id = pipeline_id.into();
                 let pipeline_details = match self.pipeline_details.get_mut(&pipeline_id) {
                     Some(details) => details,
@@ -653,11 +626,11 @@ impl IOCompositor {
                     .send_transaction(self.webrender_document, txn);
             }
 
-            ForwardedToCompositorMsg::Layout(ScriptToCompositorMsg::SendDisplayList {
+            CrossProcessCompositorMessage::SendDisplayList {
                 display_list_info,
                 display_list_descriptor,
                 display_list_receiver,
-            }) => {
+            } => {
                 // This must match the order from the sender, currently in `shared/script/lib.rs`.
                 let items_data = match display_list_receiver.recv() {
                     Ok(display_list_data) => display_list_data,
@@ -707,12 +680,7 @@ impl IOCompositor {
                     .send_transaction(self.webrender_document, transaction);
             }
 
-            ForwardedToCompositorMsg::Layout(ScriptToCompositorMsg::HitTest(
-                pipeline,
-                point,
-                flags,
-                sender,
-            )) => {
+            CrossProcessCompositorMessage::HitTest(pipeline, point, flags, sender) => {
                 // When a display list is sent to WebRender, it starts scene building in a
                 // separate thread and then that display list is available for hit testing.
                 // Without flushing scene building, any hit test we do might be done against
@@ -729,55 +697,48 @@ impl IOCompositor {
                 let _ = sender.send(result);
             }
 
-            ForwardedToCompositorMsg::Layout(ScriptToCompositorMsg::GenerateImageKey(sender))
-            | ForwardedToCompositorMsg::Net(NetToCompositorMsg::GenerateImageKey(sender)) => {
+            CrossProcessCompositorMessage::GenerateImageKey(sender) => {
                 let _ = sender.send(self.webrender_api.generate_image_key());
             }
 
-            ForwardedToCompositorMsg::Layout(ScriptToCompositorMsg::UpdateImages(updates)) => {
+            CrossProcessCompositorMessage::UpdateImages(updates) => {
                 let mut txn = Transaction::new();
                 for update in updates {
                     match update {
-                        SerializedImageUpdate::AddImage(key, desc, data) => {
-                            match data.to_image_data() {
-                                Ok(data) => txn.add_image(key, desc, data, None),
-                                Err(e) => warn!("error when sending image data: {:?}", e),
-                            }
-                        }
-                        SerializedImageUpdate::DeleteImage(key) => txn.delete_image(key),
-                        SerializedImageUpdate::UpdateImage(key, desc, data) => {
-                            match data.to_image_data() {
-                                Ok(data) => txn.update_image(key, desc, data, &DirtyRect::All),
-                                Err(e) => warn!("error when sending image data: {:?}", e),
-                            }
-                        }
+                        ImageUpdate::AddImage(key, desc, data) => {
+                            txn.add_image(key, desc, data.into(), None)
+                        },
+                        ImageUpdate::DeleteImage(key) => txn.delete_image(key),
+                        ImageUpdate::UpdateImage(key, desc, data) => {
+                            txn.update_image(key, desc, data.into(), &DirtyRect::All)
+                        },
                     }
                 }
                 self.webrender_api
                     .send_transaction(self.webrender_document, txn);
             }
 
-            ForwardedToCompositorMsg::Layout(ScriptToCompositorMsg::AddFont(
-                font_key,
-                data,
-                index,
-            )) => {
+            CrossProcessCompositorMessage::AddFont(font_key, data, index) => {
                 self.add_font(font_key, index, data);
             }
 
-            ForwardedToCompositorMsg::Layout(ScriptToCompositorMsg::AddFontInstance(
+            CrossProcessCompositorMessage::AddSystemFont(font_key, native_handle) => {
+                let mut transaction = Transaction::new();
+                transaction.add_native_font(font_key, native_handle);
+                self.webrender_api
+                    .send_transaction(self.webrender_document, transaction);
+            },
+
+            CrossProcessCompositorMessage::AddFontInstance(
                 font_instance_key,
                 font_key,
                 size,
                 flags,
-            )) => {
+            ) => {
                 self.add_font_instance(font_instance_key, font_key, size, flags);
             }
 
-            ForwardedToCompositorMsg::Layout(ScriptToCompositorMsg::RemoveFonts(
-                keys,
-                instance_keys,
-            )) => {
+            CrossProcessCompositorMessage::RemoveFonts(keys, instance_keys) => {
                 let mut transaction = Transaction::new();
 
                 for instance in instance_keys.into_iter() {
@@ -791,11 +752,18 @@ impl IOCompositor {
                     .send_transaction(self.webrender_document, transaction);
             }
 
-            ForwardedToCompositorMsg::SystemFontService(FontToCompositorMsg::GenerateKeys(
+            CrossProcessCompositorMessage::AddImage(key, desc, data) => {
+                let mut txn = Transaction::new();
+                txn.add_image(key, desc, data.into(), None);
+                self.webrender_api
+                    .send_transaction(self.webrender_document, txn);
+            }
+
+            CrossProcessCompositorMessage::GenerateFontKeys(
                 number_of_font_keys,
                 number_of_font_instance_keys,
                 result_sender,
-            )) => {
+            ) => {
                 let font_keys = (0..number_of_font_keys)
                     .map(|_| self.webrender_api.generate_font_key())
                     .collect();
@@ -805,59 +773,25 @@ impl IOCompositor {
                 let _ = result_sender.send((font_keys, font_instance_keys));
             }
 
-            ForwardedToCompositorMsg::Net(NetToCompositorMsg::AddImage(key, desc, data)) => {
-                let mut txn = Transaction::new();
-                txn.add_image(key, desc, data, None);
-                self.webrender_api
-                    .send_transaction(self.webrender_document, txn);
-            }
-
-            ForwardedToCompositorMsg::SystemFontService(FontToCompositorMsg::AddFontInstance(
-                font_instance_key,
-                font_key,
-                size,
-                flags,
-            )) => {
-                self.add_font_instance(font_instance_key, font_key, size, flags);
-            }
-
-            ForwardedToCompositorMsg::SystemFontService(FontToCompositorMsg::AddFont(
-                font_key,
-                index,
-                data,
-            )) => {
-                self.add_font(font_key, index, data);
-            }
-
-            ForwardedToCompositorMsg::SystemFontService(FontToCompositorMsg::AddSystemFont(
-                font_key,
-                native_handle,
-            )) => {
-                let mut transaction = Transaction::new();
-                transaction.add_native_font(font_key, native_handle);
-                self.webrender_api
-                    .send_transaction(self.webrender_document, transaction);
-            }
-
-            ForwardedToCompositorMsg::Canvas(CanvasToCompositorMsg::GenerateKey(sender)) => {
-                let _ = sender.send(self.webrender_api.generate_image_key());
-            }
-
-            ForwardedToCompositorMsg::Canvas(CanvasToCompositorMsg::UpdateImages(updates)) => {
-                let mut txn = Transaction::new();
-                for update in updates {
-                    match update {
-                        ImageUpdate::AddImage(key, descriptor, data) => {
-                            txn.add_image(key, descriptor, data, None)
-                        }
-                        ImageUpdate::UpdateImage(key, descriptor, data) => {
-                            txn.update_image(key, descriptor, data, &DirtyRect::All)
-                        }
-                        ImageUpdate::DeleteImage(key) => txn.delete_image(key),
-                    }
+            CrossProcessCompositorMessage::GetClientWindowRect(req) => {
+                if let Err(e) = req.send(self.viewport.into()) {
+                    warn!("Sending response to get client window failed ({:?}).", e);
                 }
-                self.webrender_api
-                    .send_transaction(self.webrender_document, txn);
+            },
+
+            CrossProcessCompositorMessage::GetScreenSize(req) => {
+                if let Err(e) = req.send(self.viewport) {
+                    warn!("Sending response to get screen size failed ({:?}).", e);
+                }
+            },
+
+            CrossProcessCompositorMessage::GetAvailableScreenSize(req) => {
+                if let Err(e) = req.send(self.viewport) {
+                    warn!(
+                        "Sending response to get screen avail size failed ({:?}).",
+                        e
+                    );
+                }
             }
         }
     }
@@ -882,23 +816,40 @@ impl IOCompositor {
                 self.remove_pipeline_root_layer(pipeline_id);
                 let _ = sender.send(());
             }
-            CompositorMsg::Forwarded(ForwardedToCompositorMsg::Canvas(
-                CanvasToCompositorMsg::GenerateKey(sender),
+            CompositorMsg::CrossProcess(CrossProcessCompositorMessage::GenerateImageKey(
+                sender,
             )) => {
                 let _ = sender.send(self.webrender_api.generate_image_key());
             }
-            CompositorMsg::GetClientWindow(sender) => {
-                if let Err(e) = sender.send((self.viewport, Point2D::new(0, 0))) {
+            CompositorMsg::CrossProcess(CrossProcessCompositorMessage::GenerateFontKeys(
+                number_of_font_keys,
+                number_of_font_instance_keys,
+                result_sender,
+            )) => {
+                let font_keys = (0..number_of_font_keys)
+                    .map(|_| self.webrender_api.generate_font_key())
+                    .collect();
+                let font_instance_keys = (0..number_of_font_instance_keys)
+                    .map(|_| self.webrender_api.generate_font_instance_key())
+                    .collect();
+                let _ = result_sender.send((font_keys, font_instance_keys));
+            },
+            CompositorMsg::CrossProcess(CrossProcessCompositorMessage::GetClientWindowRect(
+                req,
+            )) => {
+                if let Err(e) = req.send(self.viewport.into()) {
                     warn!("Sending response to get client window failed ({:?}).", e);
                 }
             }
-            CompositorMsg::GetScreenSize(sender) => {
-                if let Err(e) = sender.send(self.viewport) {
+            CompositorMsg::CrossProcess(CrossProcessCompositorMessage::GetScreenSize(req)) => {
+                if let Err(e) = req.send(self.viewport) {
                     warn!("Sending response to get screen size failed ({:?}).", e);
                 }
             }
-            CompositorMsg::GetScreenAvailSize(sender) => {
-                if let Err(e) = sender.send(self.viewport) {
+            CompositorMsg::CrossProcess(CrossProcessCompositorMessage::GetAvailableScreenSize(
+                req,
+            )) => {
+                if let Err(e) = req.send(self.viewport) {
                     warn!(
                         "Sending response to get screen avail size failed ({:?}).",
                         e
