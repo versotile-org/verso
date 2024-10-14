@@ -41,7 +41,7 @@ use webrender_api::{
 };
 use webrender_traits::display_list::{HitTestInfo, ScrollTree};
 use webrender_traits::{
-    CompositorHitTestResult, CrossProcessCompositorMessage, ImageUpdate, UntrustedNodeAddress
+    CompositorHitTestResult, CrossProcessCompositorMessage, ImageUpdate, UntrustedNodeAddress,
 };
 use winit::window::WindowId;
 
@@ -572,7 +572,7 @@ impl IOCompositor {
 
             CompositorMsg::CrossProcess(cross_proces_message) => {
                 self.handle_cross_process_message(cross_proces_message);
-            },
+            }
         }
 
         true
@@ -707,11 +707,11 @@ impl IOCompositor {
                     match update {
                         ImageUpdate::AddImage(key, desc, data) => {
                             txn.add_image(key, desc, data.into(), None)
-                        },
+                        }
                         ImageUpdate::DeleteImage(key) => txn.delete_image(key),
                         ImageUpdate::UpdateImage(key, desc, data) => {
                             txn.update_image(key, desc, data.into(), &DirtyRect::All)
-                        },
+                        }
                     }
                 }
                 self.webrender_api
@@ -727,7 +727,7 @@ impl IOCompositor {
                 transaction.add_native_font(font_key, native_handle);
                 self.webrender_api
                     .send_transaction(self.webrender_document, transaction);
-            },
+            }
 
             CrossProcessCompositorMessage::AddFontInstance(
                 font_instance_key,
@@ -777,13 +777,13 @@ impl IOCompositor {
                 if let Err(e) = req.send(self.viewport.into()) {
                     warn!("Sending response to get client window failed ({:?}).", e);
                 }
-            },
+            }
 
             CrossProcessCompositorMessage::GetScreenSize(req) => {
                 if let Err(e) = req.send(self.viewport) {
                     warn!("Sending response to get screen size failed ({:?}).", e);
                 }
-            },
+            }
 
             CrossProcessCompositorMessage::GetAvailableScreenSize(req) => {
                 if let Err(e) = req.send(self.viewport) {
@@ -833,7 +833,7 @@ impl IOCompositor {
                     .map(|_| self.webrender_api.generate_font_instance_key())
                     .collect();
                 let _ = result_sender.send((font_keys, font_instance_keys));
-            },
+            }
             CompositorMsg::CrossProcess(CrossProcessCompositorMessage::GetClientWindowRect(
                 req,
             )) => {
@@ -1240,9 +1240,10 @@ impl IOCompositor {
             self.on_resize_webview_event(panel.webview_id, rect);
         }
 
+        let rect = DeviceIntRect::from_size(size);
+        let content_size = window.get_content_rect(rect);
         if let Some(w) = &mut window.webview {
-            let rect = DeviceIntRect::from_size(size);
-            w.set_size(rect);
+            w.set_size(content_size);
             self.on_resize_webview_event(w.webview_id, w.rect);
         }
 

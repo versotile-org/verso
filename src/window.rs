@@ -83,13 +83,11 @@ impl Window {
             .expect("Failed to create rendering context");
         log::trace!("Created rendering context for window {:?}", window);
 
-        let size = window.inner_size();
-        let size = Size2D::new(size.width as i32, size.height as i32);
         (
             Self {
                 window,
                 surface,
-                panel: Some(WebView::new_panel(DeviceIntRect::from_size(size))),
+                panel: None,
                 webview: None,
                 mouse_position: Cell::new(PhysicalPosition::default()),
                 modifiers_state: Cell::new(ModifiersState::default()),
@@ -130,6 +128,26 @@ impl Window {
         };
         compositor.swap_current_window(&mut window);
         window
+    }
+
+    /// Create the control panel
+    pub fn add_control_panel(&mut self) -> &WebView {
+        let size = self.window.inner_size();
+        let size = Size2D::new(size.width as i32, size.height as i32);
+        self.panel
+            .replace(WebView::new_panel(DeviceIntRect::from_size(size)));
+        self.panel.as_ref().unwrap()
+    }
+
+    /// Get the content area size for the webview to draw on
+    pub fn get_content_rect(&self, mut size: DeviceIntRect) -> DeviceIntRect {
+        if self.panel.is_some() {
+            size.min.y = size.max.y.min(100);
+            size.min.x += 10;
+            size.max.y -= 10;
+            size.max.x -= 10;
+        }
+        size
     }
 
     /// Handle Winit window event and return a boolean to indicate if the compositor should repaint immediately.

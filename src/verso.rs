@@ -10,9 +10,7 @@ use base::id::WebViewId;
 use bluetooth::BluetoothThreadFactory;
 use bluetooth_traits::BluetoothRequest;
 use canvas::canvas_paint_thread::CanvasPaintThread;
-use compositing_traits::{
-    CompositorMsg, CompositorProxy, CompositorReceiver, ConstellationMsg,
-};
+use compositing_traits::{CompositorMsg, CompositorProxy, CompositorReceiver, ConstellationMsg};
 use constellation::{Constellation, FromCompositorLogger, InitialConstellationState};
 use crossbeam_channel::{unbounded, Sender};
 use devtools;
@@ -86,7 +84,7 @@ impl Verso {
         // Initialize configurations and Verso window
         let resource_dir = config.resource_dir.clone();
         config.init();
-        let (window, rendering_context) = Window::new(evl);
+        let (mut window, rendering_context) = Window::new(evl);
         let event_loop_waker = Box::new(Waker(proxy));
         let opts = opts::get();
 
@@ -282,7 +280,8 @@ impl Verso {
 
         // Create font cache thread
         let system_font_service = Arc::new(
-            SystemFontService::spawn(compositor_sender.cross_process_compositor_api.clone()).to_proxy(),
+            SystemFontService::spawn(compositor_sender.cross_process_compositor_api.clone())
+                .to_proxy(),
         );
 
         // Create canvas thread
@@ -368,7 +367,8 @@ impl Verso {
 
         // Send the constellation message to start Panel UI
         // TODO: Should become a window method
-        let panel_id = window.panel.as_ref().unwrap().webview_id;
+        let panel = window.add_control_panel();
+        let panel_id = panel.webview_id;
         let path = resource_dir.join("panel.html");
         let url = ServoUrl::from_file_path(path.to_str().unwrap()).unwrap();
         send_to_constellation(
