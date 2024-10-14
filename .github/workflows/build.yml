@@ -13,7 +13,7 @@ concurrency:
   cancel-in-progress: true
 
 env:
-  CN_APP_SLUG: verso-nightly
+  CN_APP_SLUG: verso/verso-nightly
 
 jobs:
   pr-fast-check:
