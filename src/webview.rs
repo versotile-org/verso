@@ -1,5 +1,5 @@
 use arboard::Clipboard;
-use base::id::{BrowsingContextId, PipelineNamespace, PipelineNamespaceId, WebViewId};
+use base::id::{BrowsingContextId, WebViewId};
 use compositing_traits::ConstellationMsg;
 use crossbeam_channel::Sender;
 use embedder_traits::{CompositorEventVariant, EmbedderMsg, PromptDefinition};
@@ -27,27 +27,6 @@ impl WebView {
     /// Create a web view from Winit window.
     pub fn new(webview_id: WebViewId, rect: DeviceIntRect) -> Self {
         Self { webview_id, rect }
-    }
-
-    /// Create a panel view from Winit window. A panel is a special web view that focus on controlling states around window.
-    /// It could be treated as the control panel or navigation bar of the window depending on usages.
-    ///
-    /// At the moment, following Web API is supported:
-    /// - Close window: `window.close()`
-    /// - Navigate to previous page: `window.prompt('PREV')`
-    /// - Navigate to next page: `window.prompt('FORWARD')`
-    /// - Refresh the page: `window.prompt('REFRESH')`
-    /// - Minimize the window: `window.prompt('MINIMIZE')`
-    /// - Maximize the window: `window.prompt('MAXIMIZE')`
-    /// - Navigate to a specific URL: `window.prompt('NAVIGATE_TO:${url}')`
-    pub fn new_panel(rect: DeviceIntRect) -> Self {
-        // Reserving a namespace to create TopLevelBrowsingContextId.
-        PipelineNamespace::install(PipelineNamespaceId(0));
-        let id = WebViewId::new();
-        Self {
-            webview_id: id,
-            rect,
-        }
     }
 
     /// Set the webview size corresponding to the window size.

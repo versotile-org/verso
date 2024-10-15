@@ -1,18 +1,15 @@
 use std::{
     borrow::Cow,
     collections::HashMap,
-    path::PathBuf,
     sync::{atomic::Ordering, Arc},
 };
 
 use arboard::Clipboard;
-use base::id::WebViewId;
+use base::id::{PipelineNamespace, PipelineNamespaceId, WebViewId};
 use bluetooth::BluetoothThreadFactory;
 use bluetooth_traits::BluetoothRequest;
 use canvas::canvas_paint_thread::CanvasPaintThread;
-use compositing_traits::{
-    CompositorMsg, CompositorProxy, CompositorReceiver, ConstellationMsg,
-};
+use compositing_traits::{CompositorMsg, CompositorProxy, CompositorReceiver, ConstellationMsg};
 use constellation::{Constellation, FromCompositorLogger, InitialConstellationState};
 use crossbeam_channel::{unbounded, Sender};
 use devtools;
@@ -24,7 +21,7 @@ use ipc_channel::router::ROUTER;
 use layout_thread_2020;
 use log::{Log, Metadata, Record};
 use media::{GlApi, GlContext, NativeDisplay, WindowGLContext};
-use net::{protocols::ProtocolRegistry, resource_thread};
+use net::resource_thread;
 use profile;
 use script::{self, JSEngineSetup};
 use script_traits::WindowSizeData;
@@ -62,7 +59,6 @@ pub struct Verso {
     _js_engine_setup: Option<JSEngineSetup>,
     /// FIXME: It's None on wayland in Flatpak. Find a way to support this.
     clipboard: Option<Clipboard>,
-    resource_dir: PathBuf,
 }
 
 impl Verso {
@@ -84,8 +80,10 @@ impl Verso {
     /// - Image Cache: Enabled
     pub fn new(evl: &ActiveEventLoop, proxy: EventLoopProxy<()>, config: Config) -> Self {
         // Initialize configurations and Verso window
-        let resource_dir = config.resource_dir.clone();
+        let protocols = config.create_protocols();
         config.init();
+        // Reserving a namespace to create TopLevelBrowsingContextId.
+        PipelineNamespace::install(PipelineNamespaceId(0));
         let (window, rendering_context) = Window::new(evl);
         let event_loop_waker = Box::new(Waker(proxy));
         let opts = opts::get();
@@ -262,9 +260,6 @@ impl Verso {
         let bluetooth_thread: IpcSender<BluetoothRequest> =
             BluetoothThreadFactory::new(embedder_sender.clone());
 
-        // Register URL scheme protocols
-        let protocols = ProtocolRegistry::with_internal_protocols();
-
         // Create resource thread pool
         let user_agent: Cow<'static, str> = default_user_agent_string().into();
         let (public_resource_threads, private_resource_threads) =
@@ -282,7 +277,8 @@ impl Verso {
 
         // Create font cache thread
         let system_font_service = Arc::new(
-            SystemFontService::spawn(compositor_sender.cross_process_compositor_api.clone()).to_proxy(),
+            SystemFontService::spawn(compositor_sender.cross_process_compositor_api.clone())
+                .to_proxy(),
         );
 
         // Create canvas thread
@@ -369,8 +365,7 @@ impl Verso {
         // Send the constellation message to start Panel UI
         // TODO: Should become a window method
         let panel_id = window.panel.as_ref().unwrap().webview_id;
-        let path = resource_dir.join("panel.html");
-        let url = ServoUrl::from_file_path(path.to_str().unwrap()).unwrap();
+        let url = ServoUrl::parse("verso://panel.html").unwrap();
         send_to_constellation(
             &constellation_sender,
             ConstellationMsg::NewWebView(url, panel_id),
@@ -387,7 +382,6 @@ impl Verso {
             embedder_receiver,
             _js_engine_setup: js_engine_setup,
             clipboard: Clipboard::new().ok(),
-            resource_dir,
         };
 
         verso.setup_logging();
@@ -445,10 +439,8 @@ impl Verso {
                                             let mut window =
                                                 Window::new_with_compositor(evl, compositor);
                                             let panel_id = WebViewId::new();
-                                            let path = self.resource_dir.join("panel.html");
                                             let url =
-                                                ServoUrl::from_file_path(path.to_str().unwrap())
-                                                    .unwrap();
+                                                ServoUrl::parse("verso://panel.html").unwrap();
                                             send_to_constellation(
                                                 &self.constellation_sender,
                                                 ConstellationMsg::NewWebView(url, panel_id),

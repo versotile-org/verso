@@ -39,7 +39,17 @@ pub struct Window {
     pub(crate) window: WinitWindow,
     /// GL surface of the window
     pub(crate) surface: Surface<WindowSurface>,
-    /// The main control panel of this window.
+    /// The main panel of this window. A panel is a special web view that focus on controlling states around window.
+    /// It could be treated as the control panel or navigation bar of the window depending on usages.
+    ///
+    /// At the moment, following Web API is supported:
+    /// - Close window: `window.close()`
+    /// - Navigate to previous page: `window.prompt('PREV')`
+    /// - Navigate to next page: `window.prompt('FORWARD')`
+    /// - Refresh the page: `window.prompt('REFRESH')`
+    /// - Minimize the window: `window.prompt('MINIMIZE')`
+    /// - Maximize the window: `window.prompt('MAXIMIZE')`
+    /// - Navigate to a specific URL: `window.prompt('NAVIGATE_TO:${url}')`
     pub(crate) panel: Option<WebView>,
     /// The WebView of this window.
     pub(crate) webview: Option<WebView>,
@@ -89,7 +99,10 @@ impl Window {
             Self {
                 window,
                 surface,
-                panel: Some(WebView::new_panel(DeviceIntRect::from_size(size))),
+                panel: Some(WebView::new(
+                    WebViewId::new(),
+                    DeviceIntRect::from_size(size),
+                )),
                 webview: None,
                 mouse_position: Cell::new(PhysicalPosition::default()),
                 modifiers_state: Cell::new(ModifiersState::default()),
