@@ -5,7 +5,7 @@ use std::{
 };
 
 use arboard::Clipboard;
-use base::id::WebViewId;
+use base::id::{PipelineNamespace, PipelineNamespaceId, WebViewId};
 use bluetooth::BluetoothThreadFactory;
 use bluetooth_traits::BluetoothRequest;
 use canvas::canvas_paint_thread::CanvasPaintThread;
@@ -82,6 +82,8 @@ impl Verso {
         // Initialize configurations and Verso window
         let protocols = config.create_protocols();
         config.init();
+        // Reserving a namespace to create TopLevelBrowsingContextId.
+        PipelineNamespace::install(PipelineNamespaceId(0));
         let (window, rendering_context) = Window::new(evl);
         let event_loop_waker = Box::new(Waker(proxy));
         let opts = opts::get();
