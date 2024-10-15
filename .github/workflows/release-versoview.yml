@@ -30,7 +30,7 @@ jobs:
           nix-channel --add https://nixos.org/channels/nixos-24.05 nixpkgs
           nix-channel --update nixpkgs
 
-      - name: Build Verso docs
+      - name: Build
         run: nix-shell shell.nix --run 'cargo build --release'
 
       - name: Upload artifact
@@ -85,6 +85,9 @@ jobs:
           curl https://gstreamer.freedesktop.org/data/pkg/osx/1.24.6/gstreamer-1.0-devel-1.24.6-universal.pkg -o develop.pkg
           sudo installer -pkg develop.pkg -target /
 
+      - name: Add rust target
+        run: rustup target add ${{ matrix.target }}
+
       - name: Build
         run: cargo build --release --target ${{ matrix.target }}
 
@@ -92,7 +95,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: verso-${{ matrix.target }}
-          path: ./target/${{ matrix.target }}/verso${{ matrix.exe }}
+          path: ./target/${{ matrix.target }}/release/verso${{ matrix.exe }}
 
   publish-release:
     runs-on: ubuntu-latest
