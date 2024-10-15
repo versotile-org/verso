@@ -103,14 +103,19 @@ jobs:
     runs-on: ubuntu-latest
     needs: [build-linux, build-others]
     steps:
-      - uses: actions/checkout@v4
       - uses: actions/download-artifact@v4
-        with:
-          merge-multiple: true
+
+      - working-directory: ./verso-x86_64-pc-windows-msvc
+        run: zip -r ../verso-x86_64-pc-windows-msvc.zip *
+      - working-directory: ./verso-aarch64-apple-darwin
+        run: zip -r ../verso-aarch64-apple-darwin.zip *
+      - working-directory: ./verso-x86_64-unknown-linux-gnu
+        run: zip -r ../verso-x86_64-unknown-linux-gnu.zip *
+
       - name: Publish release
         run: |
           RELEASE_TAG=versoview-v$(cargo metadata --format-version=1 --no-deps | jq -r '.packages[] | select(.name == "verso") | .version')
           git fetch --tags --quiet
           if ! git show-ref --tags --verify --quiet "refs/tags/${RELEASE_TAG}" ; then
-            gh release create ${RELEASE_TAG} ./*
+            gh release create ${RELEASE_TAG} ./*.zip
           fi
