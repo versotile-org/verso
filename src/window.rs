@@ -1,4 +1,4 @@
-use std::cell::Cell;
+use std::{cell::Cell, path::Path};
 
 use base::id::WebViewId;
 use compositing_traits::ConstellationMsg;
@@ -11,6 +11,7 @@ use glutin::{
 };
 use glutin_winit::DisplayBuilder;
 use script_traits::{TouchEventType, WheelDelta, WheelMode};
+use servo_url::ServoUrl;
 use webrender_api::{
     units::{DeviceIntPoint, DeviceIntRect, DeviceIntSize, DevicePoint, LayoutVector2D},
     ScrollLocation,
@@ -51,7 +52,7 @@ pub struct Window {
 
 impl Window {
     /// Create a Verso window from Winit window and return the rendering context.
-    pub fn new(evl: &ActiveEventLoop) -> (Self, RenderingContext) {
+    pub fn new(evl: &ActiveEventLoop, with_panel: bool) -> (Self, RenderingContext) {
         let window_attributes = WinitWindow::default_attributes()
             .with_transparent(true)
             .with_decorations(false);
@@ -83,11 +84,17 @@ impl Window {
             .expect("Failed to create rendering context");
         log::trace!("Created rendering context for window {:?}", window);
 
+        let panel = if with_panel {
+            Some(Self::create_control_panel(&window))
+        } else {
+            None
+        };
+
         (
             Self {
                 window,
                 surface,
-                panel: None,
+                panel,
                 webview: None,
                 mouse_position: Cell::new(PhysicalPosition::default()),
                 modifiers_state: Cell::new(ModifiersState::default()),
@@ -97,7 +104,11 @@ impl Window {
     }
 
     /// Create a Verso window with the rendering context.
-    pub fn new_with_compositor(evl: &ActiveEventLoop, compositor: &mut IOCompositor) -> Self {
+    pub fn new_with_compositor(
+        evl: &ActiveEventLoop,
+        compositor: &mut IOCompositor,
+        with_panel: bool,
+    ) -> Self {
         let window = evl
             .create_window(WinitWindow::default_attributes())
             // .with_transparent(true)
@@ -118,10 +129,15 @@ impl Window {
             .rendering_context
             .create_surface(&window)
             .unwrap();
+        let panel = if with_panel {
+            Some(Self::create_control_panel(&window))
+        } else {
+            None
+        };
         let mut window = Self {
             window,
             surface,
-            panel: None,
+            panel,
             webview: None,
             mouse_position: Cell::new(PhysicalPosition::default()),
             modifiers_state: Cell::new(ModifiersState::default()),
@@ -131,12 +147,10 @@ impl Window {
     }
 
     /// Create the control panel
-    pub fn add_control_panel(&mut self) -> &WebView {
-        let size = self.window.inner_size();
+    fn create_control_panel(window: &winit::window::Window) -> WebView {
+        let size = window.inner_size();
         let size = Size2D::new(size.width as i32, size.height as i32);
-        self.panel
-            .replace(WebView::new_panel(DeviceIntRect::from_size(size)));
-        self.panel.as_ref().unwrap()
+        WebView::new_panel(DeviceIntRect::from_size(size))
     }
 
     /// Get the content area size for the webview to draw on
@@ -148,6 +162,23 @@ impl Window {
             size.max.x -= 10;
         }
         size
+    }
+
+    /// Send the constellation message to start Panel UI
+    pub fn init_panel_webview(
+        &mut self,
+        resource_dir: &Path,
+        constellation_sender: &Sender<ConstellationMsg>,
+    ) {
+        if let Some(panel) = &self.panel {
+            let panel_id = panel.webview_id;
+            let path = resource_dir.join("panel.html");
+            let url = ServoUrl::from_file_path(path.to_str().unwrap()).unwrap();
+            send_to_constellation(
+                constellation_sender,
+                ConstellationMsg::NewWebView(url, panel_id),
+            );
+        }
     }
 
     /// Handle Winit window event and return a boolean to indicate if the compositor should repaint immediately.
