@@ -4,8 +4,6 @@ on:
   workflow_dispatch:
 
 env:
-  SCCACHE_GHA_ENABLED: "true"
-  RUSTC_WRAPPER: "sccache"
   RUST_BACKTRACE: 1
   CARGO_INCREMENTAL: 0
   GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -91,6 +89,9 @@ jobs:
         run: rustup target add ${{ matrix.target }}
 
       - name: Build
+        env:
+          SCCACHE_GHA_ENABLED: true
+          RUSTC_WRAPPER: "sccache"
         run: cargo build --release --target ${{ matrix.target }}
 
       - name: Upload artifact
