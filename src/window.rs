@@ -1,4 +1,4 @@
-use std::{cell::Cell, path::Path};
+use std::cell::Cell;
 
 use base::id::WebViewId;
 use compositing_traits::ConstellationMsg;
@@ -40,7 +40,17 @@ pub struct Window {
     pub(crate) window: WinitWindow,
     /// GL surface of the window
     pub(crate) surface: Surface<WindowSurface>,
-    /// The main control panel of this window.
+    /// The main panel of this window. A panel is a special web view that focus on controlling states around window.
+    /// It could be treated as the control panel or navigation bar of the window depending on usages.
+    ///
+    /// At the moment, following Web API is supported:
+    /// - Close window: `window.close()`
+    /// - Navigate to previous page: `window.prompt('PREV')`
+    /// - Navigate to next page: `window.prompt('FORWARD')`
+    /// - Refresh the page: `window.prompt('REFRESH')`
+    /// - Minimize the window: `window.prompt('MINIMIZE')`
+    /// - Maximize the window: `window.prompt('MAXIMIZE')`
+    /// - Navigate to a specific URL: `window.prompt('NAVIGATE_TO:${url}')`
     pub(crate) panel: Option<WebView>,
     /// The WebView of this window.
     pub(crate) webview: Option<WebView>,
@@ -85,7 +95,7 @@ impl Window {
         log::trace!("Created rendering context for window {:?}", window);
 
         let panel = if with_panel {
-            Some(Self::create_control_panel(&window, None))
+            Some(Self::create_control_panel(&window))
         } else {
             None
         };
@@ -130,7 +140,7 @@ impl Window {
             .create_surface(&window)
             .unwrap();
         let panel = if with_panel {
-            Some(Self::create_control_panel(&window, Some(WebViewId::new())))
+            Some(Self::create_control_panel(&window))
         } else {
             None
         };
@@ -147,17 +157,10 @@ impl Window {
     }
 
     /// Create the control panel
-    fn create_control_panel(
-        window: &winit::window::Window,
-        webview_id: Option<WebViewId>,
-    ) -> WebView {
+    fn create_control_panel(window: &winit::window::Window) -> WebView {
         let size = window.inner_size();
         let size = Size2D::new(size.width as i32, size.height as i32);
-        if let Some(webview_id) = webview_id {
-            WebView::new(webview_id, DeviceIntRect::from_size(size))
-        } else {
-            WebView::new_panel(DeviceIntRect::from_size(size))
-        }
+        WebView::new(WebViewId::new(), DeviceIntRect::from_size(size))
     }
 
     /// Get the content area size for the webview to draw on
@@ -172,15 +175,10 @@ impl Window {
     }
 
     /// Send the constellation message to start Panel UI
-    pub fn init_panel_webview(
-        &mut self,
-        resource_dir: &Path,
-        constellation_sender: &Sender<ConstellationMsg>,
-    ) {
+    pub fn init_panel_webview(&mut self, constellation_sender: &Sender<ConstellationMsg>) {
         if let Some(panel) = &self.panel {
             let panel_id = panel.webview_id;
-            let path = resource_dir.join("panel.html");
-            let url = ServoUrl::from_file_path(path.to_str().unwrap()).unwrap();
+            let url = ServoUrl::parse("verso://panel.html").unwrap();
             send_to_constellation(
                 constellation_sender,
                 ConstellationMsg::NewWebView(url, panel_id),

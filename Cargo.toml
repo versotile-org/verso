@@ -80,6 +80,7 @@ fonts = { git = "https://github.com/servo/servo.git", rev = "fc0835b" }
 layout_thread_2020 = { git = "https://github.com/servo/servo.git", rev = "fc0835b" }
 media = { git = "https://github.com/servo/servo.git", rev = "fc0835b" }
 net = { git = "https://github.com/servo/servo.git", rev = "fc0835b" }
+net_traits = { git = "https://github.com/servo/servo.git", rev = "fc0835b" }
 profile = { git = "https://github.com/servo/servo.git", rev = "fc0835b" }
 profile_traits = { git = "https://github.com/servo/servo.git", rev = "fc0835b" }
 script = { git = "https://github.com/servo/servo.git", rev = "fc0835b" }
@@ -104,6 +105,7 @@ cargo-packager-resource-resolver = { version = "0.1.1", features = [
   "auto-detect-format",
 ], optional = true }
 url = "2.5.2"
+headers = "0.3"
 versoview_messages = { path = "./versoview_messages" }
 
 [target.'cfg(any(target_os = "ios", target_os = "macos"))'.dependencies]

@@ -1,11 +1,11 @@
 use std::{
     borrow::Cow,
     collections::HashMap,
-    path::PathBuf,
     sync::{atomic::Ordering, Arc},
 };
 
 use arboard::Clipboard;
+use base::id::{PipelineNamespace, PipelineNamespaceId};
 use bluetooth::BluetoothThreadFactory;
 use bluetooth_traits::BluetoothRequest;
 use canvas::canvas_paint_thread::CanvasPaintThread;
@@ -21,7 +21,7 @@ use ipc_channel::router::ROUTER;
 use layout_thread_2020;
 use log::{Log, Metadata, Record};
 use media::{GlApi, GlContext, NativeDisplay, WindowGLContext};
-use net::{protocols::ProtocolRegistry, resource_thread};
+use net::resource_thread;
 use profile;
 use script::{self, JSEngineSetup};
 use script_traits::WindowSizeData;
@@ -56,7 +56,6 @@ pub struct Verso {
     _js_engine_setup: Option<JSEngineSetup>,
     /// FIXME: It's None on wayland in Flatpak. Find a way to support this.
     clipboard: Option<Clipboard>,
-    resource_dir: PathBuf,
 }
 
 impl Verso {
@@ -78,8 +77,10 @@ impl Verso {
     /// - Image Cache: Enabled
     pub fn new(evl: &ActiveEventLoop, proxy: EventLoopProxy<()>, config: Config) -> Self {
         // Initialize configurations and Verso window
-        let resource_dir = config.resource_dir.clone();
+        let protocols = config.create_protocols();
         config.init();
+        // Reserving a namespace to create TopLevelBrowsingContextId.
+        PipelineNamespace::install(PipelineNamespaceId(0));
         let (mut window, rendering_context) = Window::new(evl, true);
         let event_loop_waker = Box::new(Waker(proxy));
         let opts = opts::get();
@@ -256,9 +257,6 @@ impl Verso {
         let bluetooth_thread: IpcSender<BluetoothRequest> =
             BluetoothThreadFactory::new(embedder_sender.clone());
 
-        // Register URL scheme protocols
-        let protocols = ProtocolRegistry::with_internal_protocols();
-
         // Create resource thread pool
         let user_agent: Cow<'static, str> = default_user_agent_string().into();
         let (public_resource_threads, private_resource_threads) =
@@ -361,7 +359,7 @@ impl Verso {
             opts.debug.convert_mouse_to_touch,
         );
 
-        window.init_panel_webview(&resource_dir, &constellation_sender);
+        window.init_panel_webview(&constellation_sender);
 
         let mut windows = HashMap::new();
         windows.insert(window.id(), (window, webrender_document));
@@ -374,7 +372,6 @@ impl Verso {
             embedder_receiver,
             _js_engine_setup: js_engine_setup,
             clipboard: Clipboard::new().ok(),
-            resource_dir,
         };
 
         verso.setup_logging();
@@ -431,10 +428,7 @@ impl Verso {
                                         ) {
                                             let mut window =
                                                 Window::new_with_compositor(evl, compositor, true);
-                                            window.init_panel_webview(
-                                                &self.resource_dir,
-                                                &self.constellation_sender,
-                                            );
+                                            window.init_panel_webview(&self.constellation_sender);
                                             let webrender_document = document.clone();
                                             self.windows
                                                 .insert(window.id(), (window, webrender_document));
