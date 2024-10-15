@@ -85,7 +85,7 @@ impl Window {
         log::trace!("Created rendering context for window {:?}", window);
 
         let panel = if with_panel {
-            Some(Self::create_control_panel(&window))
+            Some(Self::create_control_panel(&window, None))
         } else {
             None
         };
@@ -130,7 +130,7 @@ impl Window {
             .create_surface(&window)
             .unwrap();
         let panel = if with_panel {
-            Some(Self::create_control_panel(&window))
+            Some(Self::create_control_panel(&window, Some(WebViewId::new())))
         } else {
             None
         };
@@ -147,10 +147,17 @@ impl Window {
     }
 
     /// Create the control panel
-    fn create_control_panel(window: &winit::window::Window) -> WebView {
+    fn create_control_panel(
+        window: &winit::window::Window,
+        webview_id: Option<WebViewId>,
+    ) -> WebView {
         let size = window.inner_size();
         let size = Size2D::new(size.width as i32, size.height as i32);
-        WebView::new_panel(DeviceIntRect::from_size(size))
+        if let Some(webview_id) = webview_id {
+            WebView::new(webview_id, DeviceIntRect::from_size(size))
+        } else {
+            WebView::new_panel(DeviceIntRect::from_size(size))
+        }
     }
 
     /// Get the content area size for the webview to draw on
