@@ -9,7 +9,37 @@ env:
   GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
 jobs:
-  build:
+  build-linux:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: nixbuild/nix-quick-install-action@v28
+
+      - name: Restore and cache Nix store
+        uses: nix-community/cache-nix-action@v5
+        with:
+          paths: |
+            ~/.cargo
+            target/release/
+          primary-key: nix-${{ runner.os }}-${{ hashFiles('**/*.nix', 'Cargo.lock', 'Cargo.toml') }}
+          restore-prefixes-first-match: nix-${{ runner.os }}-
+          gc-max-store-size-linux: 1073741824
+
+      - name: Add Nix channel
+        run: |
+          nix-channel --add https://nixos.org/channels/nixos-24.05 nixpkgs
+          nix-channel --update nixpkgs
+
+      - name: Build Verso docs
+        run: nix-shell shell.nix --run 'cargo build --release'
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: verso-x86_64-unknown-linux-gnu
+          path: ./target/release/verso
+
+  build-others:
     strategy:
       fail-fast: false
       matrix:
@@ -24,8 +54,6 @@ jobs:
             target: aarch64-apple-darwin
           - os: macos-13
             target: x86_64-apple-darwin
-          - os: ubuntu-latest
-            target: x86_64-unknown-linux
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4
@@ -63,12 +91,12 @@ jobs:
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
-          name: verso-${{ matrix.os }}
+          name: verso-${{ matrix.target }}
           path: ./target/${{ matrix.target }}/verso${{ matrix.exe }}
 
   publish-release:
     runs-on: ubuntu-latest
-    needs: build
+    needs: [build-linux, build-others]
     steps:
       - uses: actions/checkout@v4
       - uses: actions/download-artifact@v4
@@ -79,6 +107,5 @@ jobs:
           RELEASE_TAG=versoview-v$(cargo metadata --format-version=1 --no-deps | jq -r '.packages[] | select(.name == "verso") | .version')
           git fetch --tags --quiet
           if ! git show-ref --tags --verify --quiet "refs/tags/${RELEASE_TAG}" ; then
-            gh release create ${RELEASE_TAG} ./*.tar.gz
+            gh release create ${RELEASE_TAG} ./*
           fi
-
