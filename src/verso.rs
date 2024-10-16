@@ -5,7 +5,7 @@ use std::{
 };
 
 use arboard::Clipboard;
-use base::id::{PipelineNamespace, PipelineNamespaceId, WebViewId};
+use base::id::{PipelineNamespace, PipelineNamespaceId};
 use bluetooth::BluetoothThreadFactory;
 use bluetooth_traits::BluetoothRequest;
 use canvas::canvas_paint_thread::CanvasPaintThread;
@@ -26,9 +26,7 @@ use profile;
 use script::{self, JSEngineSetup};
 use script_traits::WindowSizeData;
 use servo_config::{opts, pref};
-use servo_url::ServoUrl;
 use style;
-use units::DeviceIntRect;
 use webgpu;
 use webrender::{create_webrender_instance, ShaderPrecacheFlags, WebRenderOptions};
 use webrender_api::*;
@@ -43,7 +41,6 @@ use winit::{
 use crate::{
     compositor::{IOCompositor, InitialCompositorState, ShutdownState},
     config::Config,
-    webview::WebView,
     window::Window,
 };
 
@@ -84,7 +81,7 @@ impl Verso {
         config.init();
         // Reserving a namespace to create TopLevelBrowsingContextId.
         PipelineNamespace::install(PipelineNamespaceId(0));
-        let (window, rendering_context) = Window::new(evl);
+        let (mut window, rendering_context) = Window::new(evl);
         let event_loop_waker = Box::new(Waker(proxy));
         let opts = opts::get();
 
@@ -362,14 +359,7 @@ impl Verso {
             opts.debug.convert_mouse_to_touch,
         );
 
-        // Send the constellation message to start Panel UI
-        // TODO: Should become a window method
-        let panel_id = window.panel.as_ref().unwrap().webview_id;
-        let url = ServoUrl::parse("verso://panel.html").unwrap();
-        send_to_constellation(
-            &constellation_sender,
-            ConstellationMsg::NewWebView(url, panel_id),
-        );
+        window.create_panel(&constellation_sender);
 
         let mut windows = HashMap::new();
         windows.insert(window.id(), (window, webrender_document));
@@ -438,15 +428,7 @@ impl Verso {
                                         ) {
                                             let mut window =
                                                 Window::new_with_compositor(evl, compositor);
-                                            let panel_id = WebViewId::new();
-                                            let url =
-                                                ServoUrl::parse("verso://panel.html").unwrap();
-                                            send_to_constellation(
-                                                &self.constellation_sender,
-                                                ConstellationMsg::NewWebView(url, panel_id),
-                                            );
-                                            let rect = DeviceIntRect::from_size(window.size());
-                                            window.panel = Some(WebView::new(panel_id, rect));
+                                            window.create_panel(&self.constellation_sender);
                                             let webrender_document = document.clone();
                                             self.windows
                                                 .insert(window.id(), (window, webrender_document));
