@@ -33,28 +33,18 @@ jobs:
       - name: Build
         run: nix-shell shell.nix --run 'cargo build --release'
 
+      - name: Make archive
+        working-directory: ./target/release
+        run: nix-shell shell.nix --run 'tar -czvf verso-x86_64-unknown-linux-gnu.tar.gz verso'
+
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
           name: verso-x86_64-unknown-linux-gnu
-          path: ./target/release/verso
+          path: ./target/release/verso-x86_64-unknown-linux-gnu
 
-  build-others:
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - os: windows-latest
-            target: x86_64-pc-windows-msvc
-            exe: .exe
-          # - os: windows-latest
-          #   target: aarch64-pc-windows-msvc
-          #   exe: .exe
-          - os: macos-14
-            target: aarch64-apple-darwin
-          # - os: macos-13
-          #   target: x86_64-apple-darwin
-    runs-on: ${{ matrix.os }}
+  build-windows:
+    runs-on: windows-latest
     steps:
       - uses: actions/checkout@v4
       - name: Run sccache-cache
@@ -69,15 +59,43 @@ jobs:
         run: python -m pip install mako
 
       - name: Install scroop
-        if: ${{ startsWith(matrix.os, 'windows') }}
         uses: MinoruSekine/setup-scoop@v3
-      - name: Install windows dependencies
-        if: ${{ startsWith(matrix.os, 'windows') }}
+      - name: Install dependencies
         run: |
           scoop install llvm cmake
 
-      - name: Install mac dependencies
-        if: ${{ startsWith(matrix.os, 'macos') }}
+      - name: Build
+        env:
+          SCCACHE_GHA_ENABLED: true
+          RUSTC_WRAPPER: "sccache"
+        run: cargo build --release
+
+      - name: Make archive
+        working-directory: ./target/release
+        run: tar -czvf verso-x86_64-pc-windows-msvc.tar.gz verso.exe
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: verso-x86_64-pc-windows-msvc
+          path: ./target/release/verso-x86_64-pc-windows-msvc.tar.gz
+
+  build-mac:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Run sccache-cache
+        uses: mozilla-actions/sccache-action@v0.0.4
+
+      - name: Install Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install mako
+        run: python -m pip install mako
+
+      - name: Install dependencies
         run: |
           brew install cmake
           curl https://gstreamer.freedesktop.org/data/pkg/osx/1.24.6/gstreamer-1.0-1.24.6-universal.pkg -o runtime.pkg
@@ -85,36 +103,31 @@ jobs:
           curl https://gstreamer.freedesktop.org/data/pkg/osx/1.24.6/gstreamer-1.0-devel-1.24.6-universal.pkg -o develop.pkg
           sudo installer -pkg develop.pkg -target /
 
-      - name: Add rust target
-        run: rustup target add ${{ matrix.target }}
-
       - name: Build
         env:
           SCCACHE_GHA_ENABLED: true
           RUSTC_WRAPPER: "sccache"
-        run: cargo build --release --target ${{ matrix.target }}
+        run: cargo build --release
+
+      - name: Make archive
+        working-directory: ./target/release
+        run: tar -czvf verso-aarch64-apple-darwin verso
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
-          name: verso-${{ matrix.target }}
-          path: ./target/${{ matrix.target }}/release/verso${{ matrix.exe }}
+          name: verso-aarch64-apple-darwin
+          path: ./target/release/verso-aarch64-apple-darwin
 
   publish-release:
     runs-on: ubuntu-latest
-    needs: [build-linux, build-others]
+    needs: [build-linux, build-windows, build-mac]
     steps:
       - uses: actions/checkout@v4
       - uses: actions/download-artifact@v4
         with:
+          merge-multiple: true
           path: artifacts
-
-      - working-directory: ./artifacts/verso-x86_64-pc-windows-msvc
-        run: zip -r ../verso-x86_64-pc-windows-msvc.zip *
-      - working-directory: ./artifacts/verso-aarch64-apple-darwin
-        run: zip -r ../verso-aarch64-apple-darwin.zip *
-      - working-directory: ./artifacts/verso-x86_64-unknown-linux-gnu
-        run: zip -r ../verso-x86_64-unknown-linux-gnu.zip *
 
       - name: Publish release
         working-directory: ./artifacts
@@ -122,5 +135,5 @@ jobs:
           RELEASE_TAG=versoview-v$(cargo metadata --format-version=1 --no-deps | jq -r '.packages[] | select(.name == "verso") | .version')
           git fetch --tags --quiet
           if ! git show-ref --tags --verify --quiet "refs/tags/${RELEASE_TAG}" ; then
-            gh release create ${RELEASE_TAG} ./*.zip
+            gh release create ${RELEASE_TAG} .artifacts/*.tar.gz
           fi
