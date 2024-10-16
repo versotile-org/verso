@@ -110,7 +110,7 @@ jobs:
 
       - name: Make archive
         working-directory: ./target/release
-        run: tar -czvf verso-aarch64-apple-darwin verso
+        run: tar -czvf verso-aarch64-apple-darwin.tar.gz verso
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
