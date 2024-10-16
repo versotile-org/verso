@@ -129,7 +129,6 @@ jobs:
           path: artifacts
 
       - name: Publish release
-        working-directory: ./artifacts
         run: |
           RELEASE_TAG=versoview-v$(cargo metadata --format-version=1 --no-deps | jq -r '.packages[] | select(.name == "verso") | .version')
           git fetch --tags --quiet
