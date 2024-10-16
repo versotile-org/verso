@@ -34,8 +34,7 @@ jobs:
         run: nix-shell shell.nix --run 'cargo build --release'
 
       - name: Make archive
-        working-directory: ./target/release
-        run: nix-shell shell.nix --run 'tar -czvf verso-x86_64-unknown-linux-gnu.tar.gz verso'
+        run: nix-shell shell.nix --run 'cd ./target/release && tar -czvf verso-x86_64-unknown-linux-gnu.tar.gz verso'
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
