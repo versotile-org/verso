@@ -160,7 +160,7 @@ impl Window {
                 let size = self.size();
                 let rect = DeviceIntRect::from_size(size);
                 let mut webview = WebView::new(demo_id, rect);
-                webview.set_size(self.get_content_rect(rect));
+                webview.set_size(self.get_content_size(rect));
                 self.webview = Some(webview);
                 send_to_constellation(sender, ConstellationMsg::NewWebView(demo_url, demo_id));
                 log::debug!("Verso Window {:?} adds webview {}", self.id(), demo_id);
