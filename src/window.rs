@@ -11,6 +11,7 @@ use glutin::{
 };
 use glutin_winit::DisplayBuilder;
 use script_traits::{TouchEventType, WheelDelta, WheelMode};
+use servo_url::ServoUrl;
 use webrender_api::{
     units::{DeviceIntPoint, DeviceIntRect, DeviceIntSize, DevicePoint, LayoutVector2D},
     ScrollLocation,
@@ -93,16 +94,11 @@ impl Window {
             .expect("Failed to create rendering context");
         log::trace!("Created rendering context for window {:?}", window);
 
-        let size = window.inner_size();
-        let size = Size2D::new(size.width as i32, size.height as i32);
         (
             Self {
                 window,
                 surface,
-                panel: Some(WebView::new(
-                    WebViewId::new(),
-                    DeviceIntRect::from_size(size),
-                )),
+                panel: None,
                 webview: None,
                 mouse_position: Cell::new(PhysicalPosition::default()),
                 modifiers_state: Cell::new(ModifiersState::default()),
@@ -133,6 +129,7 @@ impl Window {
             .rendering_context
             .create_surface(&window)
             .unwrap();
+
         let mut window = Self {
             window,
             surface,
@@ -143,6 +140,31 @@ impl Window {
         };
         compositor.swap_current_window(&mut window);
         window
+    }
+
+    /// Get the content area size for the webview to draw on
+    pub fn get_content_size(&self, mut size: DeviceIntRect) -> DeviceIntRect {
+        if self.panel.is_some() {
+            size.min.y = size.max.y.min(100);
+            size.min.x += 10;
+            size.max.y -= 10;
+            size.max.x -= 10;
+        }
+        size
+    }
+
+    /// Send the constellation message to start Panel UI
+    pub fn create_panel(&mut self, constellation_sender: &Sender<ConstellationMsg>) {
+        let size = self.window.inner_size();
+        let size = Size2D::new(size.width as i32, size.height as i32);
+        let panel_id = WebViewId::new();
+        self.panel = Some(WebView::new(panel_id, DeviceIntRect::from_size(size)));
+
+        let url = ServoUrl::parse("verso://panel.html").unwrap();
+        send_to_constellation(
+            constellation_sender,
+            ConstellationMsg::NewWebView(url, panel_id),
+        );
     }
 
     /// Handle Winit window event and return a boolean to indicate if the compositor should repaint immediately.

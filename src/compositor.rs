@@ -1240,9 +1240,10 @@ impl IOCompositor {
             self.on_resize_webview_event(panel.webview_id, rect);
         }
 
+        let rect = DeviceIntRect::from_size(size);
+        let content_size = window.get_content_size(rect);
         if let Some(w) = &mut window.webview {
-            let rect = DeviceIntRect::from_size(size);
-            w.set_size(rect);
+            w.set_size(content_size);
             self.on_resize_webview_event(w.webview_id, w.rect);
         }
 
