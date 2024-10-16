@@ -134,5 +134,5 @@ jobs:
           RELEASE_TAG=versoview-v$(cargo metadata --format-version=1 --no-deps | jq -r '.packages[] | select(.name == "verso") | .version')
           git fetch --tags --quiet
           if ! git show-ref --tags --verify --quiet "refs/tags/${RELEASE_TAG}" ; then
-            gh release create ${RELEASE_TAG} .artifacts/*.tar.gz
+            gh release create ${RELEASE_TAG} ./artifacts/*.tar.gz
           fi
