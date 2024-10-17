@@ -1236,8 +1236,8 @@ impl IOCompositor {
 
         if let Some(panel) = &mut window.panel {
             let rect = DeviceIntRect::from_size(size);
-            panel.rect = rect;
-            self.on_resize_webview_event(panel.webview_id, rect);
+            panel.webview.rect = rect;
+            self.on_resize_webview_event(panel.webview.webview_id, rect);
         }
 
         let rect = DeviceIntRect::from_size(size);

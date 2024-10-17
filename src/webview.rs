@@ -105,7 +105,7 @@ impl Window {
                     send_to_constellation(
                         sender,
                         ConstellationMsg::WebDriverCommand(WebDriverCommandMsg::ScriptCommand(
-                            BrowsingContextId::from(panel.webview_id),
+                            BrowsingContextId::from(panel.webview.webview_id),
                             WebDriverScriptCommand::ExecuteScript(
                                 format!("window.navbar.setNavbarUrl('{}')", url.as_str()),
                                 tx,
@@ -155,14 +155,19 @@ impl Window {
                 self.window.request_redraw();
                 send_to_constellation(sender, ConstellationMsg::FocusWebView(panel_id));
 
-                let demo_url = ServoUrl::parse("https://example.com").unwrap();
                 let demo_id = WebViewId::new();
                 let size = self.size();
                 let rect = DeviceIntRect::from_size(size);
                 let mut webview = WebView::new(demo_id, rect);
                 webview.set_size(self.get_content_size(rect));
                 self.webview = Some(webview);
-                send_to_constellation(sender, ConstellationMsg::NewWebView(demo_url, demo_id));
+                send_to_constellation(
+                    sender,
+                    ConstellationMsg::NewWebView(
+                        self.panel.as_ref().unwrap().initial_url.clone(),
+                        demo_id,
+                    ),
+                );
                 log::debug!("Verso Window {:?} adds webview {}", self.id(), demo_id);
             }
             EmbedderMsg::AllowNavigationRequest(id, _url) => {
