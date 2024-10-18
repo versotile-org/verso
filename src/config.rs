@@ -13,8 +13,8 @@ use servo_config::opts::{default_opts, set_options, Opts};
 /// Command line arguments.
 #[derive(Clone, Debug, Default)]
 pub struct CliArgs {
-    /// Url to load initially.
-    pub initial_url: Option<url::Url>,
+    /// URL to load initially.
+    pub url: Option<url::Url>,
 }
 
 /// Configuration of Verso instance.
@@ -25,14 +25,14 @@ pub struct Config {
     /// Path to resources directory.
     pub resource_dir: PathBuf,
     /// Command line arguments.
-    pub cli_args: CliArgs,
+    pub args: CliArgs,
 }
 
 fn parse_cli_args() -> Result<CliArgs, getopts::Fail> {
     let args: Vec<String> = std::env::args().collect();
 
     let mut opts = getopts::Options::new();
-    opts.optopt("", "initial-url", "load this url on start", "url");
+    opts.optopt("", "url", "URL to load on start", "URL");
 
     let matches = opts.parse(&args[1..])?;
     let initial_url = matches
@@ -50,7 +50,7 @@ fn parse_cli_args() -> Result<CliArgs, getopts::Fail> {
             }
         });
 
-    Ok(CliArgs { initial_url })
+    Ok(CliArgs { url: initial_url })
 }
 
 impl Config {
@@ -61,7 +61,7 @@ impl Config {
         Self {
             opts,
             resource_dir,
-            cli_args: parse_cli_args().unwrap_or_default(),
+            args: parse_cli_args().unwrap_or_default(),
         }
     }
 

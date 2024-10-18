@@ -78,7 +78,7 @@ impl Verso {
     pub fn new(evl: &ActiveEventLoop, proxy: EventLoopProxy<()>, config: Config) -> Self {
         // Initialize configurations and Verso window
         let protocols = config.create_protocols();
-        let initial_url = config.cli_args.initial_url.clone();
+        let initial_url = config.args.url.clone();
         config.init();
         // Reserving a namespace to create TopLevelBrowsingContextId.
         PipelineNamespace::install(PipelineNamespaceId(0));
