@@ -31,7 +31,7 @@ jobs:
           nix-channel --update nixpkgs
 
       - name: "Build Verso docs"
-        run: nix-shell shell.nix --run 'cargo doc -p verso --no-deps'
+        run: nix-shell shell.nix --run 'cargo doc -p versoview --no-deps'
 
       - name: "Remove doc lock file"
         run: rm target/doc/.lock

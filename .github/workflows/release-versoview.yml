@@ -34,7 +34,7 @@ jobs:
         run: nix-shell shell.nix --run 'cargo build --release'
 
       - name: Make archive
-        run: nix-shell shell.nix --run 'cd ./target/release && tar -czvf verso-x86_64-unknown-linux-gnu.tar.gz verso'
+        run: nix-shell shell.nix --run 'cd ./target/release && tar -czvf verso-x86_64-unknown-linux-gnu.tar.gz versoview'
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
@@ -71,7 +71,7 @@ jobs:
 
       - name: Make archive
         working-directory: ./target/release
-        run: tar -czvf verso-x86_64-pc-windows-msvc.tar.gz verso.exe
+        run: tar -czvf verso-x86_64-pc-windows-msvc.tar.gz versoview.exe
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
@@ -110,7 +110,7 @@ jobs:
 
       - name: Make archive
         working-directory: ./target/release
-        run: tar -czvf verso-aarch64-apple-darwin.tar.gz verso
+        run: tar -czvf verso-aarch64-apple-darwin.tar.gz versoview
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
@@ -130,7 +130,7 @@ jobs:
 
       - name: Publish release
         run: |
-          RELEASE_TAG=versoview-v$(cargo metadata --format-version=1 --no-deps | jq -r '.packages[] | select(.name == "verso") | .version')
+          RELEASE_TAG=versoview-v$(cargo metadata --format-version=1 --no-deps | jq -r '.packages[] | select(.name == "versoview") | .version')
           git fetch --tags --quiet
           if ! git show-ref --tags --verify --quiet "refs/tags/${RELEASE_TAG}" ; then
             gh release create ${RELEASE_TAG} ./artifacts/*.tar.gz
