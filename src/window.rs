@@ -29,26 +29,10 @@ use crate::{
     keyboard::keyboard_event_from_winit,
     rendering::{gl_config_picker, RenderingContext},
     verso::send_to_constellation,
-    webview::WebView,
+    webview::{Panel, WebView},
 };
 
 use arboard::Clipboard;
-
-/// A panel is a special web view that focus on controlling states around window.
-/// It could be treated as the control panel or navigation bar of the window depending on usages.
-///
-/// At the moment, following Web API is supported:
-/// - Close window: `window.close()`
-/// - Navigate to previous page: `window.prompt('PREV')`
-/// - Navigate to next page: `window.prompt('FORWARD')`
-/// - Refresh the page: `window.prompt('REFRESH')`
-/// - Minimize the window: `window.prompt('MINIMIZE')`
-/// - Maximize the window: `window.prompt('MAXIMIZE')`
-/// - Navigate to a specific URL: `window.prompt('NAVIGATE_TO:${url}')`
-pub struct Panel {
-    pub(crate) webview: WebView,
-    pub(crate) initial_url: servo_url::ServoUrl,
-}
 
 /// A Verso window is a Winit window containing several web views.
 pub struct Window {
