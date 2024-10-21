@@ -32,25 +32,25 @@ fn parse_cli_args() -> Result<CliArgs, getopts::Fail> {
     let args: Vec<String> = std::env::args().collect();
 
     let mut opts = getopts::Options::new();
-    opts.optopt("", "initial-url", "URL to load on start", "URL");
+    opts.optopt("", "url", "URL to load on start", "URL");
 
-    let matches = opts.parse(&args[1..])?;
-    let initial_url = matches
-        .opt_str("initial-url")
-        .and_then(|initial_url| match url::Url::parse(&initial_url) {
+    let matches: getopts::Matches = opts.parse(&args[1..])?;
+    let url = matches
+        .opt_str("url")
+        .and_then(|url| match url::Url::parse(&url) {
             Ok(url_parsed) => Some(url_parsed),
             Err(e) => {
                 if e == url::ParseError::RelativeUrlWithoutBase {
-                    if let Ok(url_parsed) = url::Url::parse(&format!("https://{initial_url}")) {
+                    if let Ok(url_parsed) = url::Url::parse(&format!("https://{url}")) {
                         return Some(url_parsed);
                     }
                 }
-                log::error!("Invalid initial url: {initial_url}");
+                log::error!("Invalid initial url: {url}");
                 None
             }
         });
 
-    Ok(CliArgs { url: initial_url })
+    Ok(CliArgs { url })
 }
 
 impl Config {
