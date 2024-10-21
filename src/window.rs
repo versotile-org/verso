@@ -16,12 +16,14 @@ use webrender_api::{
     units::{DeviceIntPoint, DeviceIntRect, DeviceIntSize, DevicePoint, LayoutVector2D},
     ScrollLocation,
 };
+#[cfg(any(linux, target_os = "windows"))]
+use winit::window::ResizeDirection;
 use winit::{
     dpi::PhysicalPosition,
     event::{ElementState, TouchPhase, WindowEvent},
     event_loop::ActiveEventLoop,
     keyboard::ModifiersState,
-    window::{CursorIcon, ResizeDirection, Window as WinitWindow, WindowId},
+    window::{CursorIcon, Window as WinitWindow, WindowId},
 };
 
 use crate::{
@@ -455,6 +457,8 @@ impl Window {
     }
 }
 
+// Non-decorated window resizing for Windows and Linux.
+#[cfg(any(linux, target_os = "windows"))]
 impl Window {
     /// Drag resize the window.
     fn drag_resize_window(&self) {
