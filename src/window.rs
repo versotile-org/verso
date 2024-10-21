@@ -29,7 +29,7 @@ use crate::{
     keyboard::keyboard_event_from_winit,
     rendering::{gl_config_picker, RenderingContext},
     verso::send_to_constellation,
-    webview::WebView,
+    webview::{Panel, WebView},
 };
 
 use arboard::Clipboard;
@@ -40,18 +40,8 @@ pub struct Window {
     pub(crate) window: WinitWindow,
     /// GL surface of the window
     pub(crate) surface: Surface<WindowSurface>,
-    /// The main panel of this window. A panel is a special web view that focus on controlling states around window.
-    /// It could be treated as the control panel or navigation bar of the window depending on usages.
-    ///
-    /// At the moment, following Web API is supported:
-    /// - Close window: `window.close()`
-    /// - Navigate to previous page: `window.prompt('PREV')`
-    /// - Navigate to next page: `window.prompt('FORWARD')`
-    /// - Refresh the page: `window.prompt('REFRESH')`
-    /// - Minimize the window: `window.prompt('MINIMIZE')`
-    /// - Maximize the window: `window.prompt('MAXIMIZE')`
-    /// - Navigate to a specific URL: `window.prompt('NAVIGATE_TO:${url}')`
-    pub(crate) panel: Option<WebView>,
+    /// The main panel of this window.
+    pub(crate) panel: Option<Panel>,
     /// The WebView of this window.
     pub(crate) webview: Option<WebView>,
     /// The mouse physical position in the web view.
@@ -154,11 +144,22 @@ impl Window {
     }
 
     /// Send the constellation message to start Panel UI
-    pub fn create_panel(&mut self, constellation_sender: &Sender<ConstellationMsg>) {
+    pub fn create_panel(
+        &mut self,
+        constellation_sender: &Sender<ConstellationMsg>,
+        initial_url: Option<url::Url>,
+    ) {
         let size = self.window.inner_size();
         let size = Size2D::new(size.width as i32, size.height as i32);
         let panel_id = WebViewId::new();
-        self.panel = Some(WebView::new(panel_id, DeviceIntRect::from_size(size)));
+        self.panel = Some(Panel {
+            webview: WebView::new(panel_id, DeviceIntRect::from_size(size)),
+            initial_url: if let Some(initial_url) = initial_url {
+                servo_url::ServoUrl::from_url(initial_url)
+            } else {
+                ServoUrl::parse("https://example.com").unwrap()
+            },
+        });
 
         let url = ServoUrl::parse("verso://panel.html").unwrap();
         send_to_constellation(
@@ -302,7 +303,7 @@ impl Window {
     ) -> bool {
         // // Handle message in Verso Panel
         if let Some(panel) = &self.panel {
-            if panel.webview_id == webview_id {
+            if panel.webview.webview_id == webview_id {
                 return self.handle_servo_messages_with_panel(
                     webview_id, message, sender, clipboard, compositor,
                 );
@@ -336,7 +337,9 @@ impl Window {
 
     /// Check if the window has such webview.
     pub fn has_webview(&self, id: WebViewId) -> bool {
-        self.panel.as_ref().map_or(false, |w| w.webview_id == id)
+        self.panel
+            .as_ref()
+            .map_or(false, |w| w.webview.webview_id == id)
             || self.webview.as_ref().map_or(false, |w| w.webview_id == id)
     }
 
@@ -347,14 +350,19 @@ impl Window {
         id: WebViewId,
         compositor: &mut IOCompositor,
     ) -> (Option<WebView>, bool) {
-        if self.panel.as_ref().filter(|w| w.webview_id == id).is_some() {
+        if self
+            .panel
+            .as_ref()
+            .filter(|w| w.webview.webview_id == id)
+            .is_some()
+        {
             if let Some(w) = self.webview.as_ref() {
                 send_to_constellation(
                     &compositor.constellation_chan,
                     ConstellationMsg::CloseWebView(w.webview_id),
                 )
             }
-            (self.panel.take(), false)
+            (self.panel.take().map(|panel| panel.webview), false)
         } else if self
             .webview
             .as_ref()
@@ -371,7 +379,7 @@ impl Window {
     pub fn painting_order(&self) -> Vec<&WebView> {
         let mut order = vec![];
         if let Some(panel) = &self.panel {
-            order.push(panel);
+            order.push(&panel.webview);
         }
         if let Some(webview) = &self.webview {
             order.push(webview);

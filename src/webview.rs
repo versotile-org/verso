@@ -35,6 +35,24 @@ impl WebView {
     }
 }
 
+/// A panel is a special web view that focus on controlling states around window.
+/// It could be treated as the control panel or navigation bar of the window depending on usages.
+///
+/// At the moment, following Web API is supported:
+/// - Close window: `window.close()`
+/// - Navigate to previous page: `window.prompt('PREV')`
+/// - Navigate to next page: `window.prompt('FORWARD')`
+/// - Refresh the page: `window.prompt('REFRESH')`
+/// - Minimize the window: `window.prompt('MINIMIZE')`
+/// - Maximize the window: `window.prompt('MAXIMIZE')`
+/// - Navigate to a specific URL: `window.prompt('NAVIGATE_TO:${url}')`
+pub struct Panel {
+    /// The panel's webview
+    pub(crate) webview: WebView,
+    /// The URL to load when the panel gets loaded
+    pub(crate) initial_url: servo_url::ServoUrl,
+}
+
 impl Window {
     /// Handle servo messages with corresponding web view ID.
     pub fn handle_servo_messages_with_webview(
@@ -105,7 +123,7 @@ impl Window {
                     send_to_constellation(
                         sender,
                         ConstellationMsg::WebDriverCommand(WebDriverCommandMsg::ScriptCommand(
-                            BrowsingContextId::from(panel.webview_id),
+                            BrowsingContextId::from(panel.webview.webview_id),
                             WebDriverScriptCommand::ExecuteScript(
                                 format!("window.navbar.setNavbarUrl('{}')", url.as_str()),
                                 tx,
@@ -155,14 +173,19 @@ impl Window {
                 self.window.request_redraw();
                 send_to_constellation(sender, ConstellationMsg::FocusWebView(panel_id));
 
-                let demo_url = ServoUrl::parse("https://example.com").unwrap();
                 let demo_id = WebViewId::new();
                 let size = self.size();
                 let rect = DeviceIntRect::from_size(size);
                 let mut webview = WebView::new(demo_id, rect);
                 webview.set_size(self.get_content_size(rect));
                 self.webview = Some(webview);
-                send_to_constellation(sender, ConstellationMsg::NewWebView(demo_url, demo_id));
+                send_to_constellation(
+                    sender,
+                    ConstellationMsg::NewWebView(
+                        self.panel.as_ref().unwrap().initial_url.clone(),
+                        demo_id,
+                    ),
+                );
                 log::debug!("Verso Window {:?} adds webview {}", self.id(), demo_id);
             }
             EmbedderMsg::AllowNavigationRequest(id, _url) => {

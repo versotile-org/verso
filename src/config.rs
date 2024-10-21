@@ -10,6 +10,13 @@ use net_traits::{
 };
 use servo_config::opts::{default_opts, set_options, Opts};
 
+/// Command line arguments.
+#[derive(Clone, Debug, Default)]
+pub struct CliArgs {
+    /// URL to load initially.
+    pub url: Option<url::Url>,
+}
+
 /// Configuration of Verso instance.
 #[derive(Clone, Debug)]
 pub struct Config {
@@ -17,6 +24,33 @@ pub struct Config {
     pub opts: Opts,
     /// Path to resources directory.
     pub resource_dir: PathBuf,
+    /// Command line arguments.
+    pub args: CliArgs,
+}
+
+fn parse_cli_args() -> Result<CliArgs, getopts::Fail> {
+    let args: Vec<String> = std::env::args().collect();
+
+    let mut opts = getopts::Options::new();
+    opts.optopt("", "url", "URL to load on start", "URL");
+
+    let matches: getopts::Matches = opts.parse(&args[1..])?;
+    let url = matches
+        .opt_str("url")
+        .and_then(|url| match url::Url::parse(&url) {
+            Ok(url_parsed) => Some(url_parsed),
+            Err(e) => {
+                if e == url::ParseError::RelativeUrlWithoutBase {
+                    if let Ok(url_parsed) = url::Url::parse(&format!("https://{url}")) {
+                        return Some(url_parsed);
+                    }
+                }
+                log::error!("Invalid initial url: {url}");
+                None
+            }
+        });
+
+    Ok(CliArgs { url })
 }
 
 impl Config {
@@ -24,7 +58,11 @@ impl Config {
     /// resources directory.
     pub fn new(resource_dir: PathBuf) -> Self {
         let opts = default_opts();
-        Self { opts, resource_dir }
+        Self {
+            opts,
+            resource_dir,
+            args: parse_cli_args().unwrap_or_default(),
+        }
     }
 
     /// Register URL scheme protocols

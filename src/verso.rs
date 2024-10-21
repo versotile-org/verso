@@ -78,10 +78,12 @@ impl Verso {
     pub fn new(evl: &ActiveEventLoop, proxy: EventLoopProxy<()>, config: Config) -> Self {
         // Initialize configurations and Verso window
         let protocols = config.create_protocols();
+        let initial_url = config.args.url.clone();
         config.init();
         // Reserving a namespace to create TopLevelBrowsingContextId.
         PipelineNamespace::install(PipelineNamespaceId(0));
         let (mut window, rendering_context) = Window::new(evl);
+
         let event_loop_waker = Box::new(Waker(proxy));
         let opts = opts::get();
 
@@ -115,11 +117,11 @@ impl Verso {
             let (compositor_ipc_sender, compositor_ipc_receiver) =
                 ipc::channel().expect("ipc channel failure");
             let sender_clone = sender.clone();
-            ROUTER.add_route(
-                compositor_ipc_receiver.to_opaque(),
+            ROUTER.add_typed_route(
+                compositor_ipc_receiver,
                 Box::new(move |message| {
                     let _ = sender_clone.send(CompositorMsg::CrossProcess(
-                        message.to().expect("Could not convert Compositor message"),
+                        message.expect("Could not convert Compositor message"),
                     ));
                 }),
             );
@@ -359,7 +361,7 @@ impl Verso {
             opts.debug.convert_mouse_to_touch,
         );
 
-        window.create_panel(&constellation_sender);
+        window.create_panel(&constellation_sender, initial_url);
 
         let mut windows = HashMap::new();
         windows.insert(window.id(), (window, webrender_document));
@@ -428,7 +430,7 @@ impl Verso {
                                         ) {
                                             let mut window =
                                                 Window::new_with_compositor(evl, compositor);
-                                            window.create_panel(&self.constellation_sender);
+                                            window.create_panel(&self.constellation_sender, None);
                                             let webrender_document = document.clone();
                                             self.windows
                                                 .insert(window.id(), (window, webrender_document));
