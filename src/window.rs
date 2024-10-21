@@ -209,8 +209,10 @@ impl Window {
                 // handle Windows and Linux non-decoration window resize cursor
                 #[cfg(any(linux, target_os = "windows"))]
                 {
-                    let direction = self.get_drag_resize_direction();
-                    self.set_drag_resize_cursor(direction);
+                    if self.can_resize_window() {
+                        let direction = self.get_drag_resize_direction();
+                        self.set_drag_resize_cursor(direction);
+                    }
                 }
             }
             WindowEvent::MouseInput { state, button, .. } => {
@@ -227,7 +229,9 @@ impl Window {
                 {
                     if *state == ElementState::Pressed && *button == winit::event::MouseButton::Left
                     {
-                        self.drag_resize_window();
+                        if self.can_resize_window() {
+                            self.drag_resize_window();
+                        }
                     }
                 }
 
@@ -460,6 +464,12 @@ impl Window {
 // Non-decorated window resizing for Windows and Linux.
 #[cfg(any(linux, target_os = "windows"))]
 impl Window {
+    /// Check current window state is allowed to drag-resize.
+    fn can_resize_window(&self) -> bool {
+        // TODO: Check if the window is in fullscreen mode.
+        !self.window.is_maximized()
+    }
+
     /// Drag resize the window.
     fn drag_resize_window(&self) {
         if let Some(direction) = self.get_drag_resize_direction() {
@@ -474,7 +484,6 @@ impl Window {
         let mouse_position = match self.mouse_position.get() {
             Some(position) => position,
             None => {
-                log::trace!("Mouse position is None, skipping drag-resize window");
                 return None;
             }
         };
@@ -483,32 +492,38 @@ impl Window {
         let border_size = 5.0 * self.window.scale_factor();
 
         let x_direction = if mouse_position.x < border_size {
-            ResizeDirection::West
+            Some(ResizeDirection::West)
         } else if mouse_position.x > (window_size.width as f64 - border_size) {
-            ResizeDirection::East
+            Some(ResizeDirection::East)
         } else {
-            // Use arbitrary direction instead of None for simplicity.
-            ResizeDirection::SouthEast
+            None
         };
 
         let y_direction = if mouse_position.y < border_size {
-            ResizeDirection::North
+            Some(ResizeDirection::North)
         } else if mouse_position.y > (window_size.height as f64 - border_size) {
-            ResizeDirection::South
+            Some(ResizeDirection::South)
         } else {
-            // Use arbitrary direction instead of None for simplicity.
-            ResizeDirection::SouthEast
+            None
         };
 
         let direction = match (x_direction, y_direction) {
-            (ResizeDirection::East, ResizeDirection::North) => ResizeDirection::NorthEast,
-            (ResizeDirection::East, ResizeDirection::South) => ResizeDirection::SouthEast,
-            (ResizeDirection::West, ResizeDirection::North) => ResizeDirection::NorthWest,
-            (ResizeDirection::West, ResizeDirection::South) => ResizeDirection::SouthWest,
-            (ResizeDirection::East, _) => ResizeDirection::East,
-            (ResizeDirection::West, _) => ResizeDirection::West,
-            (_, ResizeDirection::South) => ResizeDirection::South,
-            (_, ResizeDirection::North) => ResizeDirection::North,
+            (Some(ResizeDirection::East), None) => ResizeDirection::East,
+            (Some(ResizeDirection::West), None) => ResizeDirection::West,
+            (None, Some(ResizeDirection::South)) => ResizeDirection::South,
+            (None, Some(ResizeDirection::North)) => ResizeDirection::North,
+            (Some(ResizeDirection::East), Some(ResizeDirection::North)) => {
+                ResizeDirection::NorthEast
+            }
+            (Some(ResizeDirection::West), Some(ResizeDirection::North)) => {
+                ResizeDirection::NorthWest
+            }
+            (Some(ResizeDirection::East), Some(ResizeDirection::South)) => {
+                ResizeDirection::SouthEast
+            }
+            (Some(ResizeDirection::West), Some(ResizeDirection::South)) => {
+                ResizeDirection::SouthWest
+            }
             _ => return None,
         };
 
