@@ -1,36 +1,32 @@
 use std::{
     borrow::Cow,
     collections::HashMap,
-    path::PathBuf,
     sync::{atomic::Ordering, Arc},
 };
 
 use arboard::Clipboard;
-use base::id::WebViewId;
+use base::id::{PipelineNamespace, PipelineNamespaceId};
 use bluetooth::BluetoothThreadFactory;
 use bluetooth_traits::BluetoothRequest;
-use canvas::canvas_paint_thread::{self, CanvasPaintThread};
-use compositing_traits::{
-    CompositorMsg, CompositorProxy, CompositorReceiver, ConstellationMsg, ForwardedToCompositorMsg,
-};
+use canvas::canvas_paint_thread::CanvasPaintThread;
+use compositing_traits::{CompositorMsg, CompositorProxy, CompositorReceiver, ConstellationMsg};
 use constellation::{Constellation, FromCompositorLogger, InitialConstellationState};
 use crossbeam_channel::{unbounded, Sender};
 use devtools;
 use embedder_traits::{EmbedderMsg, EmbedderProxy, EmbedderReceiver, EventLoopWaker};
 use euclid::Scale;
 use fonts::SystemFontService;
-use ipc_channel::ipc::{IpcSender, IpcSharedMemory};
+use ipc_channel::ipc::{self, IpcSender};
+use ipc_channel::router::ROUTER;
 use layout_thread_2020;
 use log::{Log, Metadata, Record};
 use media::{GlApi, GlContext, NativeDisplay, WindowGLContext};
-use net::{protocols::ProtocolRegistry, resource_thread};
+use net::resource_thread;
 use profile;
 use script::{self, JSEngineSetup};
 use script_traits::WindowSizeData;
 use servo_config::{opts, pref};
-use servo_url::ServoUrl;
 use style;
-use units::DeviceIntRect;
 use webgpu;
 use webrender::{create_webrender_instance, ShaderPrecacheFlags, WebRenderOptions};
 use webrender_api::*;
@@ -45,13 +41,12 @@ use winit::{
 use crate::{
     compositor::{IOCompositor, InitialCompositorState, ShutdownState},
     config::Config,
-    webview::WebView,
     window::Window,
 };
 
 /// Main entry point of Verso browser.
 pub struct Verso {
-    windows: HashMap<WindowId, Window>,
+    windows: HashMap<WindowId, (Window, DocumentId)>,
     compositor: Option<IOCompositor>,
     constellation_sender: Sender<ConstellationMsg>,
     embedder_receiver: EmbedderReceiver,
@@ -61,7 +56,6 @@ pub struct Verso {
     _js_engine_setup: Option<JSEngineSetup>,
     /// FIXME: It's None on wayland in Flatpak. Find a way to support this.
     clipboard: Option<Clipboard>,
-    resource_dir: PathBuf,
 }
 
 impl Verso {
@@ -83,9 +77,13 @@ impl Verso {
     /// - Image Cache: Enabled
     pub fn new(evl: &ActiveEventLoop, proxy: EventLoopProxy<()>, config: Config) -> Self {
         // Initialize configurations and Verso window
-        let resource_dir = config.resource_dir.clone();
+        let protocols = config.create_protocols();
+        let initial_url = config.args.url.clone();
         config.init();
-        let (window, rendering_context) = Window::new(evl);
+        // Reserving a namespace to create TopLevelBrowsingContextId.
+        PipelineNamespace::install(PipelineNamespaceId(0));
+        let (mut window, rendering_context) = Window::new(evl);
+
         let event_loop_waker = Box::new(Waker(proxy));
         let opts = opts::get();
 
@@ -116,9 +114,22 @@ impl Verso {
         // Create compositor and embedder channels
         let (compositor_sender, compositor_receiver) = {
             let (sender, receiver) = unbounded();
+            let (compositor_ipc_sender, compositor_ipc_receiver) =
+                ipc::channel().expect("ipc channel failure");
+            let sender_clone = sender.clone();
+            ROUTER.add_typed_route(
+                compositor_ipc_receiver,
+                Box::new(move |message| {
+                    let _ = sender_clone.send(CompositorMsg::CrossProcess(
+                        message.expect("Could not convert Compositor message"),
+                    ));
+                }),
+            );
+            let cross_process_compositor_api = CrossProcessCompositorApi(compositor_ipc_sender);
             (
                 CompositorProxy {
                     sender,
+                    cross_process_compositor_api,
                     event_loop_waker: event_loop_waker.clone(),
                 },
                 CompositorReceiver { receiver },
@@ -248,9 +259,6 @@ impl Verso {
         let bluetooth_thread: IpcSender<BluetoothRequest> =
             BluetoothThreadFactory::new(embedder_sender.clone());
 
-        // Register URL scheme protocols
-        let protocols = ProtocolRegistry::with_internal_protocols();
-
         // Create resource thread pool
         let user_agent: Cow<'static, str> = default_user_agent_string().into();
         let (public_resource_threads, private_resource_threads) =
@@ -268,15 +276,13 @@ impl Verso {
 
         // Create font cache thread
         let system_font_service = Arc::new(
-            SystemFontService::spawn(Box::new(WebRenderFontApiCompositorProxy(
-                compositor_sender.clone(),
-            )))
-            .to_proxy(),
+            SystemFontService::spawn(compositor_sender.cross_process_compositor_api.clone())
+                .to_proxy(),
         );
 
         // Create canvas thread
         let (canvas_create_sender, canvas_ipc_sender) = CanvasPaintThread::start(
-            Box::new(CanvasWebrenderApi(compositor_sender.clone())),
+            compositor_sender.cross_process_compositor_api.clone(),
             system_font_service.clone(),
             public_resource_threads.clone(),
         );
@@ -355,18 +361,10 @@ impl Verso {
             opts.debug.convert_mouse_to_touch,
         );
 
-        // Send the constellation message to start Panel UI
-        // TODO: Should become a window method
-        let panel_id = window.panel.as_ref().unwrap().webview_id;
-        let path = resource_dir.join("panel.html");
-        let url = ServoUrl::from_file_path(path.to_str().unwrap()).unwrap();
-        send_to_constellation(
-            &constellation_sender,
-            ConstellationMsg::NewWebView(url, panel_id),
-        );
+        window.create_panel(&constellation_sender, initial_url);
 
         let mut windows = HashMap::new();
-        windows.insert(window.id(), window);
+        windows.insert(window.id(), (window, webrender_document));
 
         // Create Verso instance
         let verso = Verso {
@@ -376,7 +374,6 @@ impl Verso {
             embedder_receiver,
             _js_engine_setup: js_engine_setup,
             clipboard: Clipboard::new().ok(),
-            resource_dir,
         };
 
         verso.setup_logging();
@@ -392,7 +389,7 @@ impl Verso {
                 compositor.maybe_start_shutting_down();
             } else {
                 let need_repaint = match self.windows.get_mut(&window_id) {
-                    Some(window) => window.handle_winit_window_event(
+                    Some(window) => window.0.handle_winit_window_event(
                         &self.constellation_sender,
                         compositor,
                         &event,
@@ -422,7 +419,7 @@ impl Verso {
                     match compositor.shutdown_state {
                         ShutdownState::NotShuttingDown => {
                             if let Some(id) = webview_id {
-                                for window in self.windows.values_mut() {
+                                for (window, document) in self.windows.values_mut() {
                                     if window.has_webview(id) {
                                         if window.handle_servo_message(
                                             id,
@@ -433,18 +430,10 @@ impl Verso {
                                         ) {
                                             let mut window =
                                                 Window::new_with_compositor(evl, compositor);
-                                            let panel_id = WebViewId::new();
-                                            let path = self.resource_dir.join("panel.html");
-                                            let url =
-                                                ServoUrl::from_file_path(path.to_str().unwrap())
-                                                    .unwrap();
-                                            send_to_constellation(
-                                                &self.constellation_sender,
-                                                ConstellationMsg::NewWebView(url, panel_id),
-                                            );
-                                            let rect = DeviceIntRect::from_size(window.size());
-                                            window.panel = Some(WebView::new(panel_id, rect));
-                                            self.windows.insert(window.id(), window);
+                                            window.create_panel(&self.constellation_sender, None);
+                                            let webrender_document = document.clone();
+                                            self.windows
+                                                .insert(window.id(), (window, webrender_document));
                                         }
                                         break;
                                     }
@@ -458,7 +447,7 @@ impl Verso {
                                         if let Some(window) =
                                             self.windows.get(&compositor.current_window)
                                         {
-                                            window.set_cursor_icon(cursor);
+                                            window.0.set_cursor_icon(cursor);
                                         }
                                     }
                                     EmbedderMsg::Shutdown | EmbedderMsg::ReadyToPresent(_) => {}
@@ -590,82 +579,6 @@ impl webrender::api::RenderNotifier for RenderNotifier {
                 document_id,
                 composite_needed,
             ));
-    }
-}
-
-struct WebRenderFontApiCompositorProxy(CompositorProxy);
-
-impl WebRenderFontApi for WebRenderFontApiCompositorProxy {
-    fn add_font_instance(
-        &self,
-        font_instance_key: FontInstanceKey,
-        font_key: FontKey,
-        size: f32,
-        flags: FontInstanceFlags,
-    ) {
-        self.0.send(CompositorMsg::Forwarded(
-            ForwardedToCompositorMsg::SystemFontService(FontToCompositorMsg::AddFontInstance(
-                font_instance_key,
-                font_key,
-                size,
-                flags,
-            )),
-        ));
-    }
-
-    fn add_font(&self, font_key: FontKey, data: Arc<IpcSharedMemory>, index: u32) {
-        self.0.send(CompositorMsg::Forwarded(
-            ForwardedToCompositorMsg::SystemFontService(FontToCompositorMsg::AddFont(
-                font_key, index, data,
-            )),
-        ));
-    }
-
-    fn add_system_font(&self, font_key: FontKey, handle: NativeFontHandle) {
-        self.0.send(CompositorMsg::Forwarded(
-            ForwardedToCompositorMsg::SystemFontService(FontToCompositorMsg::AddSystemFont(
-                font_key, handle,
-            )),
-        ));
-    }
-
-    fn fetch_font_keys(
-        &self,
-        number_of_font_keys: usize,
-        number_of_font_instance_keys: usize,
-    ) -> (Vec<FontKey>, Vec<FontInstanceKey>) {
-        let (sender, receiver) = unbounded();
-        self.0.send(CompositorMsg::Forwarded(
-            ForwardedToCompositorMsg::SystemFontService(FontToCompositorMsg::GenerateKeys(
-                number_of_font_keys,
-                number_of_font_instance_keys,
-                sender,
-            )),
-        ));
-        receiver.recv().unwrap()
-    }
-}
-
-#[derive(Clone)]
-struct CanvasWebrenderApi(CompositorProxy);
-
-impl canvas_paint_thread::WebrenderApi for CanvasWebrenderApi {
-    fn generate_key(&self) -> Option<ImageKey> {
-        let (sender, receiver) = unbounded();
-        self.0
-            .send(CompositorMsg::Forwarded(ForwardedToCompositorMsg::Canvas(
-                CanvasToCompositorMsg::GenerateKey(sender),
-            )));
-        receiver.recv().ok()
-    }
-    fn update_images(&self, updates: Vec<ImageUpdate>) {
-        self.0
-            .send(CompositorMsg::Forwarded(ForwardedToCompositorMsg::Canvas(
-                CanvasToCompositorMsg::UpdateImages(updates),
-            )));
-    }
-    fn clone(&self) -> Box<dyn canvas_paint_thread::WebrenderApi> {
-        Box::new(<Self as Clone>::clone(self))
     }
 }
 
