@@ -117,11 +117,11 @@ impl Verso {
             let (compositor_ipc_sender, compositor_ipc_receiver) =
                 ipc::channel().expect("ipc channel failure");
             let sender_clone = sender.clone();
-            ROUTER.add_route(
-                compositor_ipc_receiver.to_opaque(),
+            ROUTER.add_typed_route(
+                compositor_ipc_receiver,
                 Box::new(move |message| {
                     let _ = sender_clone.send(CompositorMsg::CrossProcess(
-                        message.to().expect("Could not convert Compositor message"),
+                        message.expect("Could not convert Compositor message"),
                     ));
                 }),
             );
