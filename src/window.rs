@@ -13,6 +13,7 @@ use glutin_winit::DisplayBuilder;
 use muda::{MenuEvent, MenuEventReceiver};
 use raw_window_handle::HasWindowHandle;
 use script_traits::{TouchEventType, WheelDelta, WheelMode};
+use servo_url::ServoUrl;
 use webrender_api::{
     units::{DeviceIntPoint, DeviceIntRect, DeviceIntSize, DevicePoint, LayoutVector2D},
     ScrollLocation,
@@ -31,7 +32,7 @@ use crate::{
     keyboard::keyboard_event_from_winit,
     rendering::{gl_config_picker, RenderingContext},
     verso::send_to_constellation,
-    webview::WebView,
+    webview::{Panel, WebView},
 };
 
 use arboard::Clipboard;
@@ -42,8 +43,8 @@ pub struct Window {
     pub(crate) window: WinitWindow,
     /// GL surface of the window
     pub(crate) surface: Surface<WindowSurface>,
-    /// The main control panel of this window.
-    pub(crate) panel: Option<WebView>,
+    /// The main panel of this window.
+    pub(crate) panel: Option<Panel>,
     /// The WebView of this window.
     pub(crate) webview: Option<WebView>,
     /// The mouse physical position in the web view.
@@ -88,13 +89,11 @@ impl Window {
             .expect("Failed to create rendering context");
         log::trace!("Created rendering context for window {:?}", window);
 
-        let size = window.inner_size();
-        let size = Size2D::new(size.width as i32, size.height as i32);
         (
             Self {
                 window,
                 surface,
-                panel: Some(WebView::new_panel(DeviceIntRect::from_size(size))),
+                panel: None,
                 webview: None,
                 mouse_position: Cell::new(PhysicalPosition::default()),
                 modifiers_state: Cell::new(ModifiersState::default()),
@@ -126,6 +125,7 @@ impl Window {
             .rendering_context
             .create_surface(&window)
             .unwrap();
+
         let mut window = Self {
             window,
             surface,
@@ -137,6 +137,42 @@ impl Window {
         };
         compositor.swap_current_window(&mut window);
         window
+    }
+
+    /// Get the content area size for the webview to draw on
+    pub fn get_content_size(&self, mut size: DeviceIntRect) -> DeviceIntRect {
+        if self.panel.is_some() {
+            size.min.y = size.max.y.min(100);
+            size.min.x += 10;
+            size.max.y -= 10;
+            size.max.x -= 10;
+        }
+        size
+    }
+
+    /// Send the constellation message to start Panel UI
+    pub fn create_panel(
+        &mut self,
+        constellation_sender: &Sender<ConstellationMsg>,
+        initial_url: Option<url::Url>,
+    ) {
+        let size = self.window.inner_size();
+        let size = Size2D::new(size.width as i32, size.height as i32);
+        let panel_id = WebViewId::new();
+        self.panel = Some(Panel {
+            webview: WebView::new(panel_id, DeviceIntRect::from_size(size)),
+            initial_url: if let Some(initial_url) = initial_url {
+                servo_url::ServoUrl::from_url(initial_url)
+            } else {
+                ServoUrl::parse("https://example.com").unwrap()
+            },
+        });
+
+        let url = ServoUrl::parse("verso://panel.html").unwrap();
+        send_to_constellation(
+            constellation_sender,
+            ConstellationMsg::NewWebView(url, panel_id),
+        );
     }
 
     /// Handle Winit window event and return a boolean to indicate if the compositor should repaint immediately.
@@ -284,7 +320,7 @@ impl Window {
     ) -> bool {
         // // Handle message in Verso Panel
         if let Some(panel) = &self.panel {
-            if panel.webview_id == webview_id {
+            if panel.webview.webview_id == webview_id {
                 return self.handle_servo_messages_with_panel(
                     webview_id, message, sender, clipboard, compositor,
                 );
@@ -318,7 +354,9 @@ impl Window {
 
     /// Check if the window has such webview.
     pub fn has_webview(&self, id: WebViewId) -> bool {
-        self.panel.as_ref().map_or(false, |w| w.webview_id == id)
+        self.panel
+            .as_ref()
+            .map_or(false, |w| w.webview.webview_id == id)
             || self.webview.as_ref().map_or(false, |w| w.webview_id == id)
     }
 
@@ -329,14 +367,19 @@ impl Window {
         id: WebViewId,
         compositor: &mut IOCompositor,
     ) -> (Option<WebView>, bool) {
-        if self.panel.as_ref().filter(|w| w.webview_id == id).is_some() {
+        if self
+            .panel
+            .as_ref()
+            .filter(|w| w.webview.webview_id == id)
+            .is_some()
+        {
             if let Some(w) = self.webview.as_ref() {
                 send_to_constellation(
                     &compositor.constellation_chan,
                     ConstellationMsg::CloseWebView(w.webview_id),
                 )
             }
-            (self.panel.take(), false)
+            (self.panel.take().map(|panel| panel.webview), false)
         } else if self
             .webview
             .as_ref()
@@ -353,7 +396,7 @@ impl Window {
     pub fn painting_order(&self) -> Vec<&WebView> {
         let mut order = vec![];
         if let Some(panel) = &self.panel {
-            order.push(panel);
+            order.push(&panel.webview);
         }
         if let Some(webview) = &self.webview {
             order.push(webview);
