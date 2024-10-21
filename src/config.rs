@@ -32,7 +32,7 @@ fn parse_cli_args() -> Result<CliArgs, getopts::Fail> {
     let args: Vec<String> = std::env::args().collect();
 
     let mut opts = getopts::Options::new();
-    opts.optopt("", "url", "URL to load on start", "URL");
+    opts.optopt("", "initial-url", "URL to load on start", "URL");
 
     let matches = opts.parse(&args[1..])?;
     let initial_url = matches
