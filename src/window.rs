@@ -209,7 +209,7 @@ impl Window {
                 // handle Windows and Linux non-decoration window resize cursor
                 #[cfg(any(linux, target_os = "windows"))]
                 {
-                    if self.can_resize_window() {
+                    if self.is_resizable() {
                         let direction = self.get_drag_resize_direction();
                         self.set_drag_resize_cursor(direction);
                     }
@@ -229,7 +229,7 @@ impl Window {
                 {
                     if *state == ElementState::Pressed && *button == winit::event::MouseButton::Left
                     {
-                        if self.can_resize_window() {
+                        if self.is_resizable() {
                             self.drag_resize_window();
                         }
                     }
@@ -465,9 +465,9 @@ impl Window {
 #[cfg(any(linux, target_os = "windows"))]
 impl Window {
     /// Check current window state is allowed to drag-resize.
-    fn can_resize_window(&self) -> bool {
+    fn is_resizable(&self) -> bool {
         // TODO: Check if the window is in fullscreen mode.
-        !self.window.is_maximized()
+        !self.window.is_maximized() && self.window.is_resizable()
     }
 
     /// Drag resize the window.
