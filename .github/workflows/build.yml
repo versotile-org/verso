@@ -117,7 +117,7 @@ jobs:
       - name: Fetch Verso version
         if: ${{ github.event_name == 'schedule' }}
         run: |
-          echo "VERSO_VERSION=$(cargo metadata --format-version=1 --no-deps | jq -r '.packages[] | select(.name == "verso") | .version')" >> $GITHUB_ENV
+          echo "VERSO_VERSION=$(cargo metadata --format-version=1 --no-deps | jq -r '.packages[] | select(.name == "versoview") | .version')" >> $GITHUB_ENV
 
       - name: Generate flatpak cargo sources
         if: ${{ github.event_name == 'schedule' }}
@@ -190,7 +190,7 @@ jobs:
       - name: Fetch Verso version
         if: ${{ github.event_name == 'schedule' }}
         run: |
-          echo "VERSO_VERSION=$(cargo metadata --format-version=1 --no-deps | jq -r '.packages[] | select(.name == "verso") | .version')" >> $Env:GITHUB_ENV
+          echo "VERSO_VERSION=$(cargo metadata --format-version=1 --no-deps | jq -r '.packages[] | select(.name == "versoview") | .version')" >> $Env:GITHUB_ENV
 
       - name: Upload artifact
         if: ${{ github.event_name == 'schedule' }}
@@ -261,7 +261,7 @@ jobs:
       - name: Fetch Verso version
         if: ${{ github.event_name == 'schedule' }}
         run: |
-          echo "VERSO_VERSION=$(cargo metadata --format-version=1 --no-deps | jq -r '.packages[] | select(.name == "verso") | .version')" >> $GITHUB_ENV
+          echo "VERSO_VERSION=$(cargo metadata --format-version=1 --no-deps | jq -r '.packages[] | select(.name == "versoview") | .version')" >> $GITHUB_ENV
 
       - name: Upload artifact
         if: ${{ github.event_name == 'schedule' }}

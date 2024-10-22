@@ -1,12 +1,12 @@
 [workspace]
-members = ["versoview", "versoview_messages"]
+members = ["verso", "versoview_messages"]
 
 [workspace.dependencies]
 ipc-channel = "0.19"
 serde = { version = "1.0", features = ["derive"] }
 
 [package]
-name = "verso"
+name = "versoview"
 version = "0.0.1"
 authors = ["Wu Yu Wei"]
 edition = "2021"

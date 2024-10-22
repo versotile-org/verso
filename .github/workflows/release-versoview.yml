@@ -1,0 +1,137 @@
+name: Release VersoView
+
+on:
+  workflow_dispatch:
+
+env:
+  RUST_BACKTRACE: 1
+  CARGO_INCREMENTAL: 0
+  GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+jobs:
+  build-linux:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: nixbuild/nix-quick-install-action@v28
+
+      - name: Restore and cache Nix store
+        uses: nix-community/cache-nix-action@v5
+        with:
+          paths: |
+            ~/.cargo
+            target/release/
+          primary-key: nix-${{ runner.os }}-${{ hashFiles('**/*.nix', 'Cargo.lock', 'Cargo.toml') }}
+          restore-prefixes-first-match: nix-${{ runner.os }}-
+          gc-max-store-size-linux: 1073741824
+
+      - name: Add Nix channel
+        run: |
+          nix-channel --add https://nixos.org/channels/nixos-24.05 nixpkgs
+          nix-channel --update nixpkgs
+
+      - name: Build
+        run: nix-shell shell.nix --run 'cargo build --release'
+
+      - name: Make archive
+        run: nix-shell shell.nix --run 'cd ./target/release && tar -czvf verso-x86_64-unknown-linux-gnu.tar.gz versoview'
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: verso-x86_64-unknown-linux-gnu
+          path: ./target/release/verso-x86_64-unknown-linux-gnu.tar.gz
+
+  build-windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Run sccache-cache
+        uses: mozilla-actions/sccache-action@v0.0.4
+
+      - name: Install Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install mako
+        run: python -m pip install mako
+
+      - name: Install scroop
+        uses: MinoruSekine/setup-scoop@v3
+      - name: Install dependencies
+        run: |
+          scoop install llvm cmake
+
+      - name: Build
+        env:
+          SCCACHE_GHA_ENABLED: true
+          RUSTC_WRAPPER: "sccache"
+        run: cargo build --release
+
+      - name: Make archive
+        working-directory: ./target/release
+        run: tar -czvf verso-x86_64-pc-windows-msvc.tar.gz versoview.exe
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: verso-x86_64-pc-windows-msvc
+          path: ./target/release/verso-x86_64-pc-windows-msvc.tar.gz
+
+  build-mac:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Run sccache-cache
+        uses: mozilla-actions/sccache-action@v0.0.4
+
+      - name: Install Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install mako
+        run: python -m pip install mako
+
+      - name: Install dependencies
+        run: |
+          brew install cmake
+          curl https://gstreamer.freedesktop.org/data/pkg/osx/1.24.6/gstreamer-1.0-1.24.6-universal.pkg -o runtime.pkg
+          sudo installer -pkg runtime.pkg -target /
+          curl https://gstreamer.freedesktop.org/data/pkg/osx/1.24.6/gstreamer-1.0-devel-1.24.6-universal.pkg -o develop.pkg
+          sudo installer -pkg develop.pkg -target /
+
+      - name: Build
+        env:
+          SCCACHE_GHA_ENABLED: true
+          RUSTC_WRAPPER: "sccache"
+        run: cargo build --release
+
+      - name: Make archive
+        working-directory: ./target/release
+        run: tar -czvf verso-aarch64-apple-darwin.tar.gz versoview
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: verso-aarch64-apple-darwin
+          path: ./target/release/verso-aarch64-apple-darwin.tar.gz
+
+  publish-release:
+    runs-on: ubuntu-latest
+    needs: [build-linux, build-windows, build-mac]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          merge-multiple: true
+          path: artifacts
+
+      - name: Publish release
+        run: |
+          RELEASE_TAG=versoview-v$(cargo metadata --format-version=1 --no-deps | jq -r '.packages[] | select(.name == "versoview") | .version')
+          git fetch --tags --quiet
+          if ! git show-ref --tags --verify --quiet "refs/tags/${RELEASE_TAG}" ; then
+            gh release create ${RELEASE_TAG} ./artifacts/*.tar.gz
+          fi
