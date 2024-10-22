@@ -101,10 +101,11 @@ impl Window {
 
     /// Create a Verso window with the rendering context.
     pub fn new_with_compositor(evl: &ActiveEventLoop, compositor: &mut IOCompositor) -> Self {
+        let window_attrs = WinitWindow::default_attributes()
+            .with_decorations(false)
+            .with_transparent(true);
         let window = evl
-            .create_window(WinitWindow::default_attributes())
-            // .with_transparent(true)
-            // .with_decorations(false)
+            .create_window(window_attrs)
             .expect("Failed to create window.");
 
         #[cfg(macos)]
@@ -332,7 +333,7 @@ impl Window {
         clipboard: Option<&mut Clipboard>,
         compositor: &mut IOCompositor,
     ) -> bool {
-        // // Handle message in Verso Panel
+        // Handle message in Verso Panel
         if let Some(panel) = &self.panel {
             if panel.webview.webview_id == webview_id {
                 return self.handle_servo_messages_with_panel(
