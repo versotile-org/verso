@@ -26,7 +26,9 @@ use profile;
 use script::{self, JSEngineSetup};
 use script_traits::WindowSizeData;
 use servo_config::{opts, pref};
+use servo_url::ServoUrl;
 use style;
+use versoview_messages::ControllerMessage;
 use webgpu;
 use webrender::{create_webrender_instance, ShaderPrecacheFlags, WebRenderOptions};
 use webrender_api::*;
@@ -75,10 +77,33 @@ impl Verso {
     /// - Canvas: Enabled
     /// - Constellation: Enabled
     /// - Image Cache: Enabled
-    pub fn new(evl: &ActiveEventLoop, proxy: EventLoopProxy<()>, config: Config) -> Self {
+    pub fn new(
+        evl: &ActiveEventLoop,
+        proxy: EventLoopProxy<EventLoopProxyMessage>,
+        config: Config,
+    ) -> Self {
+        if let Some(ipc_channel_name) = &config.args.ipc_channel_name {
+            let sender =
+                IpcSender::<IpcSender<ControllerMessage>>::connect(ipc_channel_name.to_string())
+                    .unwrap();
+            let (controller_sender, receiver) = ipc::channel::<ControllerMessage>().unwrap();
+            sender.send(controller_sender).unwrap();
+            let proxy_clone = proxy.clone();
+            std::thread::spawn(move || {
+                while let Ok(message) = receiver.recv() {
+                    if let Err(e) = proxy_clone
+                        .send_event(EventLoopProxyMessage::WebviewControllerMessage(message))
+                    {
+                        log::error!("Failed to send controller message to Verso: {e}");
+                    }
+                }
+            });
+        };
+
         // Initialize configurations and Verso window
         let protocols = config.create_protocols();
         let initial_url = config.args.url.clone();
+
         config.init();
         // Reserving a namespace to create TopLevelBrowsingContextId.
         PipelineNamespace::install(PipelineNamespaceId(0));
@@ -494,6 +519,23 @@ impl Verso {
         }
     }
 
+    /// Handle message came from webview controller.
+    pub fn handle_incoming_webview_message(&self, message: ControllerMessage) {
+        match message {
+            ControllerMessage::NavigateTo(to_url) => {
+                if let Some(webview_id) = self.windows.values().next().and_then(|(window, _)| {
+                    window.webview.as_ref().map(|webview| webview.webview_id)
+                }) {
+                    send_to_constellation(
+                        &self.constellation_sender,
+                        ConstellationMsg::LoadUrl(webview_id, ServoUrl::from_url(to_url)),
+                    );
+                }
+            }
+            _ => {}
+        }
+    }
+
     /// Return true if one of the Verso windows is animating.
     pub fn is_animating(&self) -> bool {
         self.compositor
@@ -516,8 +558,16 @@ impl Verso {
     }
 }
 
+/// Message send to the event loop
+pub enum EventLoopProxyMessage {
+    /// Wake
+    Wake,
+    /// Message coming from the webview controller
+    WebviewControllerMessage(ControllerMessage),
+}
+
 #[derive(Debug, Clone)]
-struct Waker(pub EventLoopProxy<()>);
+struct Waker(pub EventLoopProxy<EventLoopProxyMessage>);
 
 impl EventLoopWaker for Waker {
     fn clone_box(&self) -> Box<dyn EventLoopWaker> {
@@ -525,8 +575,8 @@ impl EventLoopWaker for Waker {
     }
 
     fn wake(&self) {
-        if let Err(e) = self.0.send_event(()) {
-            log::error!("Servo failed to send wake up event to Verso: {}", e);
+        if let Err(e) = self.0.send_event(EventLoopProxyMessage::Wake) {
+            log::error!("Servo failed to send wake up event to Verso: {e}");
         }
     }
 }
