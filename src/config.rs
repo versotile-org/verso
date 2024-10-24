@@ -15,7 +15,7 @@ use servo_config::opts::{default_opts, set_options, Opts};
 pub struct CliArgs {
     /// URL to load initially.
     pub url: Option<url::Url>,
-    /// URL to load initially.
+    /// The IPC channel name used to communicate with the webview controller.
     pub ipc_channel: Option<String>,
 }
 
