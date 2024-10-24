@@ -6220,6 +6220,7 @@ version = "0.0.1"
 dependencies = [
  "ipc-channel",
  "serde",
+ "url",
  "versoview_messages",
 ]
 
@@ -6288,6 +6289,7 @@ version = "0.0.1"
 dependencies = [
  "ipc-channel",
  "serde",
+ "url",
 ]
 
 [[package]]
