@@ -82,9 +82,9 @@ impl Verso {
         proxy: EventLoopProxy<EventLoopProxyMessage>,
         config: Config,
     ) -> Self {
-        if let Some(ipc_channel_name) = &config.args.ipc_channel_name {
+        if let Some(ipc_channel) = &config.args.ipc_channel {
             let sender =
-                IpcSender::<IpcSender<ControllerMessage>>::connect(ipc_channel_name.to_string())
+                IpcSender::<IpcSender<ControllerMessage>>::connect(ipc_channel.to_string())
                     .unwrap();
             let (controller_sender, receiver) = ipc::channel::<ControllerMessage>().unwrap();
             sender.send(controller_sender).unwrap();

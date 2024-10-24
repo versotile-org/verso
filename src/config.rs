@@ -16,7 +16,7 @@ pub struct CliArgs {
     /// URL to load initially.
     pub url: Option<url::Url>,
     /// URL to load initially.
-    pub ipc_channel_name: Option<String>,
+    pub ipc_channel: Option<String>,
 }
 
 /// Configuration of Verso instance.
@@ -57,12 +57,9 @@ fn parse_cli_args() -> Result<CliArgs, getopts::Fail> {
                 None
             }
         });
-    let ipc_channel_name = matches.opt_str("ipc-channel");
+    let ipc_channel = matches.opt_str("ipc-channel");
 
-    Ok(CliArgs {
-        url,
-        ipc_channel_name,
-    })
+    Ok(CliArgs { url, ipc_channel })
 }
 
 impl Config {
