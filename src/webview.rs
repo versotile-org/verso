@@ -251,7 +251,7 @@ impl Window {
                                     "MINIMIZE" => {
                                         self.window.set_minimized(true);
                                     }
-                                    "MAXIMIZE" => {
+                                    "MAXIMIZE" | "DBCLICK_PANEL" => {
                                         let is_maximized = self.window.is_maximized();
                                         self.window.set_maximized(!is_maximized);
                                     }
