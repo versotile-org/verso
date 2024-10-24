@@ -1,8 +1,8 @@
 // Prevent console window from appearing on Windows
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
-use verso::config::Config;
-use verso::{Result, Verso};
+use versoview::config::Config;
+use versoview::{Result, Verso};
 use winit::application::ApplicationHandler;
 use winit::event_loop::{self, DeviceEvents};
 use winit::event_loop::{EventLoop, EventLoopProxy};
