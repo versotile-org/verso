@@ -41,7 +41,7 @@ impl ApplicationHandler<EventLoopProxyMessage> for App {
                 EventLoopProxyMessage::Wake => {
                     v.handle_servo_messages(event_loop);
                 }
-                EventLoopProxyMessage::WebviewControllerMessage(message) => {
+                EventLoopProxyMessage::IpcMessage(message) => {
                     v.handle_incoming_webview_message(message);
                 }
             }

@@ -89,15 +89,18 @@ impl Verso {
             let (controller_sender, receiver) = ipc::channel::<ControllerMessage>().unwrap();
             sender.send(controller_sender).unwrap();
             let proxy_clone = proxy.clone();
-            std::thread::spawn(move || {
-                while let Ok(message) = receiver.recv() {
-                    if let Err(e) = proxy_clone
-                        .send_event(EventLoopProxyMessage::WebviewControllerMessage(message))
-                    {
-                        log::error!("Failed to send controller message to Verso: {e}");
+            std::thread::Builder::new()
+                .name("IpcMessageRelay".to_owned())
+                .spawn(move || {
+                    while let Ok(message) = receiver.recv() {
+                        if let Err(e) =
+                            proxy_clone.send_event(EventLoopProxyMessage::IpcMessage(message))
+                        {
+                            log::error!("Failed to send controller message to Verso: {e}");
+                        }
                     }
-                }
-            });
+                })
+                .unwrap();
         };
 
         // Initialize configurations and Verso window
@@ -563,7 +566,7 @@ pub enum EventLoopProxyMessage {
     /// Wake
     Wake,
     /// Message coming from the webview controller
-    WebviewControllerMessage(ControllerMessage),
+    IpcMessage(ControllerMessage),
 }
 
 #[derive(Debug, Clone)]
