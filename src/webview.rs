@@ -117,6 +117,7 @@ impl Window {
                 }
             }
             EmbedderMsg::HistoryChanged(list, index) => {
+                self.update_history(&list, index);
                 let url = list.get(index).unwrap();
                 if let Some(panel) = self.panel.as_ref() {
                     let (tx, rx) = ipc::channel::<WebDriverJSResult>().unwrap();
@@ -137,6 +138,9 @@ impl Window {
                 if let CompositorEventVariant::MouseButtonEvent = event {
                     send_to_constellation(sender, ConstellationMsg::FocusWebView(webview_id));
                 }
+            }
+            EmbedderMsg::ShowContextMenu(_sender, _title, _options) => {
+                // TODO: Implement context menu
             }
             e => {
                 log::trace!("Verso WebView isn't supporting this message yet: {e:?}")

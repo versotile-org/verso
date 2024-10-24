@@ -10,9 +10,9 @@ use glutin::{
     surface::{Surface, WindowSurface},
 };
 use glutin_winit::DisplayBuilder;
-use muda::{MenuEvent, MenuEventReceiver};
+use muda::{Menu, MenuEvent, MenuEventReceiver, MenuItem};
 use raw_window_handle::HasWindowHandle;
-use script_traits::{TouchEventType, WheelDelta, WheelMode};
+use script_traits::{TouchEventType, TraversalDirection, WheelDelta, WheelMode};
 use servo_url::ServoUrl;
 use webrender_api::{
     units::{DeviceIntPoint, DeviceIntRect, DeviceIntSize, DevicePoint, LayoutVector2D},
@@ -53,8 +53,10 @@ pub struct Window {
     mouse_position: Cell<Option<PhysicalPosition<f64>>>,
     /// Modifiers state of the keyboard.
     modifiers_state: Cell<ModifiersState>,
-    /// Context menu evnet receiver (muda)
-    context_menu_receiver: MenuEventReceiver,
+    /// Global menu evnet receiver for muda crate
+    menu_event_receiver: MenuEventReceiver,
+    history: Vec<ServoUrl>,
+    current_history_index: usize,
 }
 
 impl Window {
@@ -99,7 +101,9 @@ impl Window {
                 webview: None,
                 mouse_position: Default::default(),
                 modifiers_state: Cell::new(ModifiersState::default()),
-                context_menu_receiver: MenuEvent::receiver().clone(),
+                menu_event_receiver: MenuEvent::receiver().clone(),
+                history: vec![],
+                current_history_index: 0,
             },
             rendering_context,
         )
@@ -136,7 +140,9 @@ impl Window {
             webview: None,
             mouse_position: Default::default(),
             modifiers_state: Cell::new(ModifiersState::default()),
-            context_menu_receiver: MenuEvent::receiver().clone(),
+            menu_event_receiver: MenuEvent::receiver().clone(),
+            history: vec![],
+            current_history_index: 0,
         };
         compositor.swap_current_window(&mut window);
         window
@@ -185,10 +191,6 @@ impl Window {
         compositor: &mut IOCompositor,
         event: &winit::event::WindowEvent,
     ) -> bool {
-        if let Ok(event) = self.context_menu_receiver.try_recv() {
-            println!("{event:?}");
-        }
-
         match event {
             WindowEvent::RedrawRequested => {
                 if let Err(err) = compositor.rendering_context.present(&self.surface) {
@@ -229,12 +231,13 @@ impl Window {
             }
             WindowEvent::MouseInput { state, button, .. } => {
                 // handle context menu
-                // TODO: dummy. Should implement it with embedder context message event.
+                // TODO: should create on ShowContextMenu event
                 if *button == winit::event::MouseButton::Right && *state == ElementState::Pressed {
-                    dbg!("create a context menu");
-                    let context_menu = VersoContextMenu::new();
-                    context_menu.show(self.window.window_handle().unwrap());
-                    return false;
+                    self.show_context_menu();
+                    // FIXME: there's chance to lose the event since the channel is async.
+                    if let Ok(event) = self.menu_event_receiver.try_recv() {
+                        self.handle_context_menu_event(sender, event);
+                    }
                 }
 
                 let position = match self.mouse_position.get() {
@@ -479,6 +482,65 @@ impl Window {
             _ => CursorIcon::Default,
         };
         self.window.set_cursor(winit_cursor);
+    }
+
+    /// Update the history of the window.
+    pub fn update_history(&mut self, history: &Vec<ServoUrl>, current_index: usize) {
+        self.history = history.to_vec();
+        self.current_history_index = current_index;
+    }
+}
+
+// Dummy Context Menu
+impl Window {
+    pub(crate) fn show_context_menu(&self) {
+        let history_len = self.history.len();
+
+        // items
+        let back = MenuItem::with_id("back", "Back", self.current_history_index > 0, None);
+        let forward = MenuItem::with_id(
+            "forward",
+            "Forward",
+            self.current_history_index + 1 < history_len,
+            None,
+        );
+        let reload = MenuItem::with_id("reload", "Reload", true, None);
+
+        let menu = Menu::new();
+        let _ = menu.append_items(&[&back, &forward, &reload]);
+
+        let context_menu = VersoContextMenu::new_with_menu(menu);
+        context_menu.show(self.window.window_handle().unwrap());
+    }
+    fn handle_context_menu_event(&self, sender: &Sender<ConstellationMsg>, event: MenuEvent) {
+        // TODO: should be more flexible to handle different menu items
+        match event.id().0.as_str() {
+            "back" => {
+                send_to_constellation(
+                    sender,
+                    ConstellationMsg::TraverseHistory(
+                        self.webview.as_ref().unwrap().webview_id,
+                        TraversalDirection::Back(1),
+                    ),
+                );
+            }
+            "forward" => {
+                send_to_constellation(
+                    sender,
+                    ConstellationMsg::TraverseHistory(
+                        self.webview.as_ref().unwrap().webview_id,
+                        TraversalDirection::Forward(1),
+                    ),
+                );
+            }
+            "reload" => {
+                send_to_constellation(
+                    sender,
+                    ConstellationMsg::Reload(self.webview.as_ref().unwrap().webview_id),
+                );
+            }
+            _ => {}
+        }
     }
 }
 
