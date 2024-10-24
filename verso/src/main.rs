@@ -1,8 +1,9 @@
-use std::{path::PathBuf, thread::sleep, time::Duration};
+use std::{env::current_exe, thread::sleep, time::Duration};
 
 fn main() {
+    let versoview_path = current_exe().unwrap().parent().unwrap().join("versoview");
     let controller = verso::VersoviewController::new(
-        PathBuf::from("target/debug/versoview"),
+        versoview_path,
         url::Url::parse("https://example.com").unwrap(),
     );
     sleep(Duration::from_secs(10));
@@ -10,6 +11,6 @@ fn main() {
         .navigate(url::Url::parse("https://docs.rs").unwrap())
         .unwrap());
     loop {
-        sleep(Duration::from_secs(10));
+        sleep(Duration::MAX);
     }
 }
