@@ -1,26 +1,23 @@
 use std::{
     borrow::Cow,
     collections::HashMap,
-    path::PathBuf,
     sync::{atomic::Ordering, Arc},
 };
 
 use arboard::Clipboard;
-use base::id::WebViewId;
+use base::id::{PipelineNamespace, PipelineNamespaceId};
 use bluetooth::BluetoothThreadFactory;
 use bluetooth_traits::BluetoothRequest;
-use canvas::canvas_paint_thread::{self, CanvasPaintThread};
-use compositing_traits::{
-    CompositorMsg, CompositorProxy, CompositorReceiver, ConstellationMsg, ForwardedToCompositorMsg,
-};
+use canvas::canvas_paint_thread::CanvasPaintThread;
+use compositing_traits::{CompositorMsg, CompositorProxy, CompositorReceiver, ConstellationMsg};
 use constellation::{Constellation, FromCompositorLogger, InitialConstellationState};
 use crossbeam_channel::{unbounded, Sender};
 use devtools;
 use embedder_traits::{EmbedderMsg, EmbedderProxy, EmbedderReceiver, EventLoopWaker};
 use euclid::Scale;
-use fonts::FontCacheThread;
-use gleam::gl;
+use fonts::SystemFontService;
 use ipc_channel::ipc::{self, IpcSender};
+use ipc_channel::router::ROUTER;
 use layout_thread_2020;
 use log::{Log, Metadata, Record};
 use media::{GlApi, GlContext, NativeDisplay, WindowGLContext};
@@ -31,8 +28,7 @@ use script_traits::WindowSizeData;
 use servo_config::{opts, pref};
 use servo_url::ServoUrl;
 use style;
-use surfman::GLApi;
-use units::DeviceIntRect;
+use versoview_messages::ControllerMessage;
 use webgpu;
 use webrender::{create_webrender_instance, ShaderPrecacheFlags, WebRenderOptions};
 use webrender_api::*;
@@ -47,13 +43,12 @@ use winit::{
 use crate::{
     compositor::{IOCompositor, InitialCompositorState, ShutdownState},
     config::Config,
-    webview::WebView,
     window::Window,
 };
 
 /// Main entry point of Verso browser.
 pub struct Verso {
-    windows: HashMap<WindowId, Window>,
+    windows: HashMap<WindowId, (Window, DocumentId)>,
     compositor: Option<IOCompositor>,
     constellation_sender: Sender<ConstellationMsg>,
     embedder_receiver: EmbedderReceiver,
@@ -63,30 +58,60 @@ pub struct Verso {
     _js_engine_setup: Option<JSEngineSetup>,
     /// FIXME: It's None on wayland in Flatpak. Find a way to support this.
     clipboard: Option<Clipboard>,
-    resource_dir: PathBuf,
 }
 
 impl Verso {
     /// Create a Verso instance from Winit's window and event loop proxy.
     ///
-    /// // TODO list the flag to toggle them and ways to disable by default
-    /// Following threads will be created while initializing Verso:
-    /// - Time Profiler
-    /// - Memory Profiler
-    /// - DevTools
-    /// - Webrender threads
-    /// - WebGL
-    /// - WebXR
-    /// - Bluetooth
-    /// - Resource threads
-    /// - Font cache
-    /// - Canvas
-    /// - Constellation
-    pub fn new(evl: &ActiveEventLoop, proxy: EventLoopProxy<()>, config: Config) -> Self {
+    /// Following threads will be created while initializing Verso based on configurations:
+    /// - Time Profiler: Enabled
+    /// - Memory Profiler: Enabled
+    /// - DevTools: `Opts::devtools_server_enabled`
+    /// - Webrender: Enabled
+    /// - WebGL: Disabled
+    /// - WebXR: Disabled
+    /// - Bluetooth: Enabled
+    /// - Resource: Enabled
+    /// - Storage: Enabled
+    /// - Font Cache: Enabled
+    /// - Canvas: Enabled
+    /// - Constellation: Enabled
+    /// - Image Cache: Enabled
+    pub fn new(
+        evl: &ActiveEventLoop,
+        proxy: EventLoopProxy<EventLoopProxyMessage>,
+        config: Config,
+    ) -> Self {
+        if let Some(ipc_channel) = &config.args.ipc_channel {
+            let sender =
+                IpcSender::<IpcSender<ControllerMessage>>::connect(ipc_channel.to_string())
+                    .unwrap();
+            let (controller_sender, receiver) = ipc::channel::<ControllerMessage>().unwrap();
+            sender.send(controller_sender).unwrap();
+            let proxy_clone = proxy.clone();
+            std::thread::Builder::new()
+                .name("IpcMessageRelay".to_owned())
+                .spawn(move || {
+                    while let Ok(message) = receiver.recv() {
+                        if let Err(e) =
+                            proxy_clone.send_event(EventLoopProxyMessage::IpcMessage(message))
+                        {
+                            log::error!("Failed to send controller message to Verso: {e}");
+                        }
+                    }
+                })
+                .unwrap();
+        };
+
         // Initialize configurations and Verso window
-        let resource_dir = config.resource_dir.clone();
+        let protocols = config.create_protocols();
+        let initial_url = config.args.url.clone();
+
         config.init();
-        let (window, rendering_context) = Window::new(evl);
+        // Reserving a namespace to create TopLevelBrowsingContextId.
+        PipelineNamespace::install(PipelineNamespaceId(0));
+        let (mut window, rendering_context) = Window::new(evl);
+
         let event_loop_waker = Box::new(Waker(proxy));
         let opts = opts::get();
 
@@ -99,26 +124,13 @@ impl Verso {
             .store(opts.nonincremental_layout, Ordering::Relaxed);
 
         // Initialize servo media with dummy backend
+        // This will create a thread to initialize a global static of servo media.
+        // The thread will be closed once the static is initialzed.
+        // TODO: This is used by content process. Spawn it there once if we have multiprocess mode.
         servo_media::ServoMedia::init::<servo_media_dummy::DummyBackend>();
 
-        // Initialize surfman & get GL bindings
-        let webrender_gl = match rendering_context.connection().gl_api() {
-            GLApi::GL => unsafe { gl::GlFns::load_with(|s| rendering_context.get_proc_address(s)) },
-            GLApi::GLES => unsafe {
-                gl::GlesFns::load_with(|s| rendering_context.get_proc_address(s))
-            },
-        };
-
-        // Make sure the gl context is made current.
-        rendering_context.make_gl_context_current().unwrap();
-        debug_assert_eq!(webrender_gl.get_error(), gl::NO_ERROR,);
-        // Bind the webrender framebuffer
-        let framebuffer_object = rendering_context
-            .context_surface_info()
-            .unwrap_or(None)
-            .map(|info| info.framebuffer_object)
-            .unwrap_or(0);
-        webrender_gl.bind_framebuffer(gl::FRAMEBUFFER, framebuffer_object);
+        // Get GL bindings
+        let webrender_gl = rendering_context.gl.clone();
 
         // Create profiler threads
         let time_profiler_sender = profile::time::Profiler::create(
@@ -130,9 +142,22 @@ impl Verso {
         // Create compositor and embedder channels
         let (compositor_sender, compositor_receiver) = {
             let (sender, receiver) = unbounded();
+            let (compositor_ipc_sender, compositor_ipc_receiver) =
+                ipc::channel().expect("ipc channel failure");
+            let sender_clone = sender.clone();
+            ROUTER.add_typed_route(
+                compositor_ipc_receiver,
+                Box::new(move |message| {
+                    let _ = sender_clone.send(CompositorMsg::CrossProcess(
+                        message.expect("Could not convert Compositor message"),
+                    ));
+                }),
+            );
+            let cross_process_compositor_api = CrossProcessCompositorApi(compositor_ipc_sender);
             (
                 CompositorProxy {
                     sender,
+                    cross_process_compositor_api,
                     event_loop_waker: event_loop_waker.clone(),
                 },
                 CompositorReceiver { receiver },
@@ -274,17 +299,19 @@ impl Verso {
                 opts.config_dir.clone(),
                 opts.certificate_path.clone(),
                 opts.ignore_certificate_errors,
+                Arc::new(protocols),
             );
 
         // Create font cache thread
-        let font_cache_thread = FontCacheThread::new(Box::new(WebRenderFontApiCompositorProxy(
-            compositor_sender.clone(),
-        )));
+        let system_font_service = Arc::new(
+            SystemFontService::spawn(compositor_sender.cross_process_compositor_api.clone())
+                .to_proxy(),
+        );
 
         // Create canvas thread
         let (canvas_create_sender, canvas_ipc_sender) = CanvasPaintThread::start(
-            Box::new(CanvasWebrenderApi(compositor_sender.clone())),
-            font_cache_thread.clone(),
+            compositor_sender.cross_process_compositor_api.clone(),
+            system_font_service.clone(),
             public_resource_threads.clone(),
         );
 
@@ -295,7 +322,7 @@ impl Verso {
             embedder_proxy: embedder_sender,
             devtools_sender,
             bluetooth_thread,
-            font_cache_thread,
+            system_font_service,
             public_resource_threads,
             private_resource_threads,
             time_profiler_chan: time_profiler_sender.clone(),
@@ -362,18 +389,10 @@ impl Verso {
             opts.debug.convert_mouse_to_touch,
         );
 
-        // Send the constellation message to start Panel UI
-        // TODO: Should become a window method
-        let panel_id = window.panel.as_ref().unwrap().webview_id;
-        let path = resource_dir.join("panel.html");
-        let url = ServoUrl::from_file_path(path.to_str().unwrap()).unwrap();
-        send_to_constellation(
-            &constellation_sender,
-            ConstellationMsg::NewWebView(url, panel_id),
-        );
+        window.create_panel(&constellation_sender, initial_url);
 
         let mut windows = HashMap::new();
-        windows.insert(window.id(), window);
+        windows.insert(window.id(), (window, webrender_document));
 
         // Create Verso instance
         let verso = Verso {
@@ -383,7 +402,6 @@ impl Verso {
             embedder_receiver,
             _js_engine_setup: js_engine_setup,
             clipboard: Clipboard::new().ok(),
-            resource_dir,
         };
 
         verso.setup_logging();
@@ -398,17 +416,14 @@ impl Verso {
                 // self.windows.remove(&window_id);
                 compositor.maybe_start_shutting_down();
             } else {
-                let mut need_repaint = false;
-                for (id, window) in &mut self.windows {
-                    if window_id == *id {
-                        need_repaint = window.handle_winit_window_event(
-                            &self.constellation_sender,
-                            compositor,
-                            &event,
-                        );
-                    }
-                }
-
+                let need_repaint = match self.windows.get_mut(&window_id) {
+                    Some(window) => window.0.handle_winit_window_event(
+                        &self.constellation_sender,
+                        compositor,
+                        &event,
+                    ),
+                    None => false,
+                };
                 if need_repaint {
                     compositor.repaint_synchronously(&mut self.windows);
                 }
@@ -432,7 +447,7 @@ impl Verso {
                     match compositor.shutdown_state {
                         ShutdownState::NotShuttingDown => {
                             if let Some(id) = webview_id {
-                                for window in self.windows.values_mut() {
+                                for (window, document) in self.windows.values_mut() {
                                     if window.has_webview(id) {
                                         if window.handle_servo_message(
                                             id,
@@ -443,18 +458,10 @@ impl Verso {
                                         ) {
                                             let mut window =
                                                 Window::new_with_compositor(evl, compositor);
-                                            let panel_id = WebViewId::new();
-                                            let path = self.resource_dir.join("panel.html");
-                                            let url =
-                                                ServoUrl::from_file_path(path.to_str().unwrap())
-                                                    .unwrap();
-                                            send_to_constellation(
-                                                &self.constellation_sender,
-                                                ConstellationMsg::NewWebView(url, panel_id),
-                                            );
-                                            let rect = DeviceIntRect::from_size(window.size());
-                                            window.panel = Some(WebView::new(panel_id, rect));
-                                            self.windows.insert(window.id(), window);
+                                            window.create_panel(&self.constellation_sender, None);
+                                            let webrender_document = document.clone();
+                                            self.windows
+                                                .insert(window.id(), (window, webrender_document));
                                         }
                                         break;
                                     }
@@ -468,7 +475,7 @@ impl Verso {
                                         if let Some(window) =
                                             self.windows.get(&compositor.current_window)
                                         {
-                                            window.set_cursor_icon(cursor);
+                                            window.0.set_cursor_icon(cursor);
                                         }
                                     }
                                     EmbedderMsg::Shutdown | EmbedderMsg::ReadyToPresent(_) => {}
@@ -515,6 +522,23 @@ impl Verso {
         }
     }
 
+    /// Handle message came from webview controller.
+    pub fn handle_incoming_webview_message(&self, message: ControllerMessage) {
+        match message {
+            ControllerMessage::NavigateTo(to_url) => {
+                if let Some(webview_id) = self.windows.values().next().and_then(|(window, _)| {
+                    window.webview.as_ref().map(|webview| webview.webview_id)
+                }) {
+                    send_to_constellation(
+                        &self.constellation_sender,
+                        ConstellationMsg::LoadUrl(webview_id, ServoUrl::from_url(to_url)),
+                    );
+                }
+            }
+            _ => {}
+        }
+    }
+
     /// Return true if one of the Verso windows is animating.
     pub fn is_animating(&self) -> bool {
         self.compositor
@@ -537,8 +561,16 @@ impl Verso {
     }
 }
 
+/// Message send to the event loop
+pub enum EventLoopProxyMessage {
+    /// Wake
+    Wake,
+    /// Message coming from the webview controller
+    IpcMessage(ControllerMessage),
+}
+
 #[derive(Debug, Clone)]
-struct Waker(pub EventLoopProxy<()>);
+struct Waker(pub EventLoopProxy<EventLoopProxyMessage>);
 
 impl EventLoopWaker for Waker {
     fn clone_box(&self) -> Box<dyn EventLoopWaker> {
@@ -546,8 +578,8 @@ impl EventLoopWaker for Waker {
     }
 
     fn wake(&self) {
-        if let Err(e) = self.0.send_event(()) {
-            log::error!("Servo failed to send wake up event to Verso: {}", e);
+        if let Err(e) = self.0.send_event(EventLoopProxyMessage::Wake) {
+            log::error!("Servo failed to send wake up event to Verso: {e}");
         }
     }
 }
@@ -590,104 +622,16 @@ impl webrender::api::RenderNotifier for RenderNotifier {
 
     fn new_frame_ready(
         &self,
-        _document_id: DocumentId,
+        document_id: DocumentId,
         _scrolled: bool,
         composite_needed: bool,
         _frame_publish_id: FramePublishId,
     ) {
         self.compositor_proxy
-            .send(CompositorMsg::NewWebRenderFrameReady(composite_needed));
-    }
-}
-
-struct WebRenderFontApiCompositorProxy(CompositorProxy);
-
-impl WebRenderFontApi for WebRenderFontApiCompositorProxy {
-    fn add_font_instance(
-        &self,
-        font_key: FontKey,
-        size: f32,
-        flags: FontInstanceFlags,
-    ) -> FontInstanceKey {
-        let (sender, receiver) = unbounded();
-        self.0
-            .send(CompositorMsg::Forwarded(ForwardedToCompositorMsg::Font(
-                FontToCompositorMsg::AddFontInstance(font_key, size, flags, sender),
-            )));
-        receiver.recv().unwrap()
-    }
-
-    fn add_font(&self, data: Arc<Vec<u8>>, index: u32) -> FontKey {
-        let (sender, receiver) = unbounded();
-        let (bytes_sender, bytes_receiver) =
-            ipc::bytes_channel().expect("failed to create IPC channel");
-        self.0
-            .send(CompositorMsg::Forwarded(ForwardedToCompositorMsg::Font(
-                FontToCompositorMsg::AddFont(sender, index, bytes_receiver),
-            )));
-        let _ = bytes_sender.send(&data);
-        receiver.recv().unwrap()
-    }
-
-    fn add_system_font(&self, handle: NativeFontHandle) -> FontKey {
-        let (sender, receiver) = unbounded();
-        self.0
-            .send(CompositorMsg::Forwarded(ForwardedToCompositorMsg::Font(
-                FontToCompositorMsg::AddSystemFont(sender, handle),
-            )));
-        receiver.recv().unwrap()
-    }
-
-    fn forward_add_font_message(
-        &self,
-        bytes_receiver: ipc::IpcBytesReceiver,
-        font_index: u32,
-        result_sender: IpcSender<FontKey>,
-    ) {
-        let (sender, receiver) = unbounded();
-        self.0
-            .send(CompositorMsg::Forwarded(ForwardedToCompositorMsg::Font(
-                FontToCompositorMsg::AddFont(sender, font_index, bytes_receiver),
-            )));
-        let _ = result_sender.send(receiver.recv().unwrap());
-    }
-
-    fn forward_add_font_instance_message(
-        &self,
-        font_key: FontKey,
-        size: f32,
-        flags: FontInstanceFlags,
-        result_sender: IpcSender<FontInstanceKey>,
-    ) {
-        let (sender, receiver) = unbounded();
-        self.0
-            .send(CompositorMsg::Forwarded(ForwardedToCompositorMsg::Font(
-                FontToCompositorMsg::AddFontInstance(font_key, size, flags, sender),
-            )));
-        let _ = result_sender.send(receiver.recv().unwrap());
-    }
-}
-
-#[derive(Clone)]
-struct CanvasWebrenderApi(CompositorProxy);
-
-impl canvas_paint_thread::WebrenderApi for CanvasWebrenderApi {
-    fn generate_key(&self) -> Option<ImageKey> {
-        let (sender, receiver) = unbounded();
-        self.0
-            .send(CompositorMsg::Forwarded(ForwardedToCompositorMsg::Canvas(
-                CanvasToCompositorMsg::GenerateKey(sender),
-            )));
-        receiver.recv().ok()
-    }
-    fn update_images(&self, updates: Vec<ImageUpdate>) {
-        self.0
-            .send(CompositorMsg::Forwarded(ForwardedToCompositorMsg::Canvas(
-                CanvasToCompositorMsg::UpdateImages(updates),
-            )));
-    }
-    fn clone(&self) -> Box<dyn canvas_paint_thread::WebrenderApi> {
-        Box::new(<Self as Clone>::clone(self))
+            .send(CompositorMsg::NewWebRenderFrameReady(
+                document_id,
+                composite_needed,
+            ));
     }
 }
 

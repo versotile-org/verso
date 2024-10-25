@@ -5,15 +5,19 @@ use compositing_traits::ConstellationMsg;
 use crossbeam_channel::Sender;
 use embedder_traits::{Cursor, EmbedderMsg};
 use euclid::{Point2D, Size2D};
-use raw_window_handle::{HasDisplayHandle, HasWindowHandle};
+use glutin::{
+    config::{ConfigTemplateBuilder, GlConfig},
+    surface::{Surface, WindowSurface},
+};
+use glutin_winit::DisplayBuilder;
 use script_traits::{TouchEventType, WheelDelta, WheelMode};
-use surfman::Connection;
-use surfman::SurfaceType;
+use servo_url::ServoUrl;
 use webrender_api::{
     units::{DeviceIntPoint, DeviceIntRect, DeviceIntSize, DevicePoint, LayoutVector2D},
     ScrollLocation,
 };
-use webrender_traits::RenderingContext;
+#[cfg(any(linux, target_os = "windows"))]
+use winit::window::ResizeDirection;
 use winit::{
     dpi::PhysicalPosition,
     event::{ElementState, TouchPhase, WindowEvent},
@@ -25,8 +29,9 @@ use winit::{
 use crate::{
     compositor::{IOCompositor, MouseWindowEvent},
     keyboard::keyboard_event_from_winit,
+    rendering::{gl_config_picker, RenderingContext},
     verso::send_to_constellation,
-    webview::WebView,
+    webview::{Panel, WebView},
 };
 
 use arboard::Clipboard;
@@ -35,12 +40,14 @@ use arboard::Clipboard;
 pub struct Window {
     /// Access to Winit window
     pub(crate) window: WinitWindow,
-    /// The main control panel of this window.
-    pub(crate) panel: Option<WebView>,
+    /// GL surface of the window
+    pub(crate) surface: Surface<WindowSurface>,
+    /// The main panel of this window.
+    pub(crate) panel: Option<Panel>,
     /// The WebView of this window.
     pub(crate) webview: Option<WebView>,
     /// The mouse physical position in the web view.
-    mouse_position: Cell<PhysicalPosition<f64>>,
+    mouse_position: Cell<Option<PhysicalPosition<f64>>>,
     /// Modifiers state of the keyboard.
     modifiers_state: Cell<ModifiersState>,
 }
@@ -48,15 +55,26 @@ pub struct Window {
 impl Window {
     /// Create a Verso window from Winit window and return the rendering context.
     pub fn new(evl: &ActiveEventLoop) -> (Self, RenderingContext) {
-        let window = evl
-            .create_window(WinitWindow::default_attributes())
-            // .with_transparent(true)
-            // .with_decorations(false)
-            .expect("Failed to create window.");
+        let window_attributes = WinitWindow::default_attributes()
+            .with_transparent(true)
+            .with_decorations(false);
 
-        let rwh = window.window_handle().expect("Failed to get window handle");
+        let template = ConfigTemplateBuilder::new()
+            .with_alpha_size(8)
+            .with_transparency(cfg!(macos));
+
+        let (window, gl_config) = DisplayBuilder::new()
+            .with_window_attributes(Some(window_attributes))
+            .build(evl, template, gl_config_picker)
+            .expect("Failed to create window and gl config");
+
+        let window = window.ok_or("Failed to create window").unwrap();
+
+        log::debug!("Picked a config with {} samples", gl_config.num_samples());
+
         #[cfg(macos)]
         unsafe {
+            let rwh = window.window_handle().expect("Failed to get window handle");
             if let RawWindowHandle::AppKit(AppKitWindowHandle { ns_view, .. }) = rwh.as_ref() {
                 decorate_window(
                     ns_view.as_ptr() as *mut AnyObject,
@@ -64,32 +82,17 @@ impl Window {
                 );
             }
         }
-        let window_size = window.inner_size();
-        let window_size = Size2D::new(window_size.width as i32, window_size.height as i32);
-        let display_handle = window
-            .display_handle()
-            .expect("Failed to get display handle");
-        let connection =
-            Connection::from_display_handle(display_handle).expect("Failed to create connection");
-        let adapter = connection
-            .create_adapter()
-            .expect("Failed to create adapter");
-        let native_widget = connection
-            .create_native_widget_from_window_handle(rwh, window_size)
-            .expect("Failed to create native widget");
-        let surface_type = SurfaceType::Widget { native_widget };
-        let rendering_context = RenderingContext::create(&connection, &adapter, surface_type)
+        let (rendering_context, surface) = RenderingContext::create(&window, &gl_config)
             .expect("Failed to create rendering context");
         log::trace!("Created rendering context for window {:?}", window);
 
-        let size = window.inner_size();
-        let size = Size2D::new(size.width as i32, size.height as i32);
         (
             Self {
                 window,
-                panel: Some(WebView::new_panel(DeviceIntRect::from_size(size))),
+                surface,
+                panel: None,
                 webview: None,
-                mouse_position: Cell::new(PhysicalPosition::default()),
+                mouse_position: Default::default(),
                 modifiers_state: Cell::new(ModifiersState::default()),
             },
             rendering_context,
@@ -98,15 +101,16 @@ impl Window {
 
     /// Create a Verso window with the rendering context.
     pub fn new_with_compositor(evl: &ActiveEventLoop, compositor: &mut IOCompositor) -> Self {
+        let window_attrs = WinitWindow::default_attributes()
+            .with_decorations(false)
+            .with_transparent(true);
         let window = evl
-            .create_window(WinitWindow::default_attributes())
-            // .with_transparent(true)
-            // .with_decorations(false)
+            .create_window(window_attrs)
             .expect("Failed to create window.");
 
-        let rwh = window.window_handle().expect("Failed to get window handle");
         #[cfg(macos)]
         unsafe {
+            let rwh = window.window_handle().expect("Failed to get window handle");
             if let RawWindowHandle::AppKit(AppKitWindowHandle { ns_view, .. }) = rwh.as_ref() {
                 decorate_window(
                     ns_view.as_ptr() as *mut AnyObject,
@@ -114,26 +118,57 @@ impl Window {
                 );
             }
         }
-        let window_size = window.inner_size();
-        let window_size = Size2D::new(window_size.width as i32, window_size.height as i32);
-        let native_widget = compositor
-            .rendering_context
-            .connection()
-            .create_native_widget_from_window_handle(rwh, window_size)
-            .expect("Failed to create native widget");
-        let surface_type = SurfaceType::Widget { native_widget };
         let surface = compositor
             .rendering_context
-            .create_surface(surface_type)
-            .ok();
-        compositor.surfaces.insert(window.id(), surface);
-        Self {
+            .create_surface(&window)
+            .unwrap();
+
+        let mut window = Self {
             window,
+            surface,
             panel: None,
             webview: None,
-            mouse_position: Cell::new(PhysicalPosition::default()),
+            mouse_position: Default::default(),
             modifiers_state: Cell::new(ModifiersState::default()),
+        };
+        compositor.swap_current_window(&mut window);
+        window
+    }
+
+    /// Get the content area size for the webview to draw on
+    pub fn get_content_size(&self, mut size: DeviceIntRect) -> DeviceIntRect {
+        if self.panel.is_some() {
+            size.min.y = size.max.y.min(100);
+            size.min.x += 10;
+            size.max.y -= 10;
+            size.max.x -= 10;
         }
+        size
+    }
+
+    /// Send the constellation message to start Panel UI
+    pub fn create_panel(
+        &mut self,
+        constellation_sender: &Sender<ConstellationMsg>,
+        initial_url: Option<url::Url>,
+    ) {
+        let size = self.window.inner_size();
+        let size = Size2D::new(size.width as i32, size.height as i32);
+        let panel_id = WebViewId::new();
+        self.panel = Some(Panel {
+            webview: WebView::new(panel_id, DeviceIntRect::from_size(size)),
+            initial_url: if let Some(initial_url) = initial_url {
+                servo_url::ServoUrl::from_url(initial_url)
+            } else {
+                ServoUrl::parse("https://example.com").unwrap()
+            },
+        });
+
+        let url = ServoUrl::parse("verso://panel.html").unwrap();
+        send_to_constellation(
+            constellation_sender,
+            ConstellationMsg::NewWebView(url, panel_id),
+        );
     }
 
     /// Handle Winit window event and return a boolean to indicate if the compositor should repaint immediately.
@@ -144,6 +179,11 @@ impl Window {
         event: &winit::event::WindowEvent,
     ) -> bool {
         match event {
+            WindowEvent::RedrawRequested => {
+                if let Err(err) = compositor.rendering_context.present(&self.surface) {
+                    log::warn!("Failed to present surface: {:?}", err);
+                }
+            }
             WindowEvent::Focused(focused) => {
                 if *focused {
                     compositor.swap_current_window(self);
@@ -159,12 +199,43 @@ impl Window {
             WindowEvent::CursorEntered { .. } => {
                 compositor.swap_current_window(self);
             }
+            WindowEvent::CursorLeft { .. } => {
+                self.mouse_position.set(None);
+            }
             WindowEvent::CursorMoved { position, .. } => {
                 let cursor: DevicePoint = DevicePoint::new(position.x as f32, position.y as f32);
-                self.mouse_position.set(*position);
+                self.mouse_position.set(Some(*position));
                 compositor.on_mouse_window_move_event_class(cursor);
+
+                // handle Windows and Linux non-decoration window resize cursor
+                #[cfg(any(linux, target_os = "windows"))]
+                {
+                    if self.is_resizable() {
+                        let direction = self.get_drag_resize_direction();
+                        self.set_drag_resize_cursor(direction);
+                    }
+                }
             }
             WindowEvent::MouseInput { state, button, .. } => {
+                let position = match self.mouse_position.get() {
+                    Some(position) => Point2D::new(position.x as f32, position.y as f32),
+                    None => {
+                        log::trace!("Mouse position is None, skipping MouseInput event.");
+                        return false;
+                    }
+                };
+
+                // handle Windows and Linux non-decoration window resize
+                #[cfg(any(linux, target_os = "windows"))]
+                {
+                    if *state == ElementState::Pressed && *button == winit::event::MouseButton::Left
+                    {
+                        if self.is_resizable() {
+                            self.drag_resize_window();
+                        }
+                    }
+                }
+
                 let button: script_traits::MouseButton = match button {
                     winit::event::MouseButton::Left => script_traits::MouseButton::Left,
                     winit::event::MouseButton::Right => script_traits::MouseButton::Right,
@@ -176,10 +247,6 @@ impl Window {
                         return false;
                     }
                 };
-                let position = Point2D::new(
-                    self.mouse_position.get().x as f32,
-                    self.mouse_position.get().y as f32,
-                );
 
                 let event: MouseWindowEvent = match state {
                     ElementState::Pressed => MouseWindowEvent::MouseDown(button, position),
@@ -197,6 +264,14 @@ impl Window {
                 compositor.on_zoom_window_event(1.0 + *delta as f32, self);
             }
             WindowEvent::MouseWheel { delta, phase, .. } => {
+                let position = match self.mouse_position.get() {
+                    Some(position) => position,
+                    None => {
+                        log::trace!("Mouse position is None, skipping MouseWheel event.");
+                        return false;
+                    }
+                };
+
                 // FIXME: Pixels per line, should be configurable (from browser setting?) and vary by zoom level.
                 const LINE_HEIGHT: f32 = 38.0;
 
@@ -213,10 +288,7 @@ impl Window {
                 // Wheel Event
                 compositor.on_wheel_event(
                     WheelDelta { x, y, z: 0.0, mode },
-                    DevicePoint::new(
-                        self.mouse_position.get().x as f32,
-                        self.mouse_position.get().y as f32,
-                    ),
+                    DevicePoint::new(position.x as f32, position.y as f32),
                 );
 
                 // Scroll Event
@@ -236,10 +308,7 @@ impl Window {
 
                 compositor.on_scroll_event(
                     ScrollLocation::Delta(LayoutVector2D::new(x as f32, y as f32)),
-                    DeviceIntPoint::new(
-                        self.mouse_position.get().x as i32,
-                        self.mouse_position.get().y as i32,
-                    ),
+                    DeviceIntPoint::new(position.x as i32, position.y as i32),
                     phase,
                 );
             }
@@ -264,9 +333,9 @@ impl Window {
         clipboard: Option<&mut Clipboard>,
         compositor: &mut IOCompositor,
     ) -> bool {
-        // // Handle message in Verso Panel
+        // Handle message in Verso Panel
         if let Some(panel) = &self.panel {
-            if panel.webview_id == webview_id {
+            if panel.webview.webview_id == webview_id {
                 return self.handle_servo_messages_with_panel(
                     webview_id, message, sender, clipboard, compositor,
                 );
@@ -300,7 +369,9 @@ impl Window {
 
     /// Check if the window has such webview.
     pub fn has_webview(&self, id: WebViewId) -> bool {
-        self.panel.as_ref().map_or(false, |w| w.webview_id == id)
+        self.panel
+            .as_ref()
+            .map_or(false, |w| w.webview.webview_id == id)
             || self.webview.as_ref().map_or(false, |w| w.webview_id == id)
     }
 
@@ -311,14 +382,19 @@ impl Window {
         id: WebViewId,
         compositor: &mut IOCompositor,
     ) -> (Option<WebView>, bool) {
-        if self.panel.as_ref().filter(|w| w.webview_id == id).is_some() {
+        if self
+            .panel
+            .as_ref()
+            .filter(|w| w.webview.webview_id == id)
+            .is_some()
+        {
             if let Some(w) = self.webview.as_ref() {
                 send_to_constellation(
                     &compositor.constellation_chan,
                     ConstellationMsg::CloseWebView(w.webview_id),
                 )
             }
-            (self.panel.take(), false)
+            (self.panel.take().map(|panel| panel.webview), false)
         } else if self
             .webview
             .as_ref()
@@ -334,11 +410,11 @@ impl Window {
     /// Get the painting order of this window.
     pub fn painting_order(&self) -> Vec<&WebView> {
         let mut order = vec![];
+        if let Some(panel) = &self.panel {
+            order.push(&panel.webview);
+        }
         if let Some(webview) = &self.webview {
             order.push(webview);
-        }
-        if let Some(panel) = &self.panel {
-            order.push(panel);
         }
         order
     }
@@ -386,11 +462,100 @@ impl Window {
     }
 }
 
+// Non-decorated window resizing for Windows and Linux.
+#[cfg(any(linux, target_os = "windows"))]
+impl Window {
+    /// Check current window state is allowed to drag-resize.
+    fn is_resizable(&self) -> bool {
+        // TODO: Check if the window is in fullscreen mode.
+        !self.window.is_maximized() && self.window.is_resizable()
+    }
+
+    /// Drag resize the window.
+    fn drag_resize_window(&self) {
+        if let Some(direction) = self.get_drag_resize_direction() {
+            if let Err(err) = self.window.drag_resize_window(direction) {
+                log::error!("Failed to drag-resize window: {:?}", err);
+            }
+        }
+    }
+
+    /// Get drag-resize direction.
+    fn get_drag_resize_direction(&self) -> Option<ResizeDirection> {
+        let mouse_position = match self.mouse_position.get() {
+            Some(position) => position,
+            None => {
+                return None;
+            }
+        };
+
+        let window_size = self.window.outer_size();
+        let border_size = 5.0 * self.window.scale_factor();
+
+        let x_direction = if mouse_position.x < border_size {
+            Some(ResizeDirection::West)
+        } else if mouse_position.x > (window_size.width as f64 - border_size) {
+            Some(ResizeDirection::East)
+        } else {
+            None
+        };
+
+        let y_direction = if mouse_position.y < border_size {
+            Some(ResizeDirection::North)
+        } else if mouse_position.y > (window_size.height as f64 - border_size) {
+            Some(ResizeDirection::South)
+        } else {
+            None
+        };
+
+        let direction = match (x_direction, y_direction) {
+            (Some(ResizeDirection::East), None) => ResizeDirection::East,
+            (Some(ResizeDirection::West), None) => ResizeDirection::West,
+            (None, Some(ResizeDirection::South)) => ResizeDirection::South,
+            (None, Some(ResizeDirection::North)) => ResizeDirection::North,
+            (Some(ResizeDirection::East), Some(ResizeDirection::North)) => {
+                ResizeDirection::NorthEast
+            }
+            (Some(ResizeDirection::West), Some(ResizeDirection::North)) => {
+                ResizeDirection::NorthWest
+            }
+            (Some(ResizeDirection::East), Some(ResizeDirection::South)) => {
+                ResizeDirection::SouthEast
+            }
+            (Some(ResizeDirection::West), Some(ResizeDirection::South)) => {
+                ResizeDirection::SouthWest
+            }
+            _ => return None,
+        };
+
+        Some(direction)
+    }
+
+    /// Set drag-resize cursor when mouse is hover on the border of the window.
+    fn set_drag_resize_cursor(&self, direction: Option<ResizeDirection>) {
+        let cursor = match direction {
+            Some(direction) => match direction {
+                ResizeDirection::East => CursorIcon::EResize,
+                ResizeDirection::West => CursorIcon::WResize,
+                ResizeDirection::South => CursorIcon::SResize,
+                ResizeDirection::North => CursorIcon::NResize,
+                ResizeDirection::NorthEast => CursorIcon::NeResize,
+                ResizeDirection::NorthWest => CursorIcon::NwResize,
+                ResizeDirection::SouthEast => CursorIcon::SeResize,
+                ResizeDirection::SouthWest => CursorIcon::SwResize,
+            },
+            None => CursorIcon::Default,
+        };
+
+        self.window.set_cursor(cursor);
+    }
+}
+
 /* window decoration */
 #[cfg(macos)]
 use objc2::runtime::AnyObject;
 #[cfg(macos)]
-use raw_window_handle::{AppKitWindowHandle, RawWindowHandle};
+use raw_window_handle::{AppKitWindowHandle, HasWindowHandle, RawWindowHandle};
 #[cfg(macos)]
 use winit::dpi::LogicalPosition;
 

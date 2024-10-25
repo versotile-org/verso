@@ -1,9 +1,13 @@
 use arboard::Clipboard;
-use base::id::{PipelineNamespace, PipelineNamespaceId, WebViewId};
+use base::id::{BrowsingContextId, WebViewId};
 use compositing_traits::ConstellationMsg;
 use crossbeam_channel::Sender;
 use embedder_traits::{CompositorEventVariant, EmbedderMsg, PromptDefinition};
-use script_traits::TraversalDirection;
+use ipc_channel::ipc;
+use script_traits::{
+    webdriver_msg::{WebDriverJSResult, WebDriverScriptCommand},
+    TraversalDirection, WebDriverCommandMsg,
+};
 use servo_url::ServoUrl;
 use url::Url;
 use webrender_api::units::DeviceIntRect;
@@ -25,26 +29,28 @@ impl WebView {
         Self { webview_id, rect }
     }
 
-    /// Create a panel view from Winit window. A panel is a special web view that focus on controlling states around window.
-    /// It could be treated as the control panel or navigation bar of the window depending on usages.
-    ///
-    /// At the moment, following Web API is supported:
-    /// - Close window: `window.close()`
-    /// - Navigate to previous page: `window.prompt('PREV')`
-    /// - Navigate to next page: `window.prompt('FORWARD')`
-    /// - Refresh the page: `window.prompt('REFRESH')`
-    /// - Minimize the window: `window.prompt('MINIMIZE')`
-    /// - Maximize the window: `window.prompt('MAXIMIZE')`
-    /// - Navigate to a specific URL: `window.prompt('NAVIGATE_TO:${url}')`
-    pub fn new_panel(rect: DeviceIntRect) -> Self {
-        // Reserving a namespace to create TopLevelBrowsingContextId.
-        PipelineNamespace::install(PipelineNamespaceId(0));
-        let id = WebViewId::new();
-        Self {
-            webview_id: id,
-            rect,
-        }
+    /// Set the webview size.
+    pub fn set_size(&mut self, rect: DeviceIntRect) {
+        self.rect = rect;
     }
+}
+
+/// A panel is a special web view that focus on controlling states around window.
+/// It could be treated as the control panel or navigation bar of the window depending on usages.
+///
+/// At the moment, following Web API is supported:
+/// - Close window: `window.close()`
+/// - Navigate to previous page: `window.prompt('PREV')`
+/// - Navigate to next page: `window.prompt('FORWARD')`
+/// - Refresh the page: `window.prompt('REFRESH')`
+/// - Minimize the window: `window.prompt('MINIMIZE')`
+/// - Maximize the window: `window.prompt('MAXIMIZE')`
+/// - Navigate to a specific URL: `window.prompt('NAVIGATE_TO:${url}')`
+pub struct Panel {
+    /// The panel's webview
+    pub(crate) webview: WebView,
+    /// The URL to load when the panel gets loaded
+    pub(crate) initial_url: servo_url::ServoUrl,
 }
 
 impl Window {
@@ -110,6 +116,23 @@ impl Window {
                     }
                 }
             }
+            EmbedderMsg::HistoryChanged(list, index) => {
+                let url = list.get(index).unwrap();
+                if let Some(panel) = self.panel.as_ref() {
+                    let (tx, rx) = ipc::channel::<WebDriverJSResult>().unwrap();
+                    send_to_constellation(
+                        sender,
+                        ConstellationMsg::WebDriverCommand(WebDriverCommandMsg::ScriptCommand(
+                            BrowsingContextId::from(panel.webview.webview_id),
+                            WebDriverScriptCommand::ExecuteScript(
+                                format!("window.navbar.setNavbarUrl('{}')", url.as_str()),
+                                tx,
+                            ),
+                        )),
+                    );
+                    let _ = rx.recv();
+                }
+            }
             EmbedderMsg::EventDelivered(event) => {
                 if let CompositorEventVariant::MouseButtonEvent = event {
                     send_to_constellation(sender, ConstellationMsg::FocusWebView(webview_id));
@@ -150,13 +173,19 @@ impl Window {
                 self.window.request_redraw();
                 send_to_constellation(sender, ConstellationMsg::FocusWebView(panel_id));
 
-                let demo_url = ServoUrl::parse("https://example.com").unwrap();
                 let demo_id = WebViewId::new();
                 let size = self.size();
-                let mut rect = DeviceIntRect::from_size(size);
-                rect.min.y = rect.max.y.min(76);
-                self.webview = Some(WebView::new(demo_id, rect));
-                send_to_constellation(sender, ConstellationMsg::NewWebView(demo_url, demo_id));
+                let rect = DeviceIntRect::from_size(size);
+                let mut webview = WebView::new(demo_id, rect);
+                webview.set_size(self.get_content_size(rect));
+                self.webview = Some(webview);
+                send_to_constellation(
+                    sender,
+                    ConstellationMsg::NewWebView(
+                        self.panel.as_ref().unwrap().initial_url.clone(),
+                        demo_id,
+                    ),
+                );
                 log::debug!("Verso Window {:?} adds webview {}", self.id(), demo_id);
             }
             EmbedderMsg::AllowNavigationRequest(id, _url) => {
@@ -214,15 +243,20 @@ impl Window {
                                         // TODO Set EmbedderMsg::Status to None
                                     }
                                     "REFRESH" => {
-                                        // send_to_constellation(sender, ConstellationMsg::Reload(id));
+                                        send_to_constellation(sender, ConstellationMsg::Reload(id));
+                                    }
+                                    "NEW_WINDOW" => {
                                         return true;
                                     }
                                     "MINIMIZE" => {
                                         self.window.set_minimized(true);
                                     }
-                                    "MAXIMIZE" => {
+                                    "MAXIMIZE" | "DBCLICK_PANEL" => {
                                         let is_maximized = self.window.is_maximized();
                                         self.window.set_maximized(!is_maximized);
+                                    }
+                                    "DRAG_WINDOW" => {
+                                        let _ = self.window.drag_window();
                                     }
                                     e => log::trace!(
                                         "Verso Panel isn't supporting this prompt message yet: {e}"
@@ -252,6 +286,11 @@ impl Window {
                     if let Err(e) = c.set_text(text) {
                         log::warn!("Verso Panel failed to set clipboard contents: {}", e);
                     }
+                }
+            }
+            EmbedderMsg::EventDelivered(event) => {
+                if let CompositorEventVariant::MouseButtonEvent = event {
+                    send_to_constellation(sender, ConstellationMsg::FocusWebView(panel_id));
                 }
             }
             e => {

@@ -13,7 +13,7 @@ concurrency:
   cancel-in-progress: true
 
 env:
-  CN_APP_SLUG: verso-nightly
+  CN_APP_SLUG: verso/verso-nightly
 
 jobs:
   pr-fast-check:
@@ -72,6 +72,7 @@ jobs:
       - name: Install flatpak dependencies
         if: ${{ github.event_name == 'schedule' }}
         run: |
+          sudo apt-get update
           sudo apt-get install -y flatpak flatpak-builder
           sudo flatpak remote-add --if-not-exists flathub https://dl.flathub.org/repo/flathub.flatpakrepo
           sudo flatpak install -y --noninteractive flathub org.freedesktop.Platform//23.08
@@ -116,7 +117,7 @@ jobs:
       - name: Fetch Verso version
         if: ${{ github.event_name == 'schedule' }}
         run: |
-          echo "VERSO_VERSION=$(cargo metadata --format-version=1 --no-deps | jq -r '.packages[] | select(.name == "verso") | .version')" >> $GITHUB_ENV
+          echo "VERSO_VERSION=$(cargo metadata --format-version=1 --no-deps | jq -r '.packages[] | select(.name == "versoview") | .version')" >> $GITHUB_ENV
 
       - name: Generate flatpak cargo sources
         if: ${{ github.event_name == 'schedule' }}
@@ -153,12 +154,6 @@ jobs:
       - name: Install Rust
         uses: dsherret/rust-toolchain-file@v1
 
-      - name: Install Rust toolchain for packager
-        if: ${{ github.event_name == 'schedule' }}
-        uses: actions-rust-lang/setup-rust-toolchain@v1
-        with:
-          toolchain: stable
-
       - name: Install Python
         uses: actions/setup-python@v5
         with:
@@ -177,7 +172,7 @@ jobs:
 
       - name: Install Cargo Packager
         if: ${{ github.event_name == 'schedule' }}
-        run: cargo +stable install cargo-packager
+        run: cargo install cargo-packager
 
       - name: Build
         run: |
@@ -195,7 +190,7 @@ jobs:
       - name: Fetch Verso version
         if: ${{ github.event_name == 'schedule' }}
         run: |
-          echo "VERSO_VERSION=$(cargo metadata --format-version=1 --no-deps | jq -r '.packages[] | select(.name == "verso") | .version')" >> $Env:GITHUB_ENV
+          echo "VERSO_VERSION=$(cargo metadata --format-version=1 --no-deps | jq -r '.packages[] | select(.name == "versoview") | .version')" >> $Env:GITHUB_ENV
 
       - name: Upload artifact
         if: ${{ github.event_name == 'schedule' }}
@@ -225,12 +220,6 @@ jobs:
       - name: Install Rust
         uses: dsherret/rust-toolchain-file@v1
 
-      - name: Install Rust toolchain for packager
-        if: ${{ github.event_name == 'schedule' }}
-        uses: actions-rust-lang/setup-rust-toolchain@v1
-        with:
-          toolchain: stable
-
       - name: Install Python
         uses: actions/setup-python@v5
         with:
@@ -250,7 +239,7 @@ jobs:
 
       - name: Install Cargo Packager
         if: ${{ github.event_name == 'schedule' }}
-        run: cargo +stable install cargo-packager
+        run: cargo install cargo-packager
 
       - name: Build
         run: |
@@ -272,7 +261,7 @@ jobs:
       - name: Fetch Verso version
         if: ${{ github.event_name == 'schedule' }}
         run: |
-          echo "VERSO_VERSION=$(cargo metadata --format-version=1 --no-deps | jq -r '.packages[] | select(.name == "verso") | .version')" >> $GITHUB_ENV
+          echo "VERSO_VERSION=$(cargo metadata --format-version=1 --no-deps | jq -r '.packages[] | select(.name == "versoview") | .version')" >> $GITHUB_ENV
 
       - name: Upload artifact
         if: ${{ github.event_name == 'schedule' }}
