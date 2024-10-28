@@ -415,18 +415,10 @@ impl Verso {
             if let WindowEvent::CloseRequested = event {
                 // self.windows.remove(&window_id);
                 compositor.maybe_start_shutting_down();
-            } else {
-                let need_repaint = match self.windows.get_mut(&window_id) {
-                    Some(window) => window.0.handle_winit_window_event(
-                        &self.constellation_sender,
-                        compositor,
-                        &event,
-                    ),
-                    None => false,
-                };
-                if need_repaint {
-                    compositor.repaint_synchronously(&mut self.windows);
-                }
+            } else if let Some(window) = self.windows.get_mut(&window_id) {
+                window
+                    .0
+                    .handle_winit_window_event(&self.constellation_sender, compositor, &event);
             }
         }
     }
