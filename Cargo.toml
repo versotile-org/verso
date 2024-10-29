@@ -4,6 +4,7 @@ members = ["verso", "versoview_messages"]
 [workspace.dependencies]
 ipc-channel = "0.19"
 serde = { version = "1.0", features = ["derive"] }
+url = { version = "2.5.2", features = ["serde"] }
 
 [package]
 name = "versoview"
@@ -68,29 +69,29 @@ sparkle = "0.1.26"
 thiserror = "1.0"
 winit = { version = "0.30", features = ["rwh_06"] }
 # Servo repo crates
-base = { git = "https://github.com/servo/servo.git", rev = "4d11b2d" }
-bluetooth = { git = "https://github.com/servo/servo.git", rev = "4d11b2d" }
-bluetooth_traits = { git = "https://github.com/servo/servo.git", rev = "4d11b2d" }
-canvas = { git = "https://github.com/servo/servo.git", rev = "4d11b2d" }
-compositing_traits = { git = "https://github.com/servo/servo.git", rev = "4d11b2d" }
-constellation = { git = "https://github.com/servo/servo.git", rev = "4d11b2d" }
-devtools = { git = "https://github.com/servo/servo.git", rev = "4d11b2d" }
-embedder_traits = { git = "https://github.com/servo/servo.git", rev = "4d11b2d" }
-fonts = { git = "https://github.com/servo/servo.git", rev = "4d11b2d" }
-layout_thread_2020 = { git = "https://github.com/servo/servo.git", rev = "4d11b2d" }
-media = { git = "https://github.com/servo/servo.git", rev = "4d11b2d" }
-net = { git = "https://github.com/servo/servo.git", rev = "4d11b2d" }
-net_traits = { git = "https://github.com/servo/servo.git", rev = "4d11b2d" }
-profile = { git = "https://github.com/servo/servo.git", rev = "4d11b2d" }
-profile_traits = { git = "https://github.com/servo/servo.git", rev = "4d11b2d" }
-script = { git = "https://github.com/servo/servo.git", rev = "4d11b2d" }
-script_traits = { git = "https://github.com/servo/servo.git", rev = "4d11b2d" }
-servo_config = { git = "https://github.com/servo/servo.git", rev = "4d11b2d" }
-servo_geometry = { git = "https://github.com/servo/servo.git", rev = "4d11b2d" }
-servo_url = { git = "https://github.com/servo/servo.git", rev = "4d11b2d" }
-webdriver_server = { git = "https://github.com/servo/servo.git", rev = "4d11b2d" }
-webrender_traits = { git = "https://github.com/servo/servo.git", rev = "4d11b2d" }
-webgpu = { git = "https://github.com/servo/servo.git", rev = "4d11b2d" }
+base = { git = "https://github.com/servo/servo.git", rev = "10aa485" }
+bluetooth = { git = "https://github.com/servo/servo.git", rev = "10aa485" }
+bluetooth_traits = { git = "https://github.com/servo/servo.git", rev = "10aa485" }
+canvas = { git = "https://github.com/servo/servo.git", rev = "10aa485" }
+compositing_traits = { git = "https://github.com/servo/servo.git", rev = "10aa485" }
+constellation = { git = "https://github.com/servo/servo.git", rev = "10aa485" }
+devtools = { git = "https://github.com/servo/servo.git", rev = "10aa485" }
+embedder_traits = { git = "https://github.com/servo/servo.git", rev = "10aa485" }
+fonts = { git = "https://github.com/servo/servo.git", rev = "10aa485" }
+layout_thread_2020 = { git = "https://github.com/servo/servo.git", rev = "10aa485" }
+media = { git = "https://github.com/servo/servo.git", rev = "10aa485" }
+net = { git = "https://github.com/servo/servo.git", rev = "10aa485" }
+net_traits = { git = "https://github.com/servo/servo.git", rev = "10aa485" }
+profile = { git = "https://github.com/servo/servo.git", rev = "10aa485" }
+profile_traits = { git = "https://github.com/servo/servo.git", rev = "10aa485" }
+script = { git = "https://github.com/servo/servo.git", rev = "10aa485" }
+script_traits = { git = "https://github.com/servo/servo.git", rev = "10aa485" }
+servo_config = { git = "https://github.com/servo/servo.git", rev = "10aa485" }
+servo_geometry = { git = "https://github.com/servo/servo.git", rev = "10aa485" }
+servo_url = { git = "https://github.com/servo/servo.git", rev = "10aa485" }
+webdriver_server = { git = "https://github.com/servo/servo.git", rev = "10aa485" }
+webrender_traits = { git = "https://github.com/servo/servo.git", rev = "10aa485" }
+webgpu = { git = "https://github.com/servo/servo.git", rev = "10aa485" }
 # Servo org crates
 servo-media = { git = "https://github.com/servo/media" }
 servo-media-dummy = { git = "https://github.com/servo/media" }
@@ -104,8 +105,8 @@ webxr-api = { git = "https://github.com/servo/webxr" }
 cargo-packager-resource-resolver = { version = "0.1.1", features = [
   "auto-detect-format",
 ], optional = true }
-url = "2.5.2"
 muda = "0.15.1"
+url = { workspace = true }
 headers = "0.3"
 versoview_messages = { path = "./versoview_messages" }
 

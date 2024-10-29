@@ -190,7 +190,7 @@ impl Window {
         sender: &Sender<ConstellationMsg>,
         compositor: &mut IOCompositor,
         event: &winit::event::WindowEvent,
-    ) -> bool {
+    ) {
         match event {
             WindowEvent::RedrawRequested => {
                 if let Err(err) = compositor.rendering_context.present(&self.surface) {
@@ -204,7 +204,7 @@ impl Window {
             }
             WindowEvent::Resized(size) => {
                 let size = Size2D::new(size.width, size.height);
-                return compositor.resize(size.to_i32(), self);
+                compositor.resize(size.to_i32(), self);
             }
             WindowEvent::ScaleFactorChanged { scale_factor, .. } => {
                 compositor.on_scale_factor_event(*scale_factor as f32, self);
@@ -244,7 +244,7 @@ impl Window {
                     Some(position) => Point2D::new(position.x as f32, position.y as f32),
                     None => {
                         log::trace!("Mouse position is None, skipping MouseInput event.");
-                        return false;
+                        return;
                     }
                 };
 
@@ -267,7 +267,7 @@ impl Window {
                         log::trace!(
                             "Verso Window isn't supporting this mouse button yet: {button:?}"
                         );
-                        return false;
+                        return;
                     }
                 };
 
@@ -291,7 +291,7 @@ impl Window {
                     Some(position) => position,
                     None => {
                         log::trace!("Mouse position is None, skipping MouseWheel event.");
-                        return false;
+                        return;
                     }
                 };
 
@@ -344,7 +344,6 @@ impl Window {
             }
             e => log::trace!("Verso Window isn't supporting this window event yet: {e:?}"),
         }
-        false
     }
 
     /// Handle servo messages. Return true if it requests a new window

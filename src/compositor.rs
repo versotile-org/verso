@@ -1225,14 +1225,13 @@ impl IOCompositor {
         }
     }
 
-    /// Resize the rendering context and all web views. Return true if the compositor should repaint and present
-    /// after this.
-    pub fn resize(&mut self, size: Size2D<i32, DevicePixel>, window: &mut Window) -> bool {
+    /// Resize the rendering context and all web views.
+    pub fn resize(&mut self, size: Size2D<i32, DevicePixel>, window: &mut Window) {
         if size.height == 0 || size.width == 0 {
-            return false;
+            return;
         }
 
-        let need_resize = self.on_resize_window_event(size, window);
+        self.on_resize_window_event(size, window);
 
         if let Some(panel) = &mut window.panel {
             let rect = DeviceIntRect::from_size(size);
@@ -1248,14 +1247,12 @@ impl IOCompositor {
         }
 
         self.send_root_pipeline_display_list(window);
-        need_resize
     }
 
-    /// Handle the window resize event and return a boolean to tell embedder if it should further
-    /// handle the resize event.
-    pub fn on_resize_window_event(&mut self, new_viewport: DeviceIntSize, window: &Window) -> bool {
+    /// Handle the window resize event.
+    pub fn on_resize_window_event(&mut self, new_viewport: DeviceIntSize, window: &Window) {
         if self.shutdown_state != ShutdownState::NotShuttingDown {
-            return false;
+            return;
         }
 
         let _ = self
@@ -1267,7 +1264,6 @@ impl IOCompositor {
         self.webrender_api
             .send_transaction(self.webrender_document, transaction);
         self.composite_if_necessary(CompositingReason::Resize);
-        true
     }
 
     /// Handle the window scale factor event and return a boolean to tell embedder if it should further
@@ -2098,29 +2094,6 @@ impl IOCompositor {
             }
         }
         self.shutdown_state != ShutdownState::FinishedShuttingDown
-    }
-    /// Repaints and recomposites synchronously. You must be careful when calling this, as if a
-    /// paint is not scheduled the compositor will hang forever.
-    ///
-    /// This is used when resizing the window.
-    pub fn repaint_synchronously(&mut self, windows: &mut HashMap<WindowId, (Window, DocumentId)>) {
-        while self.shutdown_state != ShutdownState::ShuttingDown {
-            let msg = self.port.recv_compositor_msg();
-            let need_recomposite = matches!(msg, CompositorMsg::NewWebRenderFrameReady(..));
-            let keep_going = self.handle_browser_message(msg, windows);
-            if need_recomposite {
-                if let Some((window, _)) = windows.get(&self.current_window) {
-                    self.composite(window);
-                    if let Err(err) = self.rendering_context.present(&window.surface) {
-                        log::warn!("Failed to present surface: {:?}", err);
-                    }
-                }
-                break;
-            }
-            if !keep_going {
-                break;
-            }
-        }
     }
 
     fn pinch_zoom_level(&self) -> Scale<f32, DevicePixel, DevicePixel> {

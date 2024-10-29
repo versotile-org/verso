@@ -6,3 +6,4 @@ edition = "2021"
 [dependencies]
 ipc-channel = { workspace = true }
 serde = { workspace = true }
+url = { workspace = true }

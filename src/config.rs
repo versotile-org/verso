@@ -15,6 +15,8 @@ use servo_config::opts::{default_opts, set_options, Opts};
 pub struct CliArgs {
     /// URL to load initially.
     pub url: Option<url::Url>,
+    /// The IPC channel name used to communicate with the webview controller.
+    pub ipc_channel: Option<String>,
 }
 
 /// Configuration of Verso instance.
@@ -33,6 +35,12 @@ fn parse_cli_args() -> Result<CliArgs, getopts::Fail> {
 
     let mut opts = getopts::Options::new();
     opts.optopt("", "url", "URL to load on start", "URL");
+    opts.optopt(
+        "",
+        "ipc-channel",
+        "IPC channel name to communicate and control verso",
+        "",
+    );
 
     let matches: getopts::Matches = opts.parse(&args[1..])?;
     let url = matches
@@ -49,8 +57,9 @@ fn parse_cli_args() -> Result<CliArgs, getopts::Fail> {
                 None
             }
         });
+    let ipc_channel = matches.opt_str("ipc-channel");
 
-    Ok(CliArgs { url })
+    Ok(CliArgs { url, ipc_channel })
 }
 
 impl Config {
