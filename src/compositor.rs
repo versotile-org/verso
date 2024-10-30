@@ -1942,10 +1942,13 @@ impl IOCompositor {
                 trace!("Compositing");
                 // Paint the scene.
                 // TODO(gw): Take notice of any errors the renderer returns!
-                self.webrender
+                if let Err(e) = self
+                    .webrender
                     // TODO to untyped?
                     .render(self.viewport, 0)
-                    .ok();
+                {
+                    error!("Compositing error: {e:?}");
+                }
             },
         );
 
@@ -2075,9 +2078,12 @@ impl IOCompositor {
         if let Some((window, _)) = windows.get(&self.current_window) {
             match self.composition_request {
                 CompositionRequest::NoCompositingNecessary => {}
-                CompositionRequest::CompositeNow(_) => {
+                CompositionRequest::CompositeNow(reason) => {
                     self.composite(window);
-                    window.request_redraw();
+                    match reason {
+                        CompositingReason::Resize => (),
+                        _ => window.request_redraw(),
+                    }
                 }
             }
 
