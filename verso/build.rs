@@ -7,14 +7,23 @@ use std::{
 const VERSO_VERSION: &str = "0.0.1";
 
 fn main() {
-    if env::var_os("CARGO_FEATURE_PRE_BUILT_VERSOVIEW").is_some() {
+    if env::var_os("PRE_BUILT_VERSOVIEW").is_some() {
         download_and_extract_verso().unwrap();
     }
 }
 
 fn decompress_archive(archive: &Path) -> Result<(), std::io::Error> {
+    let out_dir = PathBuf::from(env::var_os("OUT_DIR").unwrap());
+    // Not ideal, but there's no good way of getting the target directory
+    let target_dir = out_dir
+        .parent()
+        .unwrap()
+        .parent()
+        .unwrap()
+        .parent()
+        .unwrap();
     if Command::new("tar")
-        .current_dir(archive.parent().unwrap())
+        .current_dir(target_dir)
         .arg("-xf")
         .arg(archive)
         .status()?
