@@ -8,3 +8,6 @@ ipc-channel = { workspace = true }
 serde = { workspace = true }
 url = { workspace = true }
 versoview_messages = { path = "../versoview_messages" }
+
+[features]
+pre-built-versoview = []
