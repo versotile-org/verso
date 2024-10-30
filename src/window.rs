@@ -1,4 +1,7 @@
-use std::cell::Cell;
+use std::{
+    cell::Cell,
+    time::{Duration, Instant},
+};
 
 use base::id::WebViewId;
 use compositing_traits::ConstellationMsg;
@@ -50,6 +53,7 @@ pub struct Window {
     mouse_position: Cell<Option<PhysicalPosition<f64>>>,
     /// Modifiers state of the keyboard.
     modifiers_state: Cell<ModifiersState>,
+    now: Instant,
 }
 
 impl Window {
@@ -94,6 +98,7 @@ impl Window {
                 webview: None,
                 mouse_position: Default::default(),
                 modifiers_state: Cell::new(ModifiersState::default()),
+                now: Instant::now(),
             },
             rendering_context,
         )
@@ -130,6 +135,7 @@ impl Window {
             webview: None,
             mouse_position: Default::default(),
             modifiers_state: Cell::new(ModifiersState::default()),
+            now: Instant::now(),
         };
         compositor.swap_current_window(&mut window);
         window
@@ -180,8 +186,11 @@ impl Window {
     ) {
         match event {
             WindowEvent::RedrawRequested => {
-                if let Err(err) = compositor.rendering_context.present(&self.surface) {
-                    log::warn!("Failed to present surface: {:?}", err);
+                if self.now.elapsed() > Duration::from_millis(10) {
+                    if let Err(err) = compositor.rendering_context.present(&self.surface) {
+                        log::warn!("Failed to present surface: {:?}", err);
+                    }
+                    self.now = Instant::now();
                 }
             }
             WindowEvent::Focused(focused) => {
