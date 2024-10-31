@@ -474,6 +474,10 @@ impl Verso {
                                         if let Some(id) = webview_ids.first() {
                                             for (window, _document) in self.windows.values_mut() {
                                                 if window.has_webview(*id) {
+                                                    println!(
+                                                        "- ReadyToPresent for window {:?}",
+                                                        window.id()
+                                                    );
                                                     if let Err(err) =
                                                         compositor.present(&window.surface)
                                                     {

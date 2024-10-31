@@ -5,7 +5,7 @@ use std::sync::Arc;
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
 use base::cross_process_instant::CrossProcessInstant;
-use base::id::{PipelineId, TopLevelBrowsingContextId};
+use base::id::{PipelineId, TopLevelBrowsingContextId, WebViewId};
 use base::{Epoch, WebRenderEpochToU16};
 use compositing_traits::{
     CompositionPipeline, CompositorMsg, CompositorProxy, CompositorReceiver, ConstellationMsg,
@@ -219,6 +219,8 @@ pub struct IOCompositor {
 
     /// Check if we composited frame that are waiting for present.
     pub waiting_for_present: bool,
+
+    last_composite_webview_id: Option<WebViewId>,
 }
 
 #[derive(Clone, Copy)]
@@ -387,6 +389,7 @@ impl IOCompositor {
             last_animation_tick: Instant::now(),
             is_animating: false,
             waiting_for_present: false,
+            last_composite_webview_id: None,
         };
 
         // Make sure the GL state is OK
@@ -1912,6 +1915,27 @@ impl IOCompositor {
 
     /// Composite to the given target if any, or the current target otherwise.
     fn composite_specific_target(&mut self, window: &Window) -> Result<(), UnableToComposite> {
+        if let Some(last_window_id) = self.last_composite_webview_id {
+            if let Some(curr_webview) = &window.webview {
+                if last_window_id != curr_webview.webview_id {
+                    match &window.webview {
+                        Some(webview) => {
+                            self.last_composite_webview_id = Some(webview.webview_id);
+                        }
+                        None => {
+                            self.last_composite_webview_id = None;
+                        }
+                    }
+                    self.waiting_for_present = true;
+                    let msg = ConstellationMsg::ReadyToPresent(vec![last_window_id]);
+                    if let Err(e) = self.constellation_chan.send(msg) {
+                        warn!("Sending event to constellation failed ({:?}).", e);
+                    }
+                    println!(">> flush composited for window {:?}", window.id());
+                    return self.composite_specific_target(window);
+                }
+            }
+        }
         if let Err(err) = self
             .rendering_context
             .make_gl_context_current(&window.surface)
@@ -1999,15 +2023,28 @@ impl IOCompositor {
         }
 
         self.waiting_for_present = true;
-        let webview_ids = window
+
+        let webview_ids: Vec<WebViewId> = window
             .painting_order()
             .into_iter()
             .map(|webview| webview.webview_id)
             .collect();
+
+        match &window.webview {
+            Some(webview) => {
+                self.last_composite_webview_id = Some(webview.webview_id);
+            }
+            None => {
+                self.last_composite_webview_id = None;
+            }
+        }
+        // self.last_composite_webview_id = Some(window);
+
         let msg = ConstellationMsg::ReadyToPresent(webview_ids);
         if let Err(e) = self.constellation_chan.send(msg) {
             warn!("Sending event to constellation failed ({:?}).", e);
         }
+        println!("composited for window {:?}", window.id());
 
         self.composition_request = CompositionRequest::NoCompositingNecessary;
 
@@ -2029,6 +2066,7 @@ impl IOCompositor {
         &mut self,
         surface: &Surface<impl SurfaceTypeTrait>,
     ) -> Result<(), crate::errors::Error> {
+        println!("presenting...");
         if self.waiting_for_present {
             self.waiting_for_present = false;
             self.rendering_context.present(surface)
