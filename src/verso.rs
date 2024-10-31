@@ -470,7 +470,10 @@ impl Verso {
                                             window.0.set_cursor_icon(cursor);
                                         }
                                     }
-                                    EmbedderMsg::Shutdown | EmbedderMsg::ReadyToPresent(_) => {}
+                                    EmbedderMsg::ReadyToPresent(webviews) => {
+                                        // TODO: deal with this event to defer present action
+                                    }
+                                    EmbedderMsg::Shutdown => {}
                                     e => {
                                         log::trace!("Verso Window isn't supporting handling this message yet: {e:?}")
                                     }

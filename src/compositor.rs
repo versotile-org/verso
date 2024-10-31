@@ -15,6 +15,7 @@ use crossbeam_channel::Sender;
 use embedder_traits::Cursor;
 use euclid::{vec2, Point2D, Scale, Size2D, Transform3D, Vector2D};
 use gleam::gl;
+use glutin::surface::{Surface, SurfaceTypeTrait};
 use ipc_channel::ipc::{self, IpcSharedMemory};
 use log::{debug, error, trace, warn};
 use profile_traits::time::{self as profile_time, profile, ProfilerCategory};
@@ -47,6 +48,7 @@ use winit::window::WindowId;
 
 use crate::rendering::RenderingContext;
 use crate::touch::{TouchAction, TouchHandler};
+use crate::webview;
 use crate::window::Window;
 
 /// Data used to construct a compositor.
@@ -215,6 +217,9 @@ pub struct IOCompositor {
     /// will want to avoid blocking on UI events, and just
     /// run the event loop at the vsync interval.
     pub is_animating: bool,
+
+    /// Waiting external code to call present.
+    waiting_on_present: bool,
 }
 
 #[derive(Clone, Copy)]
@@ -382,6 +387,7 @@ impl IOCompositor {
             pending_frames: 0,
             last_animation_tick: Instant::now(),
             is_animating: false,
+            waiting_on_present: false,
         };
 
         // Make sure the GL state is OK
@@ -1907,6 +1913,13 @@ impl IOCompositor {
 
     /// Composite to the given target if any, or the current target otherwise.
     fn composite_specific_target(&mut self, window: &Window) -> Result<(), UnableToComposite> {
+        if self.waiting_on_present {
+            debug!("tried to composite while waiting on present");
+            return Err(UnableToComposite::NotReadyToPaintImage(
+                NotReadyToPaint::WaitingOnConstellation,
+            ));
+        }
+
         if let Err(err) = self
             .rendering_context
             .make_gl_context_current(&window.surface)
@@ -1993,11 +2006,35 @@ impl IOCompositor {
             }
         }
 
+        self.waiting_on_present = true;
+        let webview_ids = window
+            .painting_order()
+            .into_iter()
+            .map(|webview| webview.webview_id);
+        let msg = ConstellationMsg::ReadyToPresent(webview_ids.collect());
+        if let Err(e) = self.constellation_chan.send(msg) {
+            warn!("Sending event to constellation failed ({:?}).", e);
+        }
+
         self.composition_request = CompositionRequest::NoCompositingNecessary;
 
         self.process_animations(true);
 
         Ok(())
+    }
+
+    /// Present the current frame to the given surface.
+    pub fn present(
+        &mut self,
+        surface: &Surface<impl SurfaceTypeTrait>,
+    ) -> Result<(), crate::errors::Error> {
+        let result = self.rendering_context.present(surface);
+        if let Err(err) = &result {
+            warn!("Failed to present surface: {:?}", err);
+        }
+        self.waiting_on_present = false;
+
+        result
     }
 
     fn composite_if_necessary(&mut self, reason: CompositingReason) {
