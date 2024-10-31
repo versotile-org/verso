@@ -470,7 +470,24 @@ impl Verso {
                                             window.0.set_cursor_icon(cursor);
                                         }
                                     }
-                                    EmbedderMsg::Shutdown | EmbedderMsg::ReadyToPresent(_) => {}
+                                    EmbedderMsg::ReadyToPresent(webview_ids) => {
+                                        if let Some(id) = webview_ids.first() {
+                                            for (window, _document) in self.windows.values_mut() {
+                                                if window.has_webview(*id) {
+                                                    if let Err(err) =
+                                                        compositor.present(&window.surface)
+                                                    {
+                                                        log::warn!(
+                                                            "Failed to present surface: {:?}",
+                                                            err
+                                                        );
+                                                    }
+                                                    break;
+                                                }
+                                            }
+                                        }
+                                    }
+                                    EmbedderMsg::Shutdown => {}
                                     e => {
                                         log::trace!("Verso Window isn't supporting handling this message yet: {e:?}")
                                     }

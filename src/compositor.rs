@@ -15,6 +15,7 @@ use crossbeam_channel::Sender;
 use embedder_traits::Cursor;
 use euclid::{vec2, Point2D, Scale, Size2D, Transform3D, Vector2D};
 use gleam::gl;
+use glutin::surface::{Surface, SurfaceTypeTrait};
 use ipc_channel::ipc::{self, IpcSharedMemory};
 use log::{debug, error, trace, warn};
 use profile_traits::time::{self as profile_time, profile, ProfilerCategory};
@@ -215,6 +216,9 @@ pub struct IOCompositor {
     /// will want to avoid blocking on UI events, and just
     /// run the event loop at the vsync interval.
     pub is_animating: bool,
+
+    /// Check if we composited frame that are waiting for present.
+    pub waiting_for_present: bool,
 }
 
 #[derive(Clone, Copy)]
@@ -382,6 +386,7 @@ impl IOCompositor {
             pending_frames: 0,
             last_animation_tick: Instant::now(),
             is_animating: false,
+            waiting_for_present: false,
         };
 
         // Make sure the GL state is OK
@@ -1993,6 +1998,17 @@ impl IOCompositor {
             }
         }
 
+        self.waiting_for_present = true;
+        let webview_ids = window
+            .painting_order()
+            .into_iter()
+            .map(|webview| webview.webview_id)
+            .collect();
+        let msg = ConstellationMsg::ReadyToPresent(webview_ids);
+        if let Err(e) = self.constellation_chan.send(msg) {
+            warn!("Sending event to constellation failed ({:?}).", e);
+        }
+
         self.composition_request = CompositionRequest::NoCompositingNecessary;
 
         self.process_animations(true);
@@ -2006,6 +2022,19 @@ impl IOCompositor {
             self.composition_request
         );
         self.composition_request = CompositionRequest::CompositeNow(reason)
+    }
+
+    /// present
+    pub fn present(
+        &mut self,
+        surface: &Surface<impl SurfaceTypeTrait>,
+    ) -> Result<(), crate::errors::Error> {
+        if self.waiting_for_present {
+            self.waiting_for_present = false;
+            self.rendering_context.present(surface)
+        } else {
+            Ok(())
+        }
     }
 
     #[track_caller]
@@ -2077,7 +2106,6 @@ impl IOCompositor {
                 CompositionRequest::NoCompositingNecessary => {}
                 CompositionRequest::CompositeNow(_) => {
                     self.composite(window);
-                    window.request_redraw();
                 }
             }
 

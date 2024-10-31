@@ -180,7 +180,7 @@ impl Window {
     ) {
         match event {
             WindowEvent::RedrawRequested => {
-                if let Err(err) = compositor.rendering_context.present(&self.surface) {
+                if let Err(err) = compositor.present(&self.surface) {
                     log::warn!("Failed to present surface: {:?}", err);
                 }
             }
