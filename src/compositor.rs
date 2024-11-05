@@ -119,7 +119,7 @@ pub struct IOCompositor {
     webrender_document: DocumentId,
 
     /// The port on which we receive messages.
-    port: CompositorReceiver,
+    pub(crate) port: CompositorReceiver,
 
     /// Tracks each webview and its current pipeline
     webviews: HashMap<TopLevelBrowsingContextId, PipelineId>,
@@ -441,7 +441,8 @@ impl IOCompositor {
         self.shutdown_state = ShutdownState::FinishedShuttingDown;
     }
 
-    fn handle_browser_message(
+    /// Handle compositor message
+    pub fn handle_compositor_message(
         &mut self,
         msg: CompositorMsg,
         windows: &mut HashMap<WindowId, (Window, DocumentId)>,
@@ -570,8 +571,8 @@ impl IOCompositor {
                 self.pending_paint_metrics.insert(pipeline_id, epoch);
             }
 
-            CompositorMsg::CrossProcess(cross_proces_message) => {
-                self.handle_cross_process_message(cross_proces_message);
+            CompositorMsg::CrossProcess(cross_process_message) => {
+                self.handle_cross_process_message(cross_process_message);
             }
         }
 
@@ -2022,36 +2023,6 @@ impl IOCompositor {
             ),
             (gl::NO_ERROR, gl::FRAMEBUFFER_COMPLETE)
         );
-    }
-
-    /// Receive and handle compositor messages.
-    pub fn receive_messages(
-        &mut self,
-        windows: &mut HashMap<WindowId, (Window, DocumentId)>,
-    ) -> bool {
-        // Check for new messages coming from the other threads in the system.
-        let mut compositor_messages = vec![];
-        let mut found_recomposite_msg = false;
-        while let Some(msg) = self.port.try_recv_compositor_msg() {
-            match msg {
-                CompositorMsg::NewWebRenderFrameReady(..) if found_recomposite_msg => {
-                    // Only take one of duplicate NewWebRendeFrameReady messages, but do subtract
-                    // one frame from the pending frames.
-                    self.pending_frames -= 1;
-                }
-                CompositorMsg::NewWebRenderFrameReady(..) => {
-                    found_recomposite_msg = true;
-                    compositor_messages.push(msg)
-                }
-                _ => compositor_messages.push(msg),
-            }
-        }
-        for msg in compositor_messages {
-            if !self.handle_browser_message(msg, windows) {
-                return false;
-            }
-        }
-        true
     }
 
     /// Perform composition and related actions.

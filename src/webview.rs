@@ -46,6 +46,7 @@ impl WebView {
 /// - Minimize the window: `window.prompt('MINIMIZE')`
 /// - Maximize the window: `window.prompt('MAXIMIZE')`
 /// - Navigate to a specific URL: `window.prompt('NAVIGATE_TO:${url}')`
+#[derive(Debug)]
 pub struct Panel {
     /// The panel's webview
     pub(crate) webview: WebView,

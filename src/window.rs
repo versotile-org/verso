@@ -54,22 +54,7 @@ pub struct Window {
 
 impl Window {
     /// Create a Verso window from Winit window and return the rendering context.
-    pub fn new(evl: &ActiveEventLoop) -> (Self, RenderingContext) {
-        let window_attributes = WinitWindow::default_attributes()
-            .with_transparent(true)
-            .with_decorations(false);
-
-        let template = ConfigTemplateBuilder::new()
-            .with_alpha_size(8)
-            .with_transparency(cfg!(macos));
-
-        let (window, gl_config) = DisplayBuilder::new()
-            .with_window_attributes(Some(window_attributes))
-            .build(evl, template, gl_config_picker)
-            .expect("Failed to create window and gl config");
-
-        let window = window.ok_or("Failed to create window").unwrap();
-
+    pub fn new(window: WinitWindow, gl_config: glutin::config::Config) -> (Self, RenderingContext) {
         log::debug!("Picked a config with {} samples", gl_config.num_samples());
 
         #[cfg(macos)]
@@ -100,14 +85,7 @@ impl Window {
     }
 
     /// Create a Verso window with the rendering context.
-    pub fn new_with_compositor(evl: &ActiveEventLoop, compositor: &mut IOCompositor) -> Self {
-        let window_attrs = WinitWindow::default_attributes()
-            .with_decorations(false)
-            .with_transparent(true);
-        let window = evl
-            .create_window(window_attrs)
-            .expect("Failed to create window.");
-
+    pub fn new_with_compositor(window: WinitWindow, compositor: &mut IOCompositor) -> Self {
         #[cfg(macos)]
         unsafe {
             let rwh = window.window_handle().expect("Failed to get window handle");

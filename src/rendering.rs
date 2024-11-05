@@ -1,6 +1,6 @@
-use std::ffi::CString;
 use std::num::NonZeroU32;
 use std::rc::Rc;
+use std::{ffi::CString, fmt::Debug};
 
 use euclid::default::Size2D;
 use gleam::gl;
@@ -22,6 +22,12 @@ use winit::window::Window;
 pub struct RenderingContext {
     context: PossiblyCurrentContext,
     pub(crate) gl: Rc<dyn gl::Gl>,
+}
+
+impl Debug for RenderingContext {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        self.context.fmt(f)
+    }
 }
 
 impl RenderingContext {

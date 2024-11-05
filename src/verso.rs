@@ -2,13 +2,15 @@ use std::{
     borrow::Cow,
     collections::HashMap,
     sync::{atomic::Ordering, Arc},
+    thread::JoinHandle,
 };
 
 use arboard::Clipboard;
-use base::id::{PipelineNamespace, PipelineNamespaceId};
+use base::id::{PipelineNamespace, PipelineNamespaceId, TopLevelBrowsingContextId};
 use bluetooth::BluetoothThreadFactory;
 use bluetooth_traits::BluetoothRequest;
 use canvas::canvas_paint_thread::CanvasPaintThread;
+use channel::Receiver;
 use compositing_traits::{CompositorMsg, CompositorProxy, CompositorReceiver, ConstellationMsg};
 use constellation::{Constellation, FromCompositorLogger, InitialConstellationState};
 use crossbeam_channel::{unbounded, Sender};
@@ -16,6 +18,8 @@ use devtools;
 use embedder_traits::{EmbedderMsg, EmbedderProxy, EmbedderReceiver, EventLoopWaker};
 use euclid::Scale;
 use fonts::SystemFontService;
+use glutin::config::ConfigTemplateBuilder;
+use glutin_winit::DisplayBuilder;
 use ipc_channel::ipc::{self, IpcSender};
 use ipc_channel::router::ROUTER;
 use layout_thread_2020;
@@ -36,22 +40,100 @@ use webrender_traits::*;
 use webxr_api::{LayerGrandManager, LayerGrandManagerAPI, LayerManager, LayerManagerFactory};
 use winit::{
     event::WindowEvent,
-    event_loop::{ActiveEventLoop, ControlFlow, EventLoopProxy},
+    event_loop::{ActiveEventLoop, EventLoopProxy},
     window::WindowId,
 };
 
 use crate::{
     compositor::{IOCompositor, InitialCompositorState, ShutdownState},
-    config::Config,
+    config::{Config, EmbedderEvent},
+    rendering::gl_config_picker,
     window::Window,
 };
 
 /// Main entry point of Verso browser.
 pub struct Verso {
+    thread: JoinHandle<()>,
+}
+
+impl Verso {
+    /// Create a Verso instance.
+    pub fn new(
+        proxy: EventLoopProxy<EvlProxyMessage>,
+        config: Config,
+        evl_receiver: Receiver<EmbedderEvent>,
+    ) -> Self {
+        let thread = std::thread::Builder::new()
+            .name("VersoThread".to_owned())
+            .spawn(move || {
+                VersoContext::new(proxy, config, evl_receiver).run();
+            })
+            .unwrap();
+        Self { thread }
+    }
+
+    /// Ask Verso to shutdown and exit.
+    pub fn exit(self) {
+        let _ = self.thread.join();
+    }
+
+    /// Create a winit window to add into Verso
+    pub fn create_window(evl: &ActiveEventLoop, sender: &crossbeam_channel::Sender<EmbedderEvent>) {
+        let window_attrs = winit::window::Window::default_attributes()
+            .with_decorations(false)
+            .with_transparent(true);
+        let window = evl.create_window(window_attrs);
+
+        match window {
+            Ok(window) => {
+                if let Err(_) = sender.send(EmbedderEvent::Window(window)) {
+                    log::error!("Failed to send EmbedderEvent::WindowCreated");
+                }
+            }
+            Err(_) => log::error!("Failed to create winit window"),
+        }
+    }
+
+    /// Create a winit window to add into Verso
+    pub fn create_window_with_config(
+        evl: &ActiveEventLoop,
+        sender: &crossbeam_channel::Sender<EmbedderEvent>,
+    ) {
+        let window_attributes = winit::window::Window::default_attributes()
+            .with_transparent(true)
+            .with_decorations(false);
+
+        let template = ConfigTemplateBuilder::new()
+            .with_alpha_size(8)
+            .with_transparency(cfg!(macos));
+
+        let (window, gl_config) = DisplayBuilder::new()
+            .with_window_attributes(Some(window_attributes))
+            .build(evl, template, gl_config_picker)
+            .expect("Failed to create window and gl config");
+
+        match window {
+            Some(window) => {
+                if let Err(_) = sender.send(EmbedderEvent::WindowWithConfig(window, gl_config)) {
+                    log::error!("Failed to send EmbedderEvent::WindowCreated");
+                }
+            }
+            None => log::error!("Failed to create winit window"),
+        }
+    }
+}
+
+/// Context of Verso thread.
+pub struct VersoContext {
     windows: HashMap<WindowId, (Window, DocumentId)>,
     compositor: Option<IOCompositor>,
     constellation_sender: Sender<ConstellationMsg>,
-    embedder_receiver: EmbedderReceiver,
+    /// Receiver to get Servo messages.
+    servo_receiver: EmbedderReceiver,
+    /// Sender to send messages to winit event loop.
+    evl_sender: EventLoopProxy<EvlProxyMessage>,
+    /// Receiver to get winit event loop messages.
+    evl_receiver: Receiver<EmbedderEvent>,
     /// For single-process Servo instances, this field controls the initialization
     /// and deinitialization of the JS Engine. Multiprocess Servo instances have their
     /// own instance that exists in the content process instead.
@@ -60,8 +142,8 @@ pub struct Verso {
     clipboard: Option<Clipboard>,
 }
 
-impl Verso {
-    /// Create a Verso instance from Winit's window and event loop proxy.
+impl VersoContext {
+    /// Create a Verso context for Verso instance.
     ///
     /// Following threads will be created while initializing Verso based on configurations:
     /// - Time Profiler: Enabled
@@ -78,9 +160,9 @@ impl Verso {
     /// - Constellation: Enabled
     /// - Image Cache: Enabled
     pub fn new(
-        evl: &ActiveEventLoop,
-        proxy: EventLoopProxy<EventLoopProxyMessage>,
+        proxy: EventLoopProxy<EvlProxyMessage>,
         config: Config,
+        evl_receiver: Receiver<EmbedderEvent>,
     ) -> Self {
         if let Some(ipc_channel) = &config.args.ipc_channel {
             let sender =
@@ -93,8 +175,7 @@ impl Verso {
                 .name("IpcMessageRelay".to_owned())
                 .spawn(move || {
                     while let Ok(message) = receiver.recv() {
-                        if let Err(e) =
-                            proxy_clone.send_event(EventLoopProxyMessage::IpcMessage(message))
+                        if let Err(e) = proxy_clone.send_event(EvlProxyMessage::IpcMessage(message))
                         {
                             log::error!("Failed to send controller message to Verso: {e}");
                         }
@@ -108,11 +189,17 @@ impl Verso {
         let initial_url = config.args.url.clone();
 
         config.init();
+        if let Err(_) = proxy.send_event(EvlProxyMessage::NewWindowWithConfig) {
+            log::error!("Failed to send EventLoopProxyMessage::NewWindow");
+        }
+        let Ok(EmbedderEvent::WindowWithConfig(window, gl_config)) = evl_receiver.recv() else {
+            panic!("Failed to get winit window when initializing Verso");
+        };
         // Reserving a namespace to create TopLevelBrowsingContextId.
         PipelineNamespace::install(PipelineNamespaceId(0));
-        let (mut window, rendering_context) = Window::new(evl);
+        let (mut window, rendering_context) = Window::new(window, gl_config);
 
-        let event_loop_waker = Box::new(Waker(proxy));
+        let event_loop_waker = Box::new(Waker(proxy.clone()));
         let opts = opts::get();
 
         // Set Stylo flags
@@ -125,7 +212,7 @@ impl Verso {
 
         // Initialize servo media with dummy backend
         // This will create a thread to initialize a global static of servo media.
-        // The thread will be closed once the static is initialzed.
+        // The thread will be closed once the static is initialized.
         // TODO: This is used by content process. Spawn it there once if we have multiprocess mode.
         servo_media::ServoMedia::init::<servo_media_dummy::DummyBackend>();
 
@@ -395,17 +482,85 @@ impl Verso {
         windows.insert(window.id(), (window, webrender_document));
 
         // Create Verso instance
-        let verso = Verso {
+        let verso = VersoContext {
             windows,
             compositor: Some(compositor),
             constellation_sender,
-            embedder_receiver,
+            servo_receiver: embedder_receiver,
+            evl_sender: proxy,
+            evl_receiver,
             _js_engine_setup: js_engine_setup,
             clipboard: Clipboard::new().ok(),
         };
 
         verso.setup_logging();
         verso
+    }
+
+    /// Run the Verso instance and handle messages from other threads.
+    pub fn run(&mut self) {
+        loop {
+            let Some(compositor) = &mut self.compositor else {
+                return;
+            };
+            match compositor.shutdown_state {
+                ShutdownState::NotShuttingDown => {
+                    crossbeam_channel::select! {
+                        recv(self.evl_receiver) -> msg => match msg {
+                            Ok(EmbedderEvent::Window(window)) => {
+                                let mut window =
+                                    Window::new_with_compositor(window, compositor);
+                                window.create_panel(&self.constellation_sender, None);
+                                let document = self.windows.values().next().unwrap().1;
+                                self.windows
+                                    .insert(window.id(), (window, document));
+                            },
+                            Ok(EmbedderEvent::WindowEvent(id, event)) => {
+                                self.handle_winit_window_event(id, event);
+                            },
+                            e => log::warn!("Verso failed to receive event loop message: {e:?}"),
+                        },
+                        recv(self.servo_receiver.receiver) -> msg => match msg {
+                            Ok((id, msg)) => self.handle_servo_message(id, msg),
+                            Err(e) => log::warn!("Verso failed to receive constellation message: {e:?}"),
+                        },
+                        recv(compositor.port.receiver) -> msg => match msg {
+                            Ok(msg) => { compositor.handle_compositor_message(msg, &mut self.windows); },
+                            Err(e) => log::warn!("Verso failed to receive compositor message: {e:?}"),
+                        },
+                    }
+                }
+                ShutdownState::ShuttingDown => {
+                    log::warn!(
+                        "Verso shouldn't be handling messages after compositor has shut down"
+                    );
+                }
+                ShutdownState::FinishedShuttingDown => {
+                    break;
+                    //     // If Compositor has shut down, deinit and remove it.
+                    //     if let Some(compositor) = self.compositor.take() {
+                    //         IOCompositor::deinit(compositor)
+                    //     }
+                    // } else if self.is_animating() {
+                    //     if let Err(e) = self.evl_sender.send_event(EvlProxyMessage::Poll) {
+                    //         log::error!("Verso failed to send event loop message: {e:?}");
+                    //     }
+                    // } else {
+                    //     if let Err(e) = self.evl_sender.send_event(EvlProxyMessage::Wait) {
+                    //         log::error!("Verso failed to send event loop message: {e:?}");
+                    //     }
+                    // }
+                }
+            }
+        }
+
+        // Verso is exiting. Shutdown the compositor.
+        if let Some(compositor) = self.compositor.take() {
+            IOCompositor::deinit(compositor)
+        }
+        if let Err(e) = self.evl_sender.send_event(EvlProxyMessage::Exit) {
+            log::error!("Verso failed to send event loop message: {e:?}");
+        }
     }
 
     /// Handle Winit window events
@@ -424,93 +579,58 @@ impl Verso {
     }
 
     /// Handle message came from Servo.
-    pub fn handle_servo_messages(&mut self, evl: &ActiveEventLoop) {
-        let mut shutdown = false;
-        if let Some(compositor) = &mut self.compositor {
-            // Handle Compositor's messages first
-            log::trace!("Verso is handling Compositor messages");
-            if compositor.receive_messages(&mut self.windows) {
-                // And then handle Embedder messages
-                log::trace!(
-                    "Verso is handling Embedder messages when shutdown state is set to {:?}",
-                    compositor.shutdown_state
-                );
-                while let Some((webview_id, msg)) = self.embedder_receiver.try_recv_embedder_msg() {
-                    match compositor.shutdown_state {
-                        ShutdownState::NotShuttingDown => {
-                            if let Some(id) = webview_id {
-                                for (window, document) in self.windows.values_mut() {
-                                    if window.has_webview(id) {
-                                        if window.handle_servo_message(
-                                            id,
-                                            msg,
-                                            &self.constellation_sender,
-                                            self.clipboard.as_mut(),
-                                            compositor,
-                                        ) {
-                                            let mut window =
-                                                Window::new_with_compositor(evl, compositor);
-                                            window.create_panel(&self.constellation_sender, None);
-                                            let webrender_document = document.clone();
-                                            self.windows
-                                                .insert(window.id(), (window, webrender_document));
-                                        }
-                                        break;
-                                    }
-                                }
-                            } else {
-                                // Handle message in Verso Window
-                                log::trace!("Verso Window is handling Embedder message: {msg:?}");
-                                match msg {
-                                    EmbedderMsg::SetCursor(cursor) => {
-                                        // TODO: This should move to compositor
-                                        if let Some(window) =
-                                            self.windows.get(&compositor.current_window)
-                                        {
-                                            window.0.set_cursor_icon(cursor);
-                                        }
-                                    }
-                                    EmbedderMsg::Shutdown | EmbedderMsg::ReadyToPresent(_) => {}
-                                    e => {
-                                        log::trace!("Verso Window isn't supporting handling this message yet: {e:?}")
-                                    }
-                                }
-                            }
+    pub fn handle_servo_message(
+        &mut self,
+        webview_id: Option<TopLevelBrowsingContextId>,
+        msg: EmbedderMsg,
+    ) {
+        let Some(compositor) = &mut self.compositor else {
+            return;
+        };
+
+        log::trace!("Verso is handling Constellation message {msg:?}",);
+        if let Some(id) = webview_id {
+            for (window, _document) in self.windows.values_mut() {
+                if window.has_webview(id) {
+                    if window.handle_servo_message(
+                        id,
+                        msg,
+                        &self.constellation_sender,
+                        self.clipboard.as_mut(),
+                        compositor,
+                    ) {
+                        if let Err(_) = self.evl_sender.send_event(EvlProxyMessage::NewWindow) {
+                            log::error!("Failed to send EventLoopProxyMessage::NewWindow");
                         }
-                        ShutdownState::FinishedShuttingDown => {
-                            log::error!("Verso shouldn't be handling messages after compositor has shut down");
-                        }
-                        ShutdownState::ShuttingDown => {}
                     }
+                    break;
                 }
             }
-
-            if compositor.shutdown_state != ShutdownState::FinishedShuttingDown {
-                // Update compositor
-                compositor.perform_updates(&mut self.windows);
-            } else {
-                shutdown = true;
+        } else {
+            // Handle message in Verso Window
+            log::trace!("Verso Window is handling Embedder message: {msg:?}");
+            match msg {
+                EmbedderMsg::SetCursor(cursor) => {
+                    // TODO: This should move to compositor
+                    if let Some(window) = self.windows.get(&compositor.current_window) {
+                        window.0.set_cursor_icon(cursor);
+                    }
+                }
+                EmbedderMsg::Shutdown | EmbedderMsg::ReadyToPresent(_) => {}
+                e => {
+                    log::trace!("Verso Window isn't supporting handling this message yet: {e:?}")
+                }
             }
         }
+
+        // Update compositor
+        compositor.perform_updates(&mut self.windows);
 
         // Check if Verso need to start shutting down.
         if self.windows.is_empty() {
             self.compositor
                 .as_mut()
                 .map(IOCompositor::maybe_start_shutting_down);
-        }
-
-        // Check compositor status and set control flow.
-        if shutdown {
-            // If Compositor has shut down, deinit and remove it.
-            if let Some(compositor) = self.compositor.take() {
-                IOCompositor::deinit(compositor)
-            }
-            evl.exit();
-        } else if self.is_animating() {
-            evl.set_control_flow(ControlFlow::Poll);
-        } else {
-            evl.set_control_flow(ControlFlow::Wait);
         }
     }
 
@@ -553,16 +673,27 @@ impl Verso {
     }
 }
 
+#[derive(Debug)]
 /// Message send to the event loop
-pub enum EventLoopProxyMessage {
+pub enum EvlProxyMessage {
     /// Wake
     Wake,
     /// Message coming from the webview controller
     IpcMessage(ControllerMessage),
+    /// Create a new window
+    NewWindow,
+    /// Create a new window with GL configuration.
+    NewWindowWithConfig,
+    /// Ask event loop to exit,
+    Exit,
+    /// Ask event loop to set control flow to poll,
+    Poll,
+    /// Ask event loop to set control flow to wait,
+    Wait,
 }
 
 #[derive(Debug, Clone)]
-struct Waker(pub EventLoopProxy<EventLoopProxyMessage>);
+struct Waker(pub EventLoopProxy<EvlProxyMessage>);
 
 impl EventLoopWaker for Waker {
     fn clone_box(&self) -> Box<dyn EventLoopWaker> {
@@ -570,7 +701,7 @@ impl EventLoopWaker for Waker {
     }
 
     fn wake(&self) {
-        if let Err(e) = self.0.send_event(EventLoopProxyMessage::Wake) {
+        if let Err(e) = self.0.send_event(EvlProxyMessage::Wake) {
             log::error!("Servo failed to send wake up event to Verso: {e}");
         }
     }

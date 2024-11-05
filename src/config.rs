@@ -9,6 +9,10 @@ use net_traits::{
     ResourceFetchTiming,
 };
 use servo_config::opts::{default_opts, set_options, Opts};
+use winit::{
+    event::WindowEvent,
+    window::{Window, WindowId},
+};
 
 /// Command line arguments.
 #[derive(Clone, Debug, Default)]
@@ -137,4 +141,15 @@ impl ProtocolHandler for ResourceReader {
 
         Box::pin(std::future::ready(response))
     }
+}
+
+#[derive(Debug)]
+/// Event sent from embedder
+pub enum EmbedderEvent {
+    /// A winit window is created with a GL configuration.
+    WindowWithConfig(Window, glutin::config::Config),
+    /// A winit window is created.
+    Window(Window),
+    /// Winit window event
+    WindowEvent(WindowId, WindowEvent),
 }
