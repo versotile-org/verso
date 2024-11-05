@@ -27,7 +27,7 @@ impl ApplicationHandler<EventLoopProxyMessage> for App {
     ) {
         if let Some(v) = self.verso.as_mut() {
             v.handle_winit_window_event(window_id, event);
-            v.handle_servo_messages(event_loop);
+            self.proxy.send_event(EventLoopProxyMessage::Wake);
         }
     }
 

@@ -180,8 +180,11 @@ impl Window {
     ) {
         match event {
             WindowEvent::RedrawRequested => {
-                if let Err(err) = compositor.rendering_context.present(&self.surface) {
-                    log::warn!("Failed to present surface: {:?}", err);
+                if compositor.ready_to_present {
+                    if let Err(err) = compositor.rendering_context.present(&self.surface) {
+                        log::warn!("Failed to present surface: {:?}", err);
+                    }
+                    compositor.ready_to_present = false;
                 }
             }
             WindowEvent::Focused(focused) => {
