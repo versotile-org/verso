@@ -36,7 +36,9 @@ modules:
       # Build Verso release profile
       - cargo --offline fetch --manifest-path Cargo.toml
       - cargo --offline build --release --features flatpak
+      - cargo --offline build --release --package verso
       # Install Verso
+      - install -Dm755 ./target/release/versoview -t /app/bin/
       - install -Dm755 ./target/release/verso -t /app/bin/
       - mkdir /app/resources
       - cp -r ./resources/* /app/resources
