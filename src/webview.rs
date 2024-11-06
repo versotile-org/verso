@@ -173,20 +173,7 @@ impl Window {
                 self.window.request_redraw();
                 send_to_constellation(sender, ConstellationMsg::FocusWebView(panel_id));
 
-                let demo_id = WebViewId::new();
-                let size = self.size();
-                let rect = DeviceIntRect::from_size(size);
-                let mut webview = WebView::new(demo_id, rect);
-                webview.set_size(self.get_content_size(rect));
-                self.webview = Some(webview);
-                send_to_constellation(
-                    sender,
-                    ConstellationMsg::NewWebView(
-                        self.panel.as_ref().unwrap().initial_url.clone(),
-                        demo_id,
-                    ),
-                );
-                log::debug!("Verso Window {:?} adds webview {}", self.id(), demo_id);
+                self.create_webview(sender, self.panel.as_ref().unwrap().initial_url.clone());
             }
             EmbedderMsg::AllowNavigationRequest(id, _url) => {
                 // The panel shouldn't navigate to other pages.

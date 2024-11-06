@@ -158,7 +158,7 @@ impl Window {
         self.panel = Some(Panel {
             webview: WebView::new(panel_id, DeviceIntRect::from_size(size)),
             initial_url: if let Some(initial_url) = initial_url {
-                servo_url::ServoUrl::from_url(initial_url)
+                ServoUrl::from_url(initial_url)
             } else {
                 ServoUrl::parse("https://example.com").unwrap()
             },
@@ -169,6 +169,25 @@ impl Window {
             constellation_sender,
             ConstellationMsg::NewWebView(url, panel_id),
         );
+    }
+
+    /// Create a new webview and send the constellation message to load the initial URL
+    pub fn create_webview(
+        &mut self,
+        constellation_sender: &Sender<ConstellationMsg>,
+        initial_url: ServoUrl,
+    ) {
+        let webview_id = WebViewId::new();
+        let size = self.size();
+        let rect = DeviceIntRect::from_size(size);
+        let mut webview = WebView::new(webview_id, rect);
+        webview.set_size(self.get_content_size(rect));
+        self.webview.replace(webview);
+        send_to_constellation(
+            constellation_sender,
+            ConstellationMsg::NewWebView(initial_url, webview_id),
+        );
+        log::debug!("Verso Window {:?} adds webview {}", self.id(), webview_id);
     }
 
     /// Handle Winit window event and return a boolean to indicate if the compositor should repaint immediately.

@@ -106,6 +106,7 @@ impl Verso {
         // Initialize configurations and Verso window
         let protocols = config.create_protocols();
         let initial_url = config.args.url.clone();
+        let with_panel = !config.args.no_panel;
 
         config.init();
         // Reserving a namespace to create TopLevelBrowsingContextId.
@@ -389,7 +390,11 @@ impl Verso {
             opts.debug.convert_mouse_to_touch,
         );
 
-        window.create_panel(&constellation_sender, initial_url);
+        if with_panel {
+            window.create_panel(&constellation_sender, initial_url);
+        } else if let Some(initial_url) = initial_url {
+            window.create_webview(&constellation_sender, initial_url.into());
+        }
 
         let mut windows = HashMap::new();
         windows.insert(window.id(), (window, webrender_document));
