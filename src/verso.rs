@@ -145,12 +145,14 @@ impl Verso {
             let (compositor_ipc_sender, compositor_ipc_receiver) =
                 ipc::channel().expect("ipc channel failure");
             let sender_clone = sender.clone();
+            let event_loop_waker_clone = event_loop_waker.clone();
             ROUTER.add_typed_route(
                 compositor_ipc_receiver,
                 Box::new(move |message| {
                     let _ = sender_clone.send(CompositorMsg::CrossProcess(
                         message.expect("Could not convert Compositor message"),
                     ));
+                    event_loop_waker_clone.wake();
                 }),
             );
             let cross_process_compositor_api = CrossProcessCompositorApi(compositor_ipc_sender);
