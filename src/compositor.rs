@@ -140,6 +140,9 @@ pub struct IOCompositor {
     /// Tracks whether we should composite this frame.
     composition_request: CompositionRequest,
 
+    /// check if the surface is ready to present.
+    pub ready_to_present: bool,
+
     /// Tracks whether we are in the process of shutting down, or have shut down and should close
     /// the compositor.
     pub shutdown_state: ShutdownState,
@@ -382,6 +385,7 @@ impl IOCompositor {
             pending_frames: 0,
             last_animation_tick: Instant::now(),
             is_animating: false,
+            ready_to_present: false,
         };
 
         // Make sure the GL state is OK
@@ -1998,6 +2002,7 @@ impl IOCompositor {
         }
 
         self.composition_request = CompositionRequest::NoCompositingNecessary;
+        self.ready_to_present = true;
 
         self.process_animations(true);
 
