@@ -106,6 +106,7 @@ impl Verso {
         // Initialize configurations and Verso window
         let protocols = config.create_protocols();
         let initial_url = config.args.url.clone();
+        let with_panel = !config.args.no_panel;
 
         config.init();
         // Reserving a namespace to create TopLevelBrowsingContextId.
@@ -144,24 +145,23 @@ impl Verso {
             let (sender, receiver) = unbounded();
             let (compositor_ipc_sender, compositor_ipc_receiver) =
                 ipc::channel().expect("ipc channel failure");
-            let sender_clone = sender.clone();
+            let cross_process_compositor_api = CrossProcessCompositorApi(compositor_ipc_sender);
+            let compositor_proxy = CompositorProxy {
+                sender,
+                cross_process_compositor_api,
+                event_loop_waker: event_loop_waker.clone(),
+            };
+
+            let compositor_proxy_clone = compositor_proxy.clone();
             ROUTER.add_typed_route(
                 compositor_ipc_receiver,
                 Box::new(move |message| {
-                    let _ = sender_clone.send(CompositorMsg::CrossProcess(
+                    let _ = compositor_proxy_clone.send(CompositorMsg::CrossProcess(
                         message.expect("Could not convert Compositor message"),
                     ));
                 }),
             );
-            let cross_process_compositor_api = CrossProcessCompositorApi(compositor_ipc_sender);
-            (
-                CompositorProxy {
-                    sender,
-                    cross_process_compositor_api,
-                    event_loop_waker: event_loop_waker.clone(),
-                },
-                CompositorReceiver { receiver },
-            )
+            (compositor_proxy, CompositorReceiver { receiver })
         };
         let (embedder_sender, embedder_receiver) = {
             let (sender, receiver) = unbounded();
@@ -389,7 +389,11 @@ impl Verso {
             opts.debug.convert_mouse_to_touch,
         );
 
-        window.create_panel(&constellation_sender, initial_url);
+        if with_panel {
+            window.create_panel(&constellation_sender, initial_url);
+        } else if let Some(initial_url) = initial_url {
+            window.create_webview(&constellation_sender, initial_url.into());
+        }
 
         let mut windows = HashMap::new();
         windows.insert(window.id(), (window, webrender_document));

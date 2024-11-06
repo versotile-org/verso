@@ -17,6 +17,8 @@ pub struct CliArgs {
     pub url: Option<url::Url>,
     /// The IPC channel name used to communicate with the webview controller.
     pub ipc_channel: Option<String>,
+    /// Should launch without control panel
+    pub no_panel: bool,
 }
 
 /// Configuration of Verso instance.
@@ -41,6 +43,7 @@ fn parse_cli_args() -> Result<CliArgs, getopts::Fail> {
         "IPC channel name to communicate and control verso",
         "",
     );
+    opts.optflag("", "no-panel", "Launch Verso without control panel");
 
     let matches: getopts::Matches = opts.parse(&args[1..])?;
     let url = matches
@@ -58,8 +61,13 @@ fn parse_cli_args() -> Result<CliArgs, getopts::Fail> {
             }
         });
     let ipc_channel = matches.opt_str("ipc-channel");
+    let no_panel = matches.opt_present("no-panel");
 
-    Ok(CliArgs { url, ipc_channel })
+    Ok(CliArgs {
+        url,
+        ipc_channel,
+        no_panel,
+    })
 }
 
 impl Config {

@@ -24,7 +24,7 @@ use script_traits::{
     AnimationState, AnimationTickType, ConstellationControlMsg, MouseButton, MouseEventType,
     ScrollState, TouchEventType, TouchId, WheelDelta, WindowSizeData, WindowSizeType,
 };
-use servo_geometry::DeviceIndependentPixel;
+use servo_geometry::{DeviceIndependentIntSize, DeviceIndependentPixel};
 use style_traits::{CSSPixel, DevicePixel, PinchZoomFactor};
 use webrender::{RenderApi, Transaction};
 use webrender_api::units::{
@@ -778,19 +778,19 @@ impl IOCompositor {
             }
 
             CrossProcessCompositorMessage::GetClientWindowRect(req) => {
-                if let Err(e) = req.send(self.viewport.into()) {
+                if let Err(e) = req.send(self.device_independent_int_size_viewport().into()) {
                     warn!("Sending response to get client window failed ({:?}).", e);
                 }
             }
 
             CrossProcessCompositorMessage::GetScreenSize(req) => {
-                if let Err(e) = req.send(self.viewport) {
+                if let Err(e) = req.send(self.device_independent_int_size_viewport().into()) {
                     warn!("Sending response to get screen size failed ({:?}).", e);
                 }
             }
 
             CrossProcessCompositorMessage::GetAvailableScreenSize(req) => {
-                if let Err(e) = req.send(self.viewport) {
+                if let Err(e) = req.send(self.device_independent_int_size_viewport().into()) {
                     warn!(
                         "Sending response to get screen avail size failed ({:?}).",
                         e
@@ -841,19 +841,19 @@ impl IOCompositor {
             CompositorMsg::CrossProcess(CrossProcessCompositorMessage::GetClientWindowRect(
                 req,
             )) => {
-                if let Err(e) = req.send(self.viewport.into()) {
+                if let Err(e) = req.send(self.device_independent_int_size_viewport().into()) {
                     warn!("Sending response to get client window failed ({:?}).", e);
                 }
             }
             CompositorMsg::CrossProcess(CrossProcessCompositorMessage::GetScreenSize(req)) => {
-                if let Err(e) = req.send(self.viewport) {
+                if let Err(e) = req.send(self.device_independent_int_size_viewport().into()) {
                     warn!("Sending response to get screen size failed ({:?}).", e);
                 }
             }
             CompositorMsg::CrossProcess(CrossProcessCompositorMessage::GetAvailableScreenSize(
                 req,
             )) => {
-                if let Err(e) = req.send(self.viewport) {
+                if let Err(e) = req.send(self.device_independent_int_size_viewport().into()) {
                     warn!(
                         "Sending response to get screen avail size failed ({:?}).",
                         e
@@ -1751,6 +1751,10 @@ impl IOCompositor {
         &self,
     ) -> Scale<f32, CSSPixel, DevicePixel> {
         self.page_zoom * self.scale_factor
+    }
+
+    fn device_independent_int_size_viewport(&self) -> DeviceIndependentIntSize {
+        (self.viewport.to_f32() / self.scale_factor).to_i32()
     }
 
     /// Handle zoom reset event
