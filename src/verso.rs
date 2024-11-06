@@ -145,24 +145,23 @@ impl Verso {
             let (sender, receiver) = unbounded();
             let (compositor_ipc_sender, compositor_ipc_receiver) =
                 ipc::channel().expect("ipc channel failure");
-            let sender_clone = sender.clone();
+            let cross_process_compositor_api = CrossProcessCompositorApi(compositor_ipc_sender);
+            let compositor_proxy = CompositorProxy {
+                sender,
+                cross_process_compositor_api,
+                event_loop_waker: event_loop_waker.clone(),
+            };
+
+            let compositor_proxy_clone = compositor_proxy.clone();
             ROUTER.add_typed_route(
                 compositor_ipc_receiver,
                 Box::new(move |message| {
-                    let _ = sender_clone.send(CompositorMsg::CrossProcess(
+                    let _ = compositor_proxy_clone.send(CompositorMsg::CrossProcess(
                         message.expect("Could not convert Compositor message"),
                     ));
                 }),
             );
-            let cross_process_compositor_api = CrossProcessCompositorApi(compositor_ipc_sender);
-            (
-                CompositorProxy {
-                    sender,
-                    cross_process_compositor_api,
-                    event_loop_waker: event_loop_waker.clone(),
-                },
-                CompositorReceiver { receiver },
-            )
+            (compositor_proxy, CompositorReceiver { receiver })
         };
         let (embedder_sender, embedder_receiver) = {
             let (sender, receiver) = unbounded();
