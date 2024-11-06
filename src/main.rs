@@ -27,9 +27,8 @@ impl ApplicationHandler<EventLoopProxyMessage> for App {
         event: winit::event::WindowEvent,
     ) {
         if let Some(v) = self.verso.as_mut() {
-            if let WindowEvent::Resized(_) = event {
+            if let WindowEvent::RedrawRequested = event {
                 v.handle_winit_window_event(window_id, event);
-
                 if let Err(e) = self.proxy.send_event(EventLoopProxyMessage::Wake2) {
                     log::error!("Failed to send wake message to Verso: {e}");
                 }
@@ -37,13 +36,6 @@ impl ApplicationHandler<EventLoopProxyMessage> for App {
                 v.handle_winit_window_event(window_id, event);
                 v.handle_servo_messages(_event_loop);
             }
-            // XXX: Windows seems to be able to handle servo directly.
-            // We can think about how to handle all platforms the same way in the future.
-            // #[cfg(windows)]
-            // #[cfg(not(windows))]
-            // if let Err(e) = self.proxy.send_event(EventLoopProxyMessage::Wake) {
-            //     log::error!("Failed to send wake message to Verso: {e}");
-            // }
         }
     }
 
