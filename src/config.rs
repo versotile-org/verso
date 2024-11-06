@@ -17,8 +17,8 @@ pub struct CliArgs {
     pub url: Option<url::Url>,
     /// The IPC channel name used to communicate with the webview controller.
     pub ipc_channel: Option<String>,
-    /// Should launch with control panel or not
-    pub with_panel: bool,
+    /// Should launch without control panel
+    pub no_panel: bool,
 }
 
 /// Configuration of Verso instance.
@@ -66,7 +66,7 @@ fn parse_cli_args() -> Result<CliArgs, getopts::Fail> {
     Ok(CliArgs {
         url,
         ipc_channel,
-        with_panel: !no_panel,
+        no_panel,
     })
 }
 
