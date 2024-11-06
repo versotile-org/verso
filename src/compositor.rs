@@ -2082,6 +2082,13 @@ impl IOCompositor {
         }
 
         if let Some((window, _)) = windows.get(&self.current_window) {
+            // if self.ready_to_present {
+            //     if let Err(err) = self.rendering_context.present(&window.surface) {
+            //         log::warn!("Failed to present surface: {:?}", err);
+            //     }
+            //     self.ready_to_present = false;
+            // }
+
             match self.composition_request {
                 CompositionRequest::NoCompositingNecessary => {}
                 CompositionRequest::CompositeNow(_) => {

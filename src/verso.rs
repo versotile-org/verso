@@ -518,6 +518,15 @@ impl Verso {
         }
     }
 
+    /// Handle message came from Servo.
+    pub fn wake_window(&mut self) {
+        if let Some(compositor) = &mut self.compositor {
+            if let Some(window) = self.windows.get(&compositor.current_window) {
+                window.0.request_redraw();
+            }
+        }
+    }
+
     /// Handle message came from webview controller.
     pub fn handle_incoming_webview_message(&self, message: ControllerMessage) {
         match message {
@@ -561,6 +570,8 @@ impl Verso {
 pub enum EventLoopProxyMessage {
     /// Wake
     Wake,
+    /// Wake
+    Wake2,
     /// Message coming from the webview controller
     IpcMessage(ControllerMessage),
 }
