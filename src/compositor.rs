@@ -2091,9 +2091,15 @@ impl IOCompositor {
 
             match self.composition_request {
                 CompositionRequest::NoCompositingNecessary => {}
-                CompositionRequest::CompositeNow(_) => {
+                CompositionRequest::CompositeNow(r) => {
                     self.composite(window);
-                    window.request_redraw();
+                    if window.resizing {
+                        if r == CompositingReason::Resize {
+                            window.request_redraw();
+                        }
+                    } else {
+                        window.request_redraw();
+                    }
                 }
             }
 

@@ -572,6 +572,7 @@ impl Verso {
 }
 
 /// Message send to the event loop
+#[derive(Debug)]
 pub enum EventLoopProxyMessage {
     /// Wake
     Wake,
