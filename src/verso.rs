@@ -413,7 +413,7 @@ impl Verso {
     }
 
     /// Handle Winit window events
-    pub fn handle_winit_window_event(&mut self, window_id: WindowId, event: WindowEvent) {
+    pub fn handle_winit_window_event(&mut self, window_id: WindowId, event: WindowEvent) -> bool {
         log::trace!("Verso is handling Winit event: {event:?}");
         if let Some(compositor) = &mut self.compositor {
             if let WindowEvent::CloseRequested = event {
@@ -423,8 +423,11 @@ impl Verso {
                 window
                     .0
                     .handle_winit_window_event(&self.constellation_sender, compositor, &event);
+                return window.0.resizing;
             }
         }
+
+        false
     }
 
     /// Handle message came from Servo.
@@ -519,10 +522,12 @@ impl Verso {
     }
 
     /// Handle message came from Servo.
-    pub fn wake_window(&mut self) {
+    pub fn wake_window(&mut self, evl: &ActiveEventLoop) {
         if let Some(compositor) = &mut self.compositor {
             if let Some(window) = self.windows.get(&compositor.current_window) {
                 window.0.request_redraw();
+            } else {
+                self.handle_servo_messages(evl);
             }
         }
     }
@@ -570,8 +575,6 @@ impl Verso {
 pub enum EventLoopProxyMessage {
     /// Wake
     Wake,
-    /// Wake
-    Wake2,
     /// Message coming from the webview controller
     IpcMessage(ControllerMessage),
 }

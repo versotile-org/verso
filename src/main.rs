@@ -28,13 +28,12 @@ impl ApplicationHandler<EventLoopProxyMessage> for App {
     ) {
         if let Some(v) = self.verso.as_mut() {
             if let WindowEvent::RedrawRequested = event {
-                v.handle_winit_window_event(window_id, event);
-                if let Err(e) = self.proxy.send_event(EventLoopProxyMessage::Wake2) {
-                    log::error!("Failed to send wake message to Verso: {e}");
+                if !v.handle_winit_window_event(window_id, event) {
+                    v.handle_servo_messages(_event_loop);
                 }
             } else {
-                v.handle_winit_window_event(window_id, event);
                 v.handle_servo_messages(_event_loop);
+                v.handle_winit_window_event(window_id, event);
             }
         }
     }
@@ -47,14 +46,10 @@ impl ApplicationHandler<EventLoopProxyMessage> for App {
         if let Some(v) = self.verso.as_mut() {
             match event {
                 EventLoopProxyMessage::Wake => {
-                    // v.handle_servo_messages(event_loop);
-                    v.wake_window();
+                    v.wake_window(event_loop);
                 }
                 EventLoopProxyMessage::IpcMessage(message) => {
                     v.handle_incoming_webview_message(message);
-                }
-                EventLoopProxyMessage::Wake2 => {
-                    v.handle_servo_messages(event_loop);
                 }
             }
         }
