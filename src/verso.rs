@@ -423,7 +423,7 @@ impl Verso {
                 window
                     .0
                     .handle_winit_window_event(&self.constellation_sender, compositor, &event);
-                return window.0.resizing && window.0.window.has_focus();
+                return window.0.resizing;
             }
         }
 

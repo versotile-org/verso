@@ -216,7 +216,9 @@ impl Window {
                 }
             }
             WindowEvent::Resized(size) => {
-                self.resizing = true;
+                if self.window.has_focus() {
+                    self.resizing = true;
+                }
                 let size = Size2D::new(size.width, size.height);
                 compositor.resize(size.to_i32(), self);
             }

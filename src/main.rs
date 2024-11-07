@@ -27,24 +27,24 @@ impl ApplicationHandler<EventLoopProxyMessage> for App {
         event: winit::event::WindowEvent,
     ) {
         if let Some(v) = self.verso.as_mut() {
-            // if let WindowEvent::RedrawRequested = event {
-            let _resizing = v.handle_winit_window_event(window_id, event);
-            #[cfg(apple)]
-            if !_resizing {
+            if let WindowEvent::RedrawRequested = event {
+                let _resizing = v.handle_winit_window_event(window_id, event);
+                #[cfg(apple)]
+                if !_resizing {
+                    if let Err(e) = self.proxy.send_event(EventLoopProxyMessage::Wake2) {
+                        log::error!("Failed to send controller message to Verso: {e}");
+                    }
+                }
+                #[cfg(linux)]
                 if let Err(e) = self.proxy.send_event(EventLoopProxyMessage::Wake2) {
                     log::error!("Failed to send controller message to Verso: {e}");
                 }
+                #[cfg(windows)]
+                v.handle_servo_messages(_event_loop);
+            } else {
+                v.handle_servo_messages(_event_loop);
+                v.handle_winit_window_event(window_id, event);
             }
-            #[cfg(linux)]
-            if let Err(e) = self.proxy.send_event(EventLoopProxyMessage::Wake2) {
-                log::error!("Failed to send controller message to Verso: {e}");
-            }
-            #[cfg(windows)]
-            v.handle_servo_messages(_event_loop);
-            // } else {
-            //     v.handle_servo_messages(_event_loop);
-            //     v.handle_winit_window_event(window_id, event);
-            // }
         }
     }
 
