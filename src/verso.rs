@@ -423,7 +423,7 @@ impl Verso {
                 window
                     .0
                     .handle_winit_window_event(&self.constellation_sender, compositor, &event);
-                return window.0.resizing;
+                return window.0.resizing && window.0.window.has_focus();
             }
         }
 
@@ -575,6 +575,8 @@ impl Verso {
 pub enum EventLoopProxyMessage {
     /// Wake
     Wake,
+    /// Wake
+    Wake2,
     /// Message coming from the webview controller
     IpcMessage(ControllerMessage),
 }
