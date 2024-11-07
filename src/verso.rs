@@ -525,6 +525,7 @@ impl Verso {
     pub fn wake_window(&mut self, evl: &ActiveEventLoop) {
         if let Some(compositor) = &mut self.compositor {
             if let Some(window) = self.windows.get(&compositor.current_window) {
+                // evl.set_control_flow(ControlFlow::Poll);
                 window.0.request_redraw();
             } else {
                 self.handle_servo_messages(evl);
@@ -576,8 +577,6 @@ impl Verso {
 pub enum EventLoopProxyMessage {
     /// Wake
     Wake,
-    /// Wake
-    Wake2,
     /// Message coming from the webview controller
     IpcMessage(ControllerMessage),
 }

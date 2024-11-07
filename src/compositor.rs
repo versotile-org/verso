@@ -1915,6 +1915,11 @@ impl IOCompositor {
 
     /// Composite to the given target if any, or the current target otherwise.
     fn composite_specific_target(&mut self, window: &Window) -> Result<(), UnableToComposite> {
+        // if self.ready_to_present {
+        //     return Err(UnableToComposite::NotReadyToPaintImage(
+        //         NotReadyToPaint::AnimationsActive,
+        //     ));
+        // }
         if let Err(err) = self
             .rendering_context
             .make_gl_context_current(&window.surface)
@@ -2091,15 +2096,9 @@ impl IOCompositor {
 
             match self.composition_request {
                 CompositionRequest::NoCompositingNecessary => {}
-                CompositionRequest::CompositeNow(r) => {
+                CompositionRequest::CompositeNow(_) => {
                     self.composite(window);
-                    if window.resizing {
-                        if r == CompositingReason::Resize {
-                            window.request_redraw();
-                        }
-                    } else {
-                        window.request_redraw();
-                    }
+                    window.request_redraw();
                 }
             }
 

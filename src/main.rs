@@ -22,31 +22,34 @@ impl ApplicationHandler<EventLoopProxyMessage> for App {
 
     fn window_event(
         &mut self,
-        _event_loop: &winit::event_loop::ActiveEventLoop,
+        event_loop: &winit::event_loop::ActiveEventLoop,
         window_id: winit::window::WindowId,
         event: winit::event::WindowEvent,
     ) {
         if let Some(v) = self.verso.as_mut() {
-            if let WindowEvent::RedrawRequested = event {
-                let _resizing = v.handle_winit_window_event(window_id, event);
-                #[cfg(apple)]
-                if !_resizing {
-                    if let Err(e) = self.proxy.send_event(EventLoopProxyMessage::Wake2) {
-                        log::error!("Failed to send controller message to Verso: {e}");
-                    }
-                }
-                #[cfg(linux)]
-                if let Err(e) = self.proxy.send_event(EventLoopProxyMessage::Wake2) {
-                    log::error!("Failed to send controller message to Verso: {e}");
-                }
-                #[cfg(windows)]
-                v.handle_servo_messages(_event_loop);
+            #[cfg(linux)]
+            if let WindowEvent::Resized(_) = event {
+                v.handle_winit_window_event(window_id, event);
             } else {
                 v.handle_winit_window_event(window_id, event);
-                // v.handle_servo_messages(_event_loop);
-                if let Err(e) = self.proxy.send_event(EventLoopProxyMessage::Wake2) {
-                    log::error!("Failed to send controller message to Verso: {e}");
+                v.handle_servo_messages(event_loop);
+            }
+
+            #[cfg(apple)]
+            if let WindowEvent::RedrawRequested = event {
+                let resizing = v.handle_winit_window_event(window_id, event);
+                if !resizing {
+                    v.handle_servo_messages(event_loop);
                 }
+            } else {
+                v.handle_winit_window_event(window_id, event);
+                v.handle_servo_messages(event_loop);
+            }
+
+            #[cfg(windows)]
+            {
+                v.handle_winit_window_event(window_id, event);
+                v.handle_servo_messages(event_loop);
             }
         }
     }
@@ -63,9 +66,6 @@ impl ApplicationHandler<EventLoopProxyMessage> for App {
                 }
                 EventLoopProxyMessage::IpcMessage(message) => {
                     v.handle_incoming_webview_message(message);
-                }
-                EventLoopProxyMessage::Wake2 => {
-                    v.handle_servo_messages(event_loop);
                 }
             }
         }
