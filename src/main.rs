@@ -5,7 +5,6 @@ use versoview::config::Config;
 use versoview::verso::EventLoopProxyMessage;
 use versoview::{Result, Verso};
 use winit::application::ApplicationHandler;
-use winit::event::WindowEvent;
 use winit::event_loop::{self, DeviceEvents};
 use winit::event_loop::{EventLoop, EventLoopProxy};
 
@@ -27,30 +26,7 @@ impl ApplicationHandler<EventLoopProxyMessage> for App {
         event: winit::event::WindowEvent,
     ) {
         if let Some(v) = self.verso.as_mut() {
-            #[cfg(linux)]
-            if let WindowEvent::Resized(_) = event {
-                v.handle_winit_window_event(window_id, event);
-            } else {
-                v.handle_winit_window_event(window_id, event);
-                v.handle_servo_messages(event_loop);
-            }
-
-            #[cfg(apple)]
-            if let WindowEvent::RedrawRequested = event {
-                let resizing = v.handle_winit_window_event(window_id, event);
-                if !resizing {
-                    v.handle_servo_messages(event_loop);
-                }
-            } else {
-                v.handle_winit_window_event(window_id, event);
-                v.handle_servo_messages(event_loop);
-            }
-
-            #[cfg(windows)]
-            {
-                v.handle_winit_window_event(window_id, event);
-                v.handle_servo_messages(event_loop);
-            }
+            v.handle_window_event(event_loop, window_id, event);
         }
     }
 

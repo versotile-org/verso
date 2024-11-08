@@ -412,8 +412,42 @@ impl Verso {
         verso
     }
 
+    /// Handle Winit window events. The strategy to handle event are different between platforms
+    /// because the order of events might be different.
+    pub fn handle_window_event(
+        &mut self,
+        event_loop: &ActiveEventLoop,
+        window_id: WindowId,
+        event: WindowEvent,
+    ) {
+        #[cfg(linux)]
+        if let WindowEvent::Resized(_) = event {
+            self.handle_winit_window_event(window_id, event);
+        } else {
+            self.handle_winit_window_event(window_id, event);
+            self.handle_servo_messages(event_loop);
+        }
+
+        #[cfg(apple)]
+        if let WindowEvent::RedrawRequested = event {
+            let resizing = self.handle_winit_window_event(window_id, event);
+            if !resizing {
+                self.handle_servo_messages(event_loop);
+            }
+        } else {
+            self.handle_winit_window_event(window_id, event);
+            self.handle_servo_messages(event_loop);
+        }
+
+        #[cfg(windows)]
+        {
+            self.handle_winit_window_event(window_id, event);
+            self.handle_servo_messages(event_loop);
+        }
+    }
+
     /// Handle Winit window events
-    pub fn handle_winit_window_event(&mut self, window_id: WindowId, event: WindowEvent) -> bool {
+    fn handle_winit_window_event(&mut self, window_id: WindowId, event: WindowEvent) -> bool {
         log::trace!("Verso is handling Winit event: {event:?}");
         if let Some(compositor) = &mut self.compositor {
             if let WindowEvent::CloseRequested = event {
