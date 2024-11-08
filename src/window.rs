@@ -50,6 +50,8 @@ pub struct Window {
     mouse_position: Cell<Option<PhysicalPosition<f64>>>,
     /// Modifiers state of the keyboard.
     modifiers_state: Cell<ModifiersState>,
+    /// State to indicate if the window is resizing.
+    pub(crate) resizing: bool,
 }
 
 impl Window {
@@ -94,6 +96,7 @@ impl Window {
                 webview: None,
                 mouse_position: Default::default(),
                 modifiers_state: Cell::new(ModifiersState::default()),
+                resizing: false,
             },
             rendering_context,
         )
@@ -130,6 +133,7 @@ impl Window {
             webview: None,
             mouse_position: Default::default(),
             modifiers_state: Cell::new(ModifiersState::default()),
+            resizing: false,
         };
         compositor.swap_current_window(&mut window);
         window
@@ -200,6 +204,7 @@ impl Window {
         match event {
             WindowEvent::RedrawRequested => {
                 if compositor.ready_to_present {
+                    self.window.pre_present_notify();
                     if let Err(err) = compositor.rendering_context.present(&self.surface) {
                         log::warn!("Failed to present surface: {:?}", err);
                     }
@@ -212,6 +217,9 @@ impl Window {
                 }
             }
             WindowEvent::Resized(size) => {
+                if self.window.has_focus() {
+                    self.resizing = true;
+                }
                 let size = Size2D::new(size.width, size.height);
                 compositor.resize(size.to_i32(), self);
             }
@@ -272,7 +280,10 @@ impl Window {
 
                 let event: MouseWindowEvent = match state {
                     ElementState::Pressed => MouseWindowEvent::MouseDown(button, position),
-                    ElementState::Released => MouseWindowEvent::MouseUp(button, position),
+                    ElementState::Released => {
+                        self.resizing = false;
+                        MouseWindowEvent::MouseUp(button, position)
+                    }
                 };
                 compositor.on_mouse_window_event_class(event);
 

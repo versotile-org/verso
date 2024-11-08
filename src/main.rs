@@ -21,20 +21,12 @@ impl ApplicationHandler<EventLoopProxyMessage> for App {
 
     fn window_event(
         &mut self,
-        _event_loop: &winit::event_loop::ActiveEventLoop,
+        event_loop: &winit::event_loop::ActiveEventLoop,
         window_id: winit::window::WindowId,
         event: winit::event::WindowEvent,
     ) {
         if let Some(v) = self.verso.as_mut() {
-            v.handle_winit_window_event(window_id, event);
-            // XXX: Windows seems to be able to handle servo directly.
-            // We can think about how to handle all platforms the same way in the future.
-            #[cfg(windows)]
-            v.handle_servo_messages(_event_loop);
-            #[cfg(not(windows))]
-            if let Err(e) = self.proxy.send_event(EventLoopProxyMessage::Wake) {
-                log::error!("Failed to send wake message to Verso: {e}");
-            }
+            v.handle_window_event(event_loop, window_id, event);
         }
     }
 
@@ -46,7 +38,7 @@ impl ApplicationHandler<EventLoopProxyMessage> for App {
         if let Some(v) = self.verso.as_mut() {
             match event {
                 EventLoopProxyMessage::Wake => {
-                    v.handle_servo_messages(event_loop);
+                    v.request_redraw(event_loop);
                 }
                 EventLoopProxyMessage::IpcMessage(message) => {
                     v.handle_incoming_webview_message(message);
