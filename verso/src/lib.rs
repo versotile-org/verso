@@ -52,7 +52,7 @@ impl VersoviewController {
             .unwrap()
             .replace(Box::new(callback));
         let cb = self.event_listeners.on_navigation_starting.clone();
-        let (sender, receiver) = ipc::channel::<(url::Url, ipc::IpcSender<bool>)>().unwrap();
+        let (sender, receiver) = ipc::channel::<(url::Url, ipc::IpcSender<bool>)>()?;
         self.sender
             .send(ControllerMessage::OnNavigationStarting(sender))?;
         std::thread::spawn(move || {
