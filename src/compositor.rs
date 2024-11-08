@@ -574,8 +574,8 @@ impl IOCompositor {
                 self.pending_paint_metrics.insert(pipeline_id, epoch);
             }
 
-            CompositorMsg::CrossProcess(cross_proces_message) => {
-                self.handle_cross_process_message(cross_proces_message);
+            CompositorMsg::CrossProcess(cross_process_message) => {
+                self.handle_cross_process_message(cross_process_message);
             }
         }
 
