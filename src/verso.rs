@@ -531,6 +531,16 @@ impl Verso {
                     );
                 }
             }
+            ControllerMessage::OnNavigationStarting(sender) => {
+                if let Some((window, _)) = self.windows.values().next() {
+                    window
+                        .event_listeners
+                        .on_navigation_starting
+                        .lock()
+                        .unwrap()
+                        .replace(sender);
+                }
+            }
             _ => {}
         }
     }

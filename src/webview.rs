@@ -83,9 +83,21 @@ impl Window {
                 self.window.request_redraw();
                 send_to_constellation(sender, ConstellationMsg::FocusWebView(webview_id));
             }
-            EmbedderMsg::AllowNavigationRequest(id, _url) => {
-                // TODO should provide a API for users to check url
-                send_to_constellation(sender, ConstellationMsg::AllowNavigationResponse(id, true));
+            EmbedderMsg::AllowNavigationRequest(id, url) => {
+                let mut allow = true;
+                if let Some(ref sender) =
+                    *self.event_listeners.on_navigation_starting.lock().unwrap()
+                {
+                    let (result_sender, receiver) = ipc::channel::<bool>().unwrap();
+                    if let Some(result) = sender
+                        .send((url.into_url(), result_sender))
+                        .ok()
+                        .and_then(|_| receiver.recv().ok())
+                    {
+                        allow = result
+                    }
+                }
+                send_to_constellation(sender, ConstellationMsg::AllowNavigationResponse(id, allow));
             }
             EmbedderMsg::GetClipboardContents(sender) => {
                 let contents = clipboard
