@@ -52,7 +52,7 @@ pub struct Window {
     pub(crate) panel: Option<Panel>,
     /// The WebView of this window.
     pub(crate) webview: Option<WebView>,
-    /// Event listners registered from the webview controller
+    /// Event listeners registered from the webview controller
     pub(crate) event_listeners: EventListeners,
     /// The mouse physical position in the web view.
     mouse_position: Cell<Option<PhysicalPosition<f64>>>,
