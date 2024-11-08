@@ -574,8 +574,8 @@ impl IOCompositor {
                 self.pending_paint_metrics.insert(pipeline_id, epoch);
             }
 
-            CompositorMsg::CrossProcess(cross_proces_message) => {
-                self.handle_cross_process_message(cross_proces_message);
+            CompositorMsg::CrossProcess(cross_process_message) => {
+                self.handle_cross_process_message(cross_process_message);
             }
         }
 
@@ -1915,11 +1915,6 @@ impl IOCompositor {
 
     /// Composite to the given target if any, or the current target otherwise.
     fn composite_specific_target(&mut self, window: &Window) -> Result<(), UnableToComposite> {
-        // if self.ready_to_present {
-        //     return Err(UnableToComposite::NotReadyToPaintImage(
-        //         NotReadyToPaint::AnimationsActive,
-        //     ));
-        // }
         if let Err(err) = self
             .rendering_context
             .make_gl_context_current(&window.surface)
@@ -2087,13 +2082,6 @@ impl IOCompositor {
         }
 
         if let Some((window, _)) = windows.get(&self.current_window) {
-            // if self.ready_to_present {
-            //     if let Err(err) = self.rendering_context.present(&window.surface) {
-            //         log::warn!("Failed to present surface: {:?}", err);
-            //     }
-            //     self.ready_to_present = false;
-            // }
-
             match self.composition_request {
                 CompositionRequest::NoCompositingNecessary => {}
                 CompositionRequest::CompositeNow(_) => {

@@ -50,6 +50,7 @@ pub struct Window {
     mouse_position: Cell<Option<PhysicalPosition<f64>>>,
     /// Modifiers state of the keyboard.
     modifiers_state: Cell<ModifiersState>,
+    /// State to indicate if the window is resizing.
     pub(crate) resizing: bool,
 }
 

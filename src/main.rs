@@ -62,7 +62,7 @@ impl ApplicationHandler<EventLoopProxyMessage> for App {
         if let Some(v) = self.verso.as_mut() {
             match event {
                 EventLoopProxyMessage::Wake => {
-                    v.wake_window(event_loop);
+                    v.request_redraw(event_loop);
                 }
                 EventLoopProxyMessage::IpcMessage(message) => {
                     v.handle_incoming_webview_message(message);

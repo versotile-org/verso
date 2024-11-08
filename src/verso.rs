@@ -126,7 +126,7 @@ impl Verso {
 
         // Initialize servo media with dummy backend
         // This will create a thread to initialize a global static of servo media.
-        // The thread will be closed once the static is initialzed.
+        // The thread will be closed once the static is initialized.
         // TODO: This is used by content process. Spawn it there once if we have multiprocess mode.
         servo_media::ServoMedia::init::<servo_media_dummy::DummyBackend>();
 
@@ -521,8 +521,8 @@ impl Verso {
         }
     }
 
-    /// Handle message came from Servo.
-    pub fn wake_window(&mut self, evl: &ActiveEventLoop) {
+    /// Request Verso to redraw. It will queue a redraw event on current focused window.
+    pub fn request_redraw(&mut self, evl: &ActiveEventLoop) {
         if let Some(compositor) = &mut self.compositor {
             if let Some(window) = self.windows.get(&compositor.current_window) {
                 // evl.set_control_flow(ControlFlow::Poll);
