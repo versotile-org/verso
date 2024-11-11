@@ -44,6 +44,7 @@ jobs:
             libharfbuzz-dev liblzma-dev libunwind-dev libunwind-dev libvulkan1 \
             libx11-dev libxcb-render0-dev libxcb-shape0-dev libxcb-xfixes0-dev \
             libxmu-dev libxmu6 libegl1-mesa-dev llvm-dev m4 xorg-dev sway \
+            libgtk-3-dev libxdo-dev \
             python3-mako
 
       - name: Check
@@ -101,6 +102,7 @@ jobs:
             libharfbuzz-dev liblzma-dev libunwind-dev libunwind-dev libvulkan1 \
             libx11-dev libxcb-render0-dev libxcb-shape0-dev libxcb-xfixes0-dev \
             libxmu-dev libxmu6 libegl1-mesa-dev llvm-dev m4 xorg-dev sway \
+            libgtk-3-dev libxdo-dev \
             python3-mako
 
       - name: Check for merge group test
