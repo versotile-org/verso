@@ -29,5 +29,6 @@ pub use errors::{Error, Result};
 pub use verso::Verso;
 /// Re-exporting Winit for the sake of convenience.
 pub use winit;
-/// Context Menu
+/// Context
+#[cfg(any(target_os = "macos", target_os = "windows"))]
 pub mod context_menu;
