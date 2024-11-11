@@ -105,10 +105,15 @@ webxr-api = { git = "https://github.com/servo/webxr" }
 cargo-packager-resource-resolver = { version = "0.1.1", features = [
   "auto-detect-format",
 ], optional = true }
-muda = "0.15.1"
 url = { workspace = true }
 headers = "0.3"
 versoview_messages = { path = "./versoview_messages" }
+
+[target.'cfg(target_os = "macos")'.dependencies]
+muda = "0.15"
+
+[target.'cfg(target_os = "windows")'.dependencies]
+muda = "0.15"
 
 [target.'cfg(any(target_os = "ios", target_os = "macos"))'.dependencies]
 objc2 = "0.5"
