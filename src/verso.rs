@@ -89,18 +89,19 @@ impl Verso {
             let (controller_sender, receiver) = ipc::channel::<ControllerMessage>().unwrap();
             sender.send(controller_sender).unwrap();
             let proxy_clone = proxy.clone();
-            std::thread::Builder::new()
-                .name("IpcMessageRelay".to_owned())
-                .spawn(move || {
-                    while let Ok(message) = receiver.recv() {
+            ROUTER.add_typed_route(
+                receiver,
+                Box::new(move |message| match message {
+                    Ok(message) => {
                         if let Err(e) =
                             proxy_clone.send_event(EventLoopProxyMessage::IpcMessage(message))
                         {
                             log::error!("Failed to send controller message to Verso: {e}");
                         }
                     }
-                })
-                .unwrap();
+                    Err(e) => log::error!("Failed to receive controller message: {e}"),
+                }),
+            );
         };
 
         // Initialize configurations and Verso window
