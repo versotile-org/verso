@@ -57,6 +57,8 @@ pub struct Window {
     menu_event_receiver: MenuEventReceiver,
     history: Vec<ServoUrl>,
     current_history_index: usize,
+    /// State to indicate if the window is resizing.
+    pub(crate) resizing: bool,
 }
 
 impl Window {
@@ -104,6 +106,7 @@ impl Window {
                 menu_event_receiver: MenuEvent::receiver().clone(),
                 history: vec![],
                 current_history_index: 0,
+                resizing: false,
             },
             rendering_context,
         )
@@ -143,6 +146,7 @@ impl Window {
             menu_event_receiver: MenuEvent::receiver().clone(),
             history: vec![],
             current_history_index: 0,
+            resizing: false,
         };
         compositor.swap_current_window(&mut window);
         window
@@ -171,7 +175,7 @@ impl Window {
         self.panel = Some(Panel {
             webview: WebView::new(panel_id, DeviceIntRect::from_size(size)),
             initial_url: if let Some(initial_url) = initial_url {
-                servo_url::ServoUrl::from_url(initial_url)
+                ServoUrl::from_url(initial_url)
             } else {
                 ServoUrl::parse("https://example.com").unwrap()
             },
@@ -184,6 +188,25 @@ impl Window {
         );
     }
 
+    /// Create a new webview and send the constellation message to load the initial URL
+    pub fn create_webview(
+        &mut self,
+        constellation_sender: &Sender<ConstellationMsg>,
+        initial_url: ServoUrl,
+    ) {
+        let webview_id = WebViewId::new();
+        let size = self.size();
+        let rect = DeviceIntRect::from_size(size);
+        let mut webview = WebView::new(webview_id, rect);
+        webview.set_size(self.get_content_size(rect));
+        self.webview.replace(webview);
+        send_to_constellation(
+            constellation_sender,
+            ConstellationMsg::NewWebView(initial_url, webview_id),
+        );
+        log::debug!("Verso Window {:?} adds webview {}", self.id(), webview_id);
+    }
+
     /// Handle Winit window event and return a boolean to indicate if the compositor should repaint immediately.
     pub fn handle_winit_window_event(
         &mut self,
@@ -193,8 +216,12 @@ impl Window {
     ) {
         match event {
             WindowEvent::RedrawRequested => {
-                if let Err(err) = compositor.rendering_context.present(&self.surface) {
-                    log::warn!("Failed to present surface: {:?}", err);
+                if compositor.ready_to_present {
+                    self.window.pre_present_notify();
+                    if let Err(err) = compositor.rendering_context.present(&self.surface) {
+                        log::warn!("Failed to present surface: {:?}", err);
+                    }
+                    compositor.ready_to_present = false;
                 }
             }
             WindowEvent::Focused(focused) => {
@@ -203,6 +230,9 @@ impl Window {
                 }
             }
             WindowEvent::Resized(size) => {
+                if self.window.has_focus() {
+                    self.resizing = true;
+                }
                 let size = Size2D::new(size.width, size.height);
                 compositor.resize(size.to_i32(), self);
             }
@@ -273,7 +303,10 @@ impl Window {
 
                 let event: MouseWindowEvent = match state {
                     ElementState::Pressed => MouseWindowEvent::MouseDown(button, position),
-                    ElementState::Released => MouseWindowEvent::MouseUp(button, position),
+                    ElementState::Released => {
+                        self.resizing = false;
+                        MouseWindowEvent::MouseUp(button, position)
+                    }
                 };
                 compositor.on_mouse_window_event_class(event);
 

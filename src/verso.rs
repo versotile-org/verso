@@ -106,6 +106,7 @@ impl Verso {
         // Initialize configurations and Verso window
         let protocols = config.create_protocols();
         let initial_url = config.args.url.clone();
+        let with_panel = !config.args.no_panel;
 
         config.init();
         // Reserving a namespace to create TopLevelBrowsingContextId.
@@ -125,7 +126,7 @@ impl Verso {
 
         // Initialize servo media with dummy backend
         // This will create a thread to initialize a global static of servo media.
-        // The thread will be closed once the static is initialzed.
+        // The thread will be closed once the static is initialized.
         // TODO: This is used by content process. Spawn it there once if we have multiprocess mode.
         servo_media::ServoMedia::init::<servo_media_dummy::DummyBackend>();
 
@@ -144,24 +145,23 @@ impl Verso {
             let (sender, receiver) = unbounded();
             let (compositor_ipc_sender, compositor_ipc_receiver) =
                 ipc::channel().expect("ipc channel failure");
-            let sender_clone = sender.clone();
+            let cross_process_compositor_api = CrossProcessCompositorApi(compositor_ipc_sender);
+            let compositor_proxy = CompositorProxy {
+                sender,
+                cross_process_compositor_api,
+                event_loop_waker: event_loop_waker.clone(),
+            };
+
+            let compositor_proxy_clone = compositor_proxy.clone();
             ROUTER.add_typed_route(
                 compositor_ipc_receiver,
                 Box::new(move |message| {
-                    let _ = sender_clone.send(CompositorMsg::CrossProcess(
+                    let _ = compositor_proxy_clone.send(CompositorMsg::CrossProcess(
                         message.expect("Could not convert Compositor message"),
                     ));
                 }),
             );
-            let cross_process_compositor_api = CrossProcessCompositorApi(compositor_ipc_sender);
-            (
-                CompositorProxy {
-                    sender,
-                    cross_process_compositor_api,
-                    event_loop_waker: event_loop_waker.clone(),
-                },
-                CompositorReceiver { receiver },
-            )
+            (compositor_proxy, CompositorReceiver { receiver })
         };
         let (embedder_sender, embedder_receiver) = {
             let (sender, receiver) = unbounded();
@@ -389,7 +389,11 @@ impl Verso {
             opts.debug.convert_mouse_to_touch,
         );
 
-        window.create_panel(&constellation_sender, initial_url);
+        if with_panel {
+            window.create_panel(&constellation_sender, initial_url);
+        } else if let Some(initial_url) = initial_url {
+            window.create_webview(&constellation_sender, initial_url.into());
+        }
 
         let mut windows = HashMap::new();
         windows.insert(window.id(), (window, webrender_document));
@@ -408,8 +412,42 @@ impl Verso {
         verso
     }
 
+    /// Handle Winit window events. The strategy to handle event are different between platforms
+    /// because the order of events might be different.
+    pub fn handle_window_event(
+        &mut self,
+        event_loop: &ActiveEventLoop,
+        window_id: WindowId,
+        event: WindowEvent,
+    ) {
+        #[cfg(linux)]
+        if let WindowEvent::Resized(_) = event {
+            self.handle_winit_window_event(window_id, event);
+        } else {
+            self.handle_winit_window_event(window_id, event);
+            self.handle_servo_messages(event_loop);
+        }
+
+        #[cfg(apple)]
+        if let WindowEvent::RedrawRequested = event {
+            let resizing = self.handle_winit_window_event(window_id, event);
+            if !resizing {
+                self.handle_servo_messages(event_loop);
+            }
+        } else {
+            self.handle_winit_window_event(window_id, event);
+            self.handle_servo_messages(event_loop);
+        }
+
+        #[cfg(windows)]
+        {
+            self.handle_winit_window_event(window_id, event);
+            self.handle_servo_messages(event_loop);
+        }
+    }
+
     /// Handle Winit window events
-    pub fn handle_winit_window_event(&mut self, window_id: WindowId, event: WindowEvent) {
+    fn handle_winit_window_event(&mut self, window_id: WindowId, event: WindowEvent) -> bool {
         log::trace!("Verso is handling Winit event: {event:?}");
         if let Some(compositor) = &mut self.compositor {
             if let WindowEvent::CloseRequested = event {
@@ -419,8 +457,11 @@ impl Verso {
                 window
                     .0
                     .handle_winit_window_event(&self.constellation_sender, compositor, &event);
+                return window.0.resizing;
             }
         }
+
+        false
     }
 
     /// Handle message came from Servo.
@@ -514,6 +555,18 @@ impl Verso {
         }
     }
 
+    /// Request Verso to redraw. It will queue a redraw event on current focused window.
+    pub fn request_redraw(&mut self, evl: &ActiveEventLoop) {
+        if let Some(compositor) = &mut self.compositor {
+            if let Some(window) = self.windows.get(&compositor.current_window) {
+                // evl.set_control_flow(ControlFlow::Poll);
+                window.0.request_redraw();
+            } else {
+                self.handle_servo_messages(evl);
+            }
+        }
+    }
+
     /// Handle message came from webview controller.
     pub fn handle_incoming_webview_message(&self, message: ControllerMessage) {
         match message {
@@ -554,6 +607,7 @@ impl Verso {
 }
 
 /// Message send to the event loop
+#[derive(Debug)]
 pub enum EventLoopProxyMessage {
     /// Wake
     Wake,

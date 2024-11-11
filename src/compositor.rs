@@ -24,7 +24,7 @@ use script_traits::{
     AnimationState, AnimationTickType, ConstellationControlMsg, MouseButton, MouseEventType,
     ScrollState, TouchEventType, TouchId, WheelDelta, WindowSizeData, WindowSizeType,
 };
-use servo_geometry::DeviceIndependentPixel;
+use servo_geometry::{DeviceIndependentIntSize, DeviceIndependentPixel};
 use style_traits::{CSSPixel, DevicePixel, PinchZoomFactor};
 use webrender::{RenderApi, Transaction};
 use webrender_api::units::{
@@ -139,6 +139,9 @@ pub struct IOCompositor {
 
     /// Tracks whether we should composite this frame.
     composition_request: CompositionRequest,
+
+    /// check if the surface is ready to present.
+    pub ready_to_present: bool,
 
     /// Tracks whether we are in the process of shutting down, or have shut down and should close
     /// the compositor.
@@ -382,6 +385,7 @@ impl IOCompositor {
             pending_frames: 0,
             last_animation_tick: Instant::now(),
             is_animating: false,
+            ready_to_present: false,
         };
 
         // Make sure the GL state is OK
@@ -570,8 +574,8 @@ impl IOCompositor {
                 self.pending_paint_metrics.insert(pipeline_id, epoch);
             }
 
-            CompositorMsg::CrossProcess(cross_proces_message) => {
-                self.handle_cross_process_message(cross_proces_message);
+            CompositorMsg::CrossProcess(cross_process_message) => {
+                self.handle_cross_process_message(cross_process_message);
             }
         }
 
@@ -774,19 +778,19 @@ impl IOCompositor {
             }
 
             CrossProcessCompositorMessage::GetClientWindowRect(req) => {
-                if let Err(e) = req.send(self.viewport.into()) {
+                if let Err(e) = req.send(self.device_independent_int_size_viewport().into()) {
                     warn!("Sending response to get client window failed ({:?}).", e);
                 }
             }
 
             CrossProcessCompositorMessage::GetScreenSize(req) => {
-                if let Err(e) = req.send(self.viewport) {
+                if let Err(e) = req.send(self.device_independent_int_size_viewport().into()) {
                     warn!("Sending response to get screen size failed ({:?}).", e);
                 }
             }
 
             CrossProcessCompositorMessage::GetAvailableScreenSize(req) => {
-                if let Err(e) = req.send(self.viewport) {
+                if let Err(e) = req.send(self.device_independent_int_size_viewport().into()) {
                     warn!(
                         "Sending response to get screen avail size failed ({:?}).",
                         e
@@ -837,19 +841,19 @@ impl IOCompositor {
             CompositorMsg::CrossProcess(CrossProcessCompositorMessage::GetClientWindowRect(
                 req,
             )) => {
-                if let Err(e) = req.send(self.viewport.into()) {
+                if let Err(e) = req.send(self.device_independent_int_size_viewport().into()) {
                     warn!("Sending response to get client window failed ({:?}).", e);
                 }
             }
             CompositorMsg::CrossProcess(CrossProcessCompositorMessage::GetScreenSize(req)) => {
-                if let Err(e) = req.send(self.viewport) {
+                if let Err(e) = req.send(self.device_independent_int_size_viewport().into()) {
                     warn!("Sending response to get screen size failed ({:?}).", e);
                 }
             }
             CompositorMsg::CrossProcess(CrossProcessCompositorMessage::GetAvailableScreenSize(
                 req,
             )) => {
-                if let Err(e) = req.send(self.viewport) {
+                if let Err(e) = req.send(self.device_independent_int_size_viewport().into()) {
                     warn!(
                         "Sending response to get screen avail size failed ({:?}).",
                         e
@@ -1749,6 +1753,10 @@ impl IOCompositor {
         self.page_zoom * self.scale_factor
     }
 
+    fn device_independent_int_size_viewport(&self) -> DeviceIndependentIntSize {
+        (self.viewport.to_f32() / self.scale_factor).to_i32()
+    }
+
     /// Handle zoom reset event
     pub fn on_zoom_reset_window_event(&mut self, window: &Window) {
         if self.shutdown_state != ShutdownState::NotShuttingDown {
@@ -1994,6 +2002,7 @@ impl IOCompositor {
         }
 
         self.composition_request = CompositionRequest::NoCompositingNecessary;
+        self.ready_to_present = true;
 
         self.process_animations(true);
 

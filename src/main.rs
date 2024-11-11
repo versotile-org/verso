@@ -26,8 +26,7 @@ impl ApplicationHandler<EventLoopProxyMessage> for App {
         event: winit::event::WindowEvent,
     ) {
         if let Some(v) = self.verso.as_mut() {
-            v.handle_winit_window_event(window_id, event);
-            v.handle_servo_messages(event_loop);
+            v.handle_window_event(event_loop, window_id, event);
         }
     }
 
@@ -39,7 +38,7 @@ impl ApplicationHandler<EventLoopProxyMessage> for App {
         if let Some(v) = self.verso.as_mut() {
             match event {
                 EventLoopProxyMessage::Wake => {
-                    v.handle_servo_messages(event_loop);
+                    v.request_redraw(event_loop);
                 }
                 EventLoopProxyMessage::IpcMessage(message) => {
                     v.handle_incoming_webview_message(message);
