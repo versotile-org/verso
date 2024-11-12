@@ -49,15 +49,17 @@ fn parse_cli_args() -> Result<CliArgs, getopts::Fail> {
         "",
     );
     opts.optflag("", "no-panel", "Launch Verso without control panel");
-    opts.optflag(
+    opts.optopt(
         "",
         "width",
         "Initial window's width in physical unit, the height command line arg much also be set",
+        "",
     );
-    opts.optflag(
+    opts.optopt(
         "",
         "height",
         "Initial window's height in physical unit, the width command line arg much also be set",
+        "",
     );
 
     let matches: getopts::Matches = opts.parse(&args[1..])?;
