@@ -102,11 +102,11 @@ fn parse_cli_args() -> Result<CliArgs, getopts::Fail> {
         None
     });
     match (width, height) {
-        (None, Some(_height)) => {
-            log::error!("Invalid size command line argument, height is present but not width");
-        }
         (Some(_width), None) => {
             log::error!("Invalid size command line argument, width is present but not height");
+        }
+        (None, Some(_height)) => {
+            log::error!("Invalid size command line argument, height is present but not width");
         }
         (Some(width), Some(height)) => {
             window_attributes =
@@ -124,11 +124,11 @@ fn parse_cli_args() -> Result<CliArgs, getopts::Fail> {
         None
     });
     match (x, y) {
-        (None, Some(_y)) => {
-            log::error!("Invalid size command line argument, y is present but not x");
-        }
         (Some(_x), None) => {
             log::error!("Invalid size command line argument, x is present but not y");
+        }
+        (None, Some(_y)) => {
+            log::error!("Invalid size command line argument, y is present but not x");
         }
         (Some(x), Some(y)) => {
             window_attributes = window_attributes.with_position(dpi::PhysicalPosition::new(x, y))
