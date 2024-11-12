@@ -51,25 +51,25 @@ fn parse_cli_args() -> Result<CliArgs, getopts::Fail> {
     opts.optopt(
         "w",
         "width",
-        "Initial window's width in physical unit, the height command line arg much also be set",
+        "Initial window's width in physical unit, the height command line arg must also be set",
         "",
     );
     opts.optopt(
         "h",
         "height",
-        "Initial window's height in physical unit, the width command line arg much also be set",
+        "Initial window's height in physical unit, the width command line arg must also be set",
         "",
     );
     opts.optopt(
         "",
         "x",
-        "Initial window's top left x position in physical unit, the y command line arg much also be set, ignored on wayland",
+        "Initial window's top left x position in physical unit, the y command line arg must also be set. Wayland isn't supported.",
         "",
     );
     opts.optopt(
         "",
         "y",
-        "Initial window's top left y position in physical unit, the x command line arg much also be set, ignored on wayland",
+        "Initial window's top left y position in physical unit, the x command line arg must also be set. Wayland isn't supported.",
         "",
     );
 
