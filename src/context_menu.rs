@@ -1,12 +1,20 @@
-use muda::{ContextMenu, Menu};
+#[cfg(any(target_os = "macos", target_os = "windows"))]
+use muda::{ContextMenu as MudaContextMenu, Menu};
+#[cfg(any(target_os = "macos", target_os = "windows"))]
 use raw_window_handle::{HasWindowHandle, RawWindowHandle};
 
 /// Context Menu
-pub struct VersoContextMenu {
+#[cfg(any(target_os = "macos", target_os = "windows"))]
+pub struct ContextMenu {
     menu: Menu,
 }
 
-impl VersoContextMenu {
+/// Context Menu
+#[cfg(linux)]
+pub struct ContextMenu {}
+
+#[cfg(any(target_os = "macos", target_os = "windows"))]
+impl ContextMenu {
     /// Create context menu with custom items
     pub fn new_with_menu(menu: Menu) -> Self {
         Self { menu }

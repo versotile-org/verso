@@ -33,7 +33,7 @@ use winit::{
 };
 
 #[cfg(any(target_os = "macos", target_os = "windows"))]
-use crate::context_menu::VersoContextMenu;
+use crate::context_menu::ContextMenu;
 use crate::{
     compositor::{IOCompositor, MouseWindowEvent},
     keyboard::keyboard_event_from_winit,
@@ -552,7 +552,7 @@ impl Window {
         let menu = Menu::new();
         let _ = menu.append_items(&[&back, &forward, &reload]);
 
-        let context_menu = VersoContextMenu::new_with_menu(menu);
+        let context_menu = ContextMenu::new_with_menu(menu);
         context_menu.show(self.window.window_handle().unwrap());
     }
     fn handle_context_menu_event(&self, sender: &Sender<ConstellationMsg>, event: MenuEvent) {
