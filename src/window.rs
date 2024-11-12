@@ -32,10 +32,9 @@ use winit::{
     window::{CursorIcon, Window as WinitWindow, WindowAttributes, WindowId},
 };
 
-#[cfg(any(target_os = "macos", target_os = "windows"))]
-use crate::context_menu::ContextMenu;
 use crate::{
     compositor::{IOCompositor, MouseWindowEvent},
+    context_menu::{self, ContextMenu},
     keyboard::keyboard_event_from_winit,
     rendering::{gl_config_picker, RenderingContext},
     verso::send_to_constellation,
@@ -58,10 +57,18 @@ pub struct Window {
     mouse_position: Cell<Option<PhysicalPosition<f64>>>,
     /// Modifiers state of the keyboard.
     modifiers_state: Cell<ModifiersState>,
+    /// Browser history of the window.
     history: Vec<ServoUrl>,
+    /// Current history index.
     current_history_index: usize,
     /// State to indicate if the window is resizing.
     pub(crate) resizing: bool,
+
+    /// dialog webviews
+    dialog_webviews: Vec<WebView>,
+
+    /// context_menu
+    context_menu: Option<ContextMenu>,
 
     /// Global menu evnet receiver for muda crate
     #[cfg(any(target_os = "macos", target_os = "windows"))]
@@ -116,6 +123,8 @@ impl Window {
                 history: vec![],
                 current_history_index: 0,
                 resizing: false,
+                dialog_webviews: vec![],
+                context_menu: None,
                 #[cfg(any(target_os = "macos", target_os = "windows"))]
                 menu_event_receiver: MenuEvent::receiver().clone(),
             },
@@ -157,6 +166,8 @@ impl Window {
             history: vec![],
             current_history_index: 0,
             resizing: false,
+            dialog_webviews: vec![],
+            context_menu: None,
             #[cfg(any(target_os = "macos", target_os = "windows"))]
             menu_event_receiver: MenuEvent::receiver().clone(),
         };
@@ -274,12 +285,45 @@ impl Window {
             WindowEvent::MouseInput { state, button, .. } => {
                 // handle context menu
                 // TODO: should create on ShowContextMenu event
-                #[cfg(any(target_os = "macos", target_os = "windows"))]
+                #[cfg(linux)]
+                if *button == winit::event::MouseButton::Left && *state == ElementState::Pressed {
+                    if let Some(context_menu) = self.context_menu.take() {
+                        dbg!("close context menu");
+                        if let Some(webview) = context_menu.webview {
+                            dbg!("remove context menu");
+                            send_to_constellation(
+                                sender,
+                                ConstellationMsg::CloseWebView(webview.webview_id),
+                            );
+                            return;
+                        }
+                    }
+                }
                 if *button == winit::event::MouseButton::Right && *state == ElementState::Pressed {
-                    self.show_context_menu();
-                    // FIXME: there's chance to lose the event since the channel is async.
-                    if let Ok(event) = self.menu_event_receiver.try_recv() {
-                        self.handle_context_menu_event(sender, event);
+                    #[cfg(any(target_os = "macos", target_os = "windows"))]
+                    {
+                        self.show_context_menu();
+                        // FIXME: there's chance to lose the event since the channel is async.
+                        if let Ok(event) = self.menu_event_receiver.try_recv() {
+                            self.handle_context_menu_event(sender, event);
+                        }
+                    }
+                    #[cfg(linux)]
+                    {
+                        if let Some(context_menu) = self.context_menu.take() {
+                            dbg!("closing old context menu");
+                            if let Some(webview) = context_menu.webview {
+                                dbg!("remove old context menu");
+                                send_to_constellation(
+                                    sender,
+                                    ConstellationMsg::CloseWebView(webview.webview_id),
+                                );
+                            }
+                        }
+                        dbg!("open context menu");
+                        self.context_menu = Some(self.create_context_menu());
+                        self.show_context_menu(sender);
+                        return;
                     }
                 }
 
@@ -435,6 +479,16 @@ impl Window {
         self.window.scale_factor()
     }
 
+    /// Append a dialog webview to the window.
+    pub fn append_dialog_webview(&mut self, webview: &WebView) {
+        self.dialog_webviews.push(webview.clone());
+    }
+
+    /// Remove a dialog webview from the window.
+    pub fn remove_dialog_webview(&mut self, id: WebViewId) {
+        self.dialog_webviews.retain(|w| w.webview_id != id);
+    }
+
     /// Check if the window has such webview.
     pub fn has_webview(&self, id: WebViewId) -> bool {
         self.panel
@@ -450,6 +504,7 @@ impl Window {
         id: WebViewId,
         compositor: &mut IOCompositor,
     ) -> (Option<WebView>, bool) {
+        dbg!("REMOVE WEBVIEW");
         if self
             .panel
             .as_ref()
@@ -470,6 +525,9 @@ impl Window {
             .is_some()
         {
             (self.webview.take(), self.panel.is_none())
+        } else if let Some(index) = self.dialog_webviews.iter().position(|w| w.webview_id == id) {
+            let webview = self.dialog_webviews.remove(index);
+            (Some(webview), false)
         } else {
             (None, false)
         }
@@ -477,6 +535,7 @@ impl Window {
 
     /// Get the painting order of this window.
     pub fn painting_order(&self) -> Vec<&WebView> {
+        dbg!(&self.dialog_webviews);
         let mut order = vec![];
         if let Some(panel) = &self.panel {
             order.push(&panel.webview);
@@ -484,6 +543,7 @@ impl Window {
         if let Some(webview) = &self.webview {
             order.push(webview);
         }
+        self.dialog_webviews.iter().for_each(|w| order.push(w));
         order
     }
 
@@ -537,8 +597,8 @@ impl Window {
 }
 
 // Dummy Context Menu
-#[cfg(any(target_os = "macos", target_os = "windows"))]
 impl Window {
+    #[cfg(any(target_os = "macos", target_os = "windows"))]
     pub(crate) fn show_context_menu(&self) {
         let history_len = self.history.len();
 
@@ -558,6 +618,43 @@ impl Window {
         let context_menu = ContextMenu::new_with_menu(menu);
         context_menu.show(self.window.window_handle().unwrap());
     }
+
+    #[cfg(linux)]
+    pub(crate) fn create_context_menu(&mut self) -> ContextMenu {
+        use crate::context_menu::MenuItem;
+        let history_len = self.history.len();
+
+        // items
+        let back = MenuItem::new(Some("back"), "Back", self.current_history_index > 0);
+        let forward = MenuItem::new(
+            Some("forward"),
+            "Forward",
+            self.current_history_index + 1 < history_len,
+        );
+        let reload = MenuItem::new(Some("reload"), "Reload", true);
+
+        ContextMenu::new_with_menu([back, forward, reload].to_vec())
+    }
+
+    #[cfg(linux)]
+    pub(crate) fn show_context_menu(&mut self, sender: &Sender<ConstellationMsg>) {
+        if let Some(ref mut context_menu) = self.context_menu {
+            let mouse_position = self.mouse_position.get().unwrap();
+            let position = Point2D::new(mouse_position.x as i32, mouse_position.y as i32);
+
+            let url = ServoUrl::parse("https://example.com").unwrap();
+            let menu_webview = context_menu.create_webview(position);
+
+            send_to_constellation(
+                sender,
+                ConstellationMsg::NewWebView(url, menu_webview.webview_id),
+            );
+
+            self.append_dialog_webview(&menu_webview);
+        }
+    }
+
+    #[cfg(any(target_os = "macos", target_os = "windows"))]
     fn handle_context_menu_event(&self, sender: &Sender<ConstellationMsg>, event: MenuEvent) {
         // TODO: should be more flexible to handle different menu items
         match event.id().0.as_str() {

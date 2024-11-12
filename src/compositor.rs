@@ -1112,6 +1112,9 @@ impl IOCompositor {
 
                 if close_window {
                     window_id = Some(window.id());
+                } else {
+                    // if the window is not closed, we need to update the display list
+                    self.send_root_pipeline_display_list(window);
                 }
 
                 self.frame_tree_id.next();
