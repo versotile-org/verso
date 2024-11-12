@@ -108,7 +108,7 @@ impl Verso {
         let protocols = config.create_protocols();
         let initial_url = config.args.url.clone();
         let with_panel = !config.args.no_panel;
-        let window_settings = config.args.window_settings.clone();
+        let window_settings = config.args.window_attributes.clone();
 
         config.init();
         // Reserving a namespace to create TopLevelBrowsingContextId.

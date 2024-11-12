@@ -9,9 +9,7 @@ use net_traits::{
     ResourceFetchTiming,
 };
 use servo_config::opts::{default_opts, set_options, Opts};
-use winit::dpi;
-
-use crate::window::WindowSettings;
+use winit::{dpi, window::WindowAttributes};
 
 /// Command line arguments.
 #[derive(Clone, Debug, Default)]
@@ -23,7 +21,7 @@ pub struct CliArgs {
     /// Should launch without control panel
     pub no_panel: bool,
     /// Window settings for the initial winit window
-    pub window_settings: WindowSettings,
+    pub window_attributes: WindowAttributes,
 }
 
 /// Configuration of Verso instance.
@@ -102,16 +100,17 @@ fn parse_cli_args() -> Result<CliArgs, getopts::Fail> {
         (Some(width), Some(height)) => Some(dpi::PhysicalSize::new(width, height)),
         _ => None,
     };
-    let window_settings = WindowSettings {
-        size,
-        ..Default::default()
-    };
+    let mut window_attributes = winit::window::Window::default_attributes();
+
+    if let Some(size) = size {
+        window_attributes = window_attributes.with_inner_size(size);
+    }
 
     Ok(CliArgs {
         url,
         ipc_channel,
         no_panel,
-        window_settings,
+        window_attributes,
     })
 }
 
