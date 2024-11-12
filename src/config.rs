@@ -61,14 +61,14 @@ fn parse_cli_args() -> Result<CliArgs, getopts::Fail> {
         "",
     );
     opts.optopt(
-        "",
         "x",
+        "",
         "Initial window's top left x position in physical unit, the y command line arg must also be set. Wayland isn't supported.",
         "",
     );
     opts.optopt(
-        "",
         "y",
+        "",
         "Initial window's top left y position in physical unit, the x command line arg must also be set. Wayland isn't supported.",
         "",
     );
