@@ -10,6 +10,12 @@ use glutin::{
     surface::{Surface, WindowSurface},
 };
 use glutin_winit::DisplayBuilder;
+#[cfg(any(target_os = "macos", target_os = "windows"))]
+use muda::{Menu, MenuEvent, MenuEventReceiver, MenuItem};
+#[cfg(any(target_os = "macos", target_os = "windows"))]
+use raw_window_handle::HasWindowHandle;
+#[cfg(any(target_os = "macos", target_os = "windows"))]
+use script_traits::TraversalDirection;
 use script_traits::{TouchEventType, WheelDelta, WheelMode};
 use servo_url::ServoUrl;
 use webrender_api::{
@@ -26,6 +32,8 @@ use winit::{
     window::{CursorIcon, Window as WinitWindow, WindowId},
 };
 
+#[cfg(any(target_os = "macos", target_os = "windows"))]
+use crate::context_menu::ContextMenu;
 use crate::{
     compositor::{IOCompositor, MouseWindowEvent},
     keyboard::keyboard_event_from_winit,
@@ -50,8 +58,14 @@ pub struct Window {
     mouse_position: Cell<Option<PhysicalPosition<f64>>>,
     /// Modifiers state of the keyboard.
     modifiers_state: Cell<ModifiersState>,
+    history: Vec<ServoUrl>,
+    current_history_index: usize,
     /// State to indicate if the window is resizing.
     pub(crate) resizing: bool,
+
+    /// Global menu evnet receiver for muda crate
+    #[cfg(any(target_os = "macos", target_os = "windows"))]
+    menu_event_receiver: MenuEventReceiver,
 }
 
 impl Window {
@@ -96,7 +110,11 @@ impl Window {
                 webview: None,
                 mouse_position: Default::default(),
                 modifiers_state: Cell::new(ModifiersState::default()),
+                history: vec![],
+                current_history_index: 0,
                 resizing: false,
+                #[cfg(any(target_os = "macos", target_os = "windows"))]
+                menu_event_receiver: MenuEvent::receiver().clone(),
             },
             rendering_context,
         )
@@ -133,7 +151,11 @@ impl Window {
             webview: None,
             mouse_position: Default::default(),
             modifiers_state: Cell::new(ModifiersState::default()),
+            history: vec![],
+            current_history_index: 0,
             resizing: false,
+            #[cfg(any(target_os = "macos", target_os = "windows"))]
+            menu_event_receiver: MenuEvent::receiver().clone(),
         };
         compositor.swap_current_window(&mut window);
         window
@@ -247,6 +269,17 @@ impl Window {
                 }
             }
             WindowEvent::MouseInput { state, button, .. } => {
+                // handle context menu
+                // TODO: should create on ShowContextMenu event
+                #[cfg(any(target_os = "macos", target_os = "windows"))]
+                if *button == winit::event::MouseButton::Right && *state == ElementState::Pressed {
+                    self.show_context_menu();
+                    // FIXME: there's chance to lose the event since the channel is async.
+                    if let Ok(event) = self.menu_event_receiver.try_recv() {
+                        self.handle_context_menu_event(sender, event);
+                    }
+                }
+
                 let position = match self.mouse_position.get() {
                     Some(position) => Point2D::new(position.x as f32, position.y as f32),
                     None => {
@@ -492,6 +525,66 @@ impl Window {
         };
         self.window.set_cursor(winit_cursor);
     }
+
+    /// Update the history of the window.
+    pub fn update_history(&mut self, history: &Vec<ServoUrl>, current_index: usize) {
+        self.history = history.to_vec();
+        self.current_history_index = current_index;
+    }
+}
+
+// Dummy Context Menu
+#[cfg(any(target_os = "macos", target_os = "windows"))]
+impl Window {
+    pub(crate) fn show_context_menu(&self) {
+        let history_len = self.history.len();
+
+        // items
+        let back = MenuItem::with_id("back", "Back", self.current_history_index > 0, None);
+        let forward = MenuItem::with_id(
+            "forward",
+            "Forward",
+            self.current_history_index + 1 < history_len,
+            None,
+        );
+        let reload = MenuItem::with_id("reload", "Reload", true, None);
+
+        let menu = Menu::new();
+        let _ = menu.append_items(&[&back, &forward, &reload]);
+
+        let context_menu = ContextMenu::new_with_menu(menu);
+        context_menu.show(self.window.window_handle().unwrap());
+    }
+    fn handle_context_menu_event(&self, sender: &Sender<ConstellationMsg>, event: MenuEvent) {
+        // TODO: should be more flexible to handle different menu items
+        match event.id().0.as_str() {
+            "back" => {
+                send_to_constellation(
+                    sender,
+                    ConstellationMsg::TraverseHistory(
+                        self.webview.as_ref().unwrap().webview_id,
+                        TraversalDirection::Back(1),
+                    ),
+                );
+            }
+            "forward" => {
+                send_to_constellation(
+                    sender,
+                    ConstellationMsg::TraverseHistory(
+                        self.webview.as_ref().unwrap().webview_id,
+                        TraversalDirection::Forward(1),
+                    ),
+                );
+            }
+            "reload" => {
+                send_to_constellation(
+                    sender,
+                    ConstellationMsg::Reload(self.webview.as_ref().unwrap().webview_id),
+                );
+            }
+            _ => {}
+        }
+    }
 }
 
 // Non-decorated window resizing for Windows and Linux.
@@ -587,7 +680,7 @@ impl Window {
 #[cfg(macos)]
 use objc2::runtime::AnyObject;
 #[cfg(macos)]
-use raw_window_handle::{AppKitWindowHandle, HasWindowHandle, RawWindowHandle};
+use raw_window_handle::{AppKitWindowHandle, RawWindowHandle};
 #[cfg(macos)]
 use winit::dpi::LogicalPosition;
 
