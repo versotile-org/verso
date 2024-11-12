@@ -1,3 +1,4 @@
+use log::error;
 use std::{
     path::Path,
     process::Command,
@@ -5,7 +6,10 @@ use std::{
 };
 use versoview_messages::ControllerMessage;
 
-use ipc_channel::ipc::{self, IpcOneShotServer, IpcSender};
+use ipc_channel::{
+    ipc::{self, IpcOneShotServer, IpcSender},
+    router::ROUTER,
+};
 
 #[derive(Default)]
 struct EventListeners {
@@ -46,20 +50,31 @@ impl VersoviewController {
         &self,
         callback: impl Fn(url::Url) -> bool + Send + 'static,
     ) -> Result<(), Box<ipc_channel::ErrorKind>> {
-        self.event_listeners
+        if self
+            .event_listeners
             .on_navigation_starting
             .lock()
             .unwrap()
-            .replace(Box::new(callback));
+            .replace(Box::new(callback))
+            .is_some()
+        {
+            return Ok(());
+        }
         let cb = self.event_listeners.on_navigation_starting.clone();
         let (sender, receiver) = ipc::channel::<(url::Url, ipc::IpcSender<bool>)>()?;
         self.sender
             .send(ControllerMessage::OnNavigationStarting(sender))?;
-        std::thread::spawn(move || {
-            while let Ok((url, result_sender)) = receiver.recv() {
-                let _ = result_sender.send(cb.lock().unwrap().as_ref().unwrap()(url));
-            }
-        });
+        ROUTER.add_typed_route(
+            receiver,
+            Box::new(move |message| match message {
+                Ok((url, result_sender)) => {
+                    if let Err(e) = result_sender.send(cb.lock().unwrap().as_ref().unwrap()(url)) {
+                        error!("Error while sending back OnNavigationStarting result: {e}");
+                    }
+                }
+                Err(e) => error!("Error while receiving OnNavigationStarting message: {e}"),
+            }),
+        );
         Ok(())
     }
 }
