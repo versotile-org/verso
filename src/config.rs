@@ -49,6 +49,7 @@ fn parse_cli_args() -> Result<CliArgs, getopts::Fail> {
         "",
     );
     opts.optflag("", "no-panel", "Launch Verso without control panel");
+
     opts.optopt(
         "",
         "width",
@@ -80,11 +81,11 @@ fn parse_cli_args() -> Result<CliArgs, getopts::Fail> {
     let ipc_channel = matches.opt_str("ipc-channel");
     let no_panel = matches.opt_present("no-panel");
 
-    let width: Option<u32> = matches.opt_get("width").unwrap_or_else(|e| {
+    let width = matches.opt_get::<u32>("width").unwrap_or_else(|e| {
         log::error!("Failed to parse width command line argument: {e}");
         None
     });
-    let height: Option<u32> = matches.opt_get("height").unwrap_or_else(|e| {
+    let height = matches.opt_get::<u32>("height").unwrap_or_else(|e| {
         log::error!("Failed to parse height command line argument: {e}");
         None
     });
