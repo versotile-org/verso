@@ -51,13 +51,13 @@ fn parse_cli_args() -> Result<CliArgs, getopts::Fail> {
     opts.optflag("", "no-panel", "Launch Verso without control panel");
 
     opts.optopt(
-        "",
+        "w",
         "width",
         "Initial window's width in physical unit, the height command line arg much also be set",
         "",
     );
     opts.optopt(
-        "",
+        "h",
         "height",
         "Initial window's height in physical unit, the width command line arg much also be set",
         "",
