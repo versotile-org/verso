@@ -51,13 +51,25 @@ fn parse_cli_args() -> Result<CliArgs, getopts::Fail> {
     opts.optopt(
         "w",
         "width",
-        "Initial window's width in physical unit, the height command line arg much also be set",
+        "Initial window's width in physical unit, the height command line arg must also be set",
         "",
     );
     opts.optopt(
         "h",
         "height",
-        "Initial window's height in physical unit, the width command line arg much also be set",
+        "Initial window's height in physical unit, the width command line arg must also be set",
+        "",
+    );
+    opts.optopt(
+        "",
+        "x",
+        "Initial window's top left x position in physical unit, the y command line arg must also be set. Wayland isn't supported.",
+        "",
+    );
+    opts.optopt(
+        "",
+        "y",
+        "Initial window's top left y position in physical unit, the x command line arg must also be set. Wayland isn't supported.",
         "",
     );
 
@@ -79,6 +91,8 @@ fn parse_cli_args() -> Result<CliArgs, getopts::Fail> {
     let ipc_channel = matches.opt_str("ipc-channel");
     let no_panel = matches.opt_present("no-panel");
 
+    let mut window_attributes = winit::window::Window::default_attributes();
+
     let width = matches.opt_get::<u32>("width").unwrap_or_else(|e| {
         log::error!("Failed to parse width command line argument: {e}");
         None
@@ -87,24 +101,40 @@ fn parse_cli_args() -> Result<CliArgs, getopts::Fail> {
         log::error!("Failed to parse height command line argument: {e}");
         None
     });
-
-    let size = match (width, height) {
-        (None, Some(_height)) => {
-            log::error!("Invalid size command line argument, height is present but not width");
-            None
-        }
+    match (width, height) {
         (Some(_width), None) => {
             log::error!("Invalid size command line argument, width is present but not height");
-            None
         }
-        (Some(width), Some(height)) => Some(dpi::PhysicalSize::new(width, height)),
-        _ => None,
+        (None, Some(_height)) => {
+            log::error!("Invalid size command line argument, height is present but not width");
+        }
+        (Some(width), Some(height)) => {
+            window_attributes =
+                window_attributes.with_inner_size(dpi::PhysicalSize::new(width, height))
+        }
+        _ => {}
     };
-    let mut window_attributes = winit::window::Window::default_attributes();
 
-    if let Some(size) = size {
-        window_attributes = window_attributes.with_inner_size(size);
-    }
+    let x = matches.opt_get::<u32>("x").unwrap_or_else(|e| {
+        log::error!("Failed to parse x command line argument: {e}");
+        None
+    });
+    let y = matches.opt_get::<u32>("y").unwrap_or_else(|e| {
+        log::error!("Failed to parse y command line argument: {e}");
+        None
+    });
+    match (x, y) {
+        (Some(_x), None) => {
+            log::error!("Invalid size command line argument, x is present but not y");
+        }
+        (None, Some(_y)) => {
+            log::error!("Invalid size command line argument, y is present but not x");
+        }
+        (Some(x), Some(y)) => {
+            window_attributes = window_attributes.with_position(dpi::PhysicalPosition::new(x, y))
+        }
+        _ => {}
+    };
 
     Ok(CliArgs {
         url,
