@@ -19,7 +19,7 @@ use webrender_api::{
 #[cfg(any(linux, target_os = "windows"))]
 use winit::window::ResizeDirection;
 use winit::{
-    dpi::PhysicalPosition,
+    dpi::{self, PhysicalPosition},
     event::{ElementState, TouchPhase, WindowEvent},
     event_loop::ActiveEventLoop,
     keyboard::ModifiersState,
@@ -54,12 +54,24 @@ pub struct Window {
     pub(crate) resizing: bool,
 }
 
+/// Window settings to init the winit window
+#[derive(Debug, Default, Clone)]
+#[non_exhaustive]
+pub struct WindowSettings {
+    /// Size
+    pub(crate) size: Option<dpi::PhysicalSize<u32>>,
+}
+
 impl Window {
     /// Create a Verso window from Winit window and return the rendering context.
-    pub fn new(evl: &ActiveEventLoop) -> (Self, RenderingContext) {
-        let window_attributes = WinitWindow::default_attributes()
+    pub fn new(evl: &ActiveEventLoop, settings: WindowSettings) -> (Self, RenderingContext) {
+        let mut window_attributes = WinitWindow::default_attributes()
             .with_transparent(true)
             .with_decorations(false);
+
+        if let Some(size) = settings.size {
+            window_attributes = window_attributes.with_inner_size(size);
+        }
 
         let template = ConfigTemplateBuilder::new()
             .with_alpha_size(8)

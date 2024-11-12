@@ -9,6 +9,9 @@ use net_traits::{
     ResourceFetchTiming,
 };
 use servo_config::opts::{default_opts, set_options, Opts};
+use winit::dpi;
+
+use crate::window::WindowSettings;
 
 /// Command line arguments.
 #[derive(Clone, Debug, Default)]
@@ -19,6 +22,8 @@ pub struct CliArgs {
     pub ipc_channel: Option<String>,
     /// Should launch without control panel
     pub no_panel: bool,
+    /// Window settings for the initial winit window
+    pub window_settings: WindowSettings,
 }
 
 /// Configuration of Verso instance.
@@ -44,6 +49,16 @@ fn parse_cli_args() -> Result<CliArgs, getopts::Fail> {
         "",
     );
     opts.optflag("", "no-panel", "Launch Verso without control panel");
+    opts.optflag(
+        "",
+        "width",
+        "Initial window's width in physical unit, the height command line arg much also be set",
+    );
+    opts.optflag(
+        "",
+        "height",
+        "Initial window's height in physical unit, the width command line arg much also be set",
+    );
 
     let matches: getopts::Matches = opts.parse(&args[1..])?;
     let url = matches
@@ -63,10 +78,37 @@ fn parse_cli_args() -> Result<CliArgs, getopts::Fail> {
     let ipc_channel = matches.opt_str("ipc-channel");
     let no_panel = matches.opt_present("no-panel");
 
+    let width: Option<u32> = matches.opt_get("width").unwrap_or_else(|e| {
+        log::error!("Failed to parse width command line argument: {e}");
+        None
+    });
+    let height: Option<u32> = matches.opt_get("height").unwrap_or_else(|e| {
+        log::error!("Failed to parse height command line argument: {e}");
+        None
+    });
+
+    let size = match (width, height) {
+        (None, Some(_height)) => {
+            log::error!("Invalid size command line argument, height is present but not width");
+            None
+        }
+        (Some(_width), None) => {
+            log::error!("Invalid size command line argument, width is present but not height");
+            None
+        }
+        (Some(width), Some(height)) => Some(dpi::PhysicalSize::new(width, height)),
+        _ => None,
+    };
+    let window_settings = WindowSettings {
+        size,
+        ..Default::default()
+    };
+
     Ok(CliArgs {
         url,
         ipc_channel,
         no_panel,
+        window_settings,
     })
 }
 
