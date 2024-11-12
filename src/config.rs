@@ -63,13 +63,13 @@ fn parse_cli_args() -> Result<CliArgs, getopts::Fail> {
     opts.optopt(
         "",
         "x",
-        "Initial window's top left x position in physical unit, the y command line arg much also be set",
+        "Initial window's top left x position in physical unit, the y command line arg much also be set, ignored on wayland",
         "",
     );
     opts.optopt(
         "",
         "y",
-        "Initial window's top left y position in physical unit, the x command line arg much also be set",
+        "Initial window's top left y position in physical unit, the x command line arg much also be set, ignored on wayland",
         "",
     );
 
