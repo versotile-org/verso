@@ -29,7 +29,7 @@ use winit::{
     event::{ElementState, TouchPhase, WindowEvent},
     event_loop::ActiveEventLoop,
     keyboard::ModifiersState,
-    window::{CursorIcon, Window as WinitWindow, WindowId},
+    window::{CursorIcon, Window as WinitWindow, WindowAttributes, WindowId},
 };
 
 #[cfg(any(target_os = "macos", target_os = "windows"))]
@@ -70,8 +70,11 @@ pub struct Window {
 
 impl Window {
     /// Create a Verso window from Winit window and return the rendering context.
-    pub fn new(evl: &ActiveEventLoop) -> (Self, RenderingContext) {
-        let window_attributes = WinitWindow::default_attributes()
+    pub fn new(
+        evl: &ActiveEventLoop,
+        window_attributes: WindowAttributes,
+    ) -> (Self, RenderingContext) {
+        let window_attributes = window_attributes
             .with_transparent(true)
             .with_decorations(false);
 

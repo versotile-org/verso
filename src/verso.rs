@@ -108,11 +108,12 @@ impl Verso {
         let protocols = config.create_protocols();
         let initial_url = config.args.url.clone();
         let with_panel = !config.args.no_panel;
+        let window_settings = config.args.window_attributes.clone();
 
         config.init();
         // Reserving a namespace to create TopLevelBrowsingContextId.
         PipelineNamespace::install(PipelineNamespaceId(0));
-        let (mut window, rendering_context) = Window::new(evl);
+        let (mut window, rendering_context) = Window::new(evl, window_settings);
 
         let event_loop_waker = Box::new(Waker(proxy));
         let opts = opts::get();
