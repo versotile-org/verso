@@ -196,15 +196,7 @@ impl Window {
                         if let Some(webview) = &self.webview {
                             let id = webview.webview_id;
 
-                            if msg.starts_with("CONTEXT_MENU:") {
-                                // FIXME: we can't get message from menu dialog now. App crashes before we get this message and it's because prompt_sender's channel is already closed.
-                                let json_str_msg = msg.strip_prefix("CONTEXT_MENU:").unwrap();
-                                dbg!(json_str_msg);
-                                let json =
-                                    serde_json::from_str::<ContextMenuClickResult>(json_str_msg)
-                                        .unwrap();
-                                dbg!(json);
-                            } else if msg.starts_with("NAVIGATE_TO:") {
+                            if msg.starts_with("NAVIGATE_TO:") {
                                 let unparsed_url = msg.strip_prefix("NAVIGATE_TO:").unwrap();
                                 let url = match Url::parse(unparsed_url) {
                                     Ok(url_parsed) => url_parsed,
@@ -295,6 +287,37 @@ impl Window {
                     send_to_constellation(sender, ConstellationMsg::FocusWebView(panel_id));
                 }
             }
+            e => {
+                log::trace!("Verso Panel isn't supporting this message yet: {e:?}")
+            }
+        }
+        false
+    }
+
+    /// Handle servo messages with main panel. Return true it requests a new window.
+    pub fn handle_servo_messages_with_context_menu(
+        &mut self,
+        webview_id: WebViewId,
+        message: EmbedderMsg,
+        _sender: &Sender<ConstellationMsg>,
+        _clipboard: Option<&mut Clipboard>,
+        _compositor: &mut IOCompositor,
+    ) -> bool {
+        log::trace!("Verso Context Menu {webview_id:?} is handling Embedder message: {message:?}",);
+        match message {
+            EmbedderMsg::Prompt(definition, _origin) => match definition {
+                PromptDefinition::Input(msg, _, prompt_sender) => {
+                    let _ = prompt_sender.send(None);
+                    if msg.starts_with("CONTEXT_MENU:") {
+                        let json_str_msg = msg.strip_prefix("CONTEXT_MENU:").unwrap();
+                        let result =
+                            serde_json::from_str::<ContextMenuClickResult>(json_str_msg).unwrap();
+
+                        dbg!(result);
+                    }
+                }
+                _ => log::trace!("Verso Panel isn't supporting this prompt yet"),
+            },
             e => {
                 log::trace!("Verso Panel isn't supporting this message yet: {e:?}")
             }

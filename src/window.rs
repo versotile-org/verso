@@ -462,6 +462,15 @@ impl Window {
                 );
             }
         }
+        if let Some(context_menu) = &self.context_menu {
+            if let Some(webview) = &context_menu.webview {
+                if webview.webview_id == webview_id {
+                    return self.handle_servo_messages_with_context_menu(
+                        webview_id, message, sender, clipboard, compositor,
+                    );
+                }
+            }
+        }
         // Handle message in Verso WebView
         self.handle_servo_messages_with_webview(webview_id, message, sender, clipboard, compositor);
         false
@@ -498,12 +507,21 @@ impl Window {
         self.dialog_webviews.retain(|w| w.webview_id != id);
     }
 
+    /// Check has dialog webview in the window.
+    pub fn has_dialog_webview(&self, id: WebViewId) -> bool {
+        self.dialog_webviews
+            .iter()
+            .find(|w| w.webview_id == id)
+            .is_some()
+    }
+
     /// Check if the window has such webview.
     pub fn has_webview(&self, id: WebViewId) -> bool {
         self.panel
             .as_ref()
             .map_or(false, |w| w.webview.webview_id == id)
             || self.webview.as_ref().map_or(false, |w| w.webview_id == id)
+            || self.has_dialog_webview(id)
     }
 
     /// Remove the webview in this window by provided webview ID. If this is the panel, it will

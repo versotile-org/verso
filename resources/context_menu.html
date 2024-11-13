@@ -4,7 +4,7 @@
       body {
         font-family: Arial, Helvetica, sans-serif;
         background: #dfdfdf;
-        width: 185px;
+        width: 184px;
       }
       .menu {
         display: flex;
@@ -63,8 +63,7 @@
             close: true,
           });
           console.log(`CONTEXT_MENU:${msg}`);
-          // FIXME: current using propmt will crash on verso's servo backend, IPCChannel seems disconnected before recv
-          // window.prompt(`CONTEXT_MENU:${msg}`);
+          window.prompt(`CONTEXT_MENU:${msg}`);
         };
       }
 
