@@ -1,0 +1,68 @@
+<html>
+  <head>
+    <style>
+      body {
+        font-family: Arial, Helvetica, sans-serif;
+        background: #dfdfdf;
+        width: 185px;
+      }
+      .menu {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: start;
+      }
+      .menu-item {
+        display: flex;
+        height: 30px;
+        width: 100%;
+        line-height: 30px;
+        align-items: center;
+        padding-left: 5px;
+      }
+      .menu-item:hover {
+        background: #cecece;
+        border-radius: 5px;
+      }
+      .menu-item.disabled {
+        background: #dfdfdf;
+        color: #505050;
+        cursor: pointer;
+      }
+      .menu-item:hover.disabled {
+        background: #dfdfdf;
+      }
+    </style>
+  </head>
+  <body>
+    <div id="menu" class="menu"></div>
+  </body>
+  <script>
+    const menuEl = document.getElementById('menu');
+
+    let url = URL.parse(window.location.href);
+    let params = url.searchParams;
+
+    const options = JSON.parse(params.get('items'));
+    for (option of options) {
+      createMenuItem(option.id, option.label, option.enabled);
+    }
+
+    function createMenuItem(id, label, enabled) {
+      const menuItem = document.createElement('div');
+      menuItem.classList.add('menu-item');
+      menuItem.id = id;
+      menuItem.innerText = label;
+
+      if (!enabled) {
+        menuItem.classList.add('disabled');
+      } else {
+        menuItem.onclick = () => {
+          console.log(`Clicked on ${id}:${label}`);
+        };
+      }
+
+      menuEl.appendChild(menuItem);
+    }
+  </script>
+</html>
