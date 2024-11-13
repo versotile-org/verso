@@ -520,13 +520,17 @@ impl Verso {
                                     EmbedderMsg::Prompt(definition, origin) => match origin {
                                         // TODO: actually prompt the user with a dialog
                                         PromptOrigin::Trusted => match definition {
-                                            PromptDefinition::YesNo(_, ipc_sender) => {
-                                                if let Err(err) =
-                                                    ipc_sender.send(PromptResult::Primary)
+                                            PromptDefinition::YesNo(question, ipc_sender) => {
+                                                if question
+                                                    == "Accept incoming devtools connection?"
                                                 {
-                                                    log::error!(
-                                                        "Failed to send prompt result back: {err}"
-                                                    );
+                                                    if let Err(err) =
+                                                        ipc_sender.send(PromptResult::Primary)
+                                                    {
+                                                        log::error!(
+                                                            "Failed to send prompt result back: {err}"
+                                                        );
+                                                    }
                                                 }
                                             }
                                             _ => {}
