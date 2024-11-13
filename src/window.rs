@@ -34,7 +34,7 @@ use winit::{
 
 use crate::{
     compositor::{IOCompositor, MouseWindowEvent},
-    context_menu::{self, ContextMenu},
+    context_menu::ContextMenu,
     keyboard::keyboard_event_from_winit,
     rendering::{gl_config_picker, RenderingContext},
     verso::send_to_constellation,
@@ -283,14 +283,29 @@ impl Window {
                 }
             }
             WindowEvent::MouseInput { state, button, .. } => {
-                // handle context menu
-                // TODO: should create on ShowContextMenu event
+                let position = match self.mouse_position.get() {
+                    Some(position) => Point2D::new(position.x as f32, position.y as f32),
+                    None => {
+                        log::trace!("Mouse position is None, skipping MouseInput event.");
+                        return;
+                    }
+                };
+
+                /* handle context menu */
+
+                // TODO(context-menu): should create on ShowContextMenu event
                 #[cfg(linux)]
-                if *button == winit::event::MouseButton::Left && *state == ElementState::Pressed {
+                let is_click_on_context_menu =
+                    self.is_position_on_context_menu(compositor, position);
+
+                // Close context menu when clicking outside of it
+                #[cfg(linux)]
+                if !is_click_on_context_menu
+                    && *button == winit::event::MouseButton::Left
+                    && *state == ElementState::Pressed
+                {
                     if let Some(context_menu) = self.context_menu.take() {
-                        dbg!("close context menu");
                         if let Some(webview) = context_menu.webview {
-                            dbg!("remove context menu");
                             send_to_constellation(
                                 sender,
                                 ConstellationMsg::CloseWebView(webview.webview_id),
@@ -299,6 +314,7 @@ impl Window {
                         }
                     }
                 }
+
                 if *button == winit::event::MouseButton::Right && *state == ElementState::Pressed {
                     #[cfg(any(target_os = "macos", target_os = "windows"))]
                     {
@@ -310,30 +326,23 @@ impl Window {
                     }
                     #[cfg(linux)]
                     {
+                        // Close old context menu
                         if let Some(context_menu) = self.context_menu.take() {
-                            dbg!("closing old context menu");
                             if let Some(webview) = context_menu.webview {
-                                dbg!("remove old context menu");
                                 send_to_constellation(
                                     sender,
                                     ConstellationMsg::CloseWebView(webview.webview_id),
                                 );
                             }
                         }
-                        dbg!("open context menu");
+                        // Create new context menu
                         self.context_menu = Some(self.create_context_menu());
                         self.show_context_menu(sender);
                         return;
                     }
                 }
 
-                let position = match self.mouse_position.get() {
-                    Some(position) => Point2D::new(position.x as f32, position.y as f32),
-                    None => {
-                        log::trace!("Mouse position is None, skipping MouseInput event.");
-                        return;
-                    }
-                };
+                // TODO(context-menu): ignore first release event after context menu open or close to prevent click on backgound element
 
                 // handle Windows and Linux non-decoration window resize
                 #[cfg(any(linux, target_os = "windows"))]
@@ -504,7 +513,6 @@ impl Window {
         id: WebViewId,
         compositor: &mut IOCompositor,
     ) -> (Option<WebView>, bool) {
-        dbg!("REMOVE WEBVIEW");
         if self
             .panel
             .as_ref()
@@ -653,6 +661,33 @@ impl Window {
 
             self.append_dialog_webview(&menu_webview);
         }
+    }
+
+    #[cfg(linux)]
+    fn is_position_on_context_menu(
+        &self,
+        compositor: &mut IOCompositor,
+        position: DevicePoint,
+    ) -> bool {
+        let result = compositor.hit_test_at_point(position);
+
+        if let Some(result) = result {
+            let pipeline_id = result.pipeline_id;
+            if let Some(webview_id) = compositor.webview_id_by_pipeline_id(pipeline_id) {
+                return self
+                    .context_menu
+                    .as_ref()
+                    .and_then(|context_menu| context_menu.webview.as_ref())
+                    .and_then(|webview| {
+                        if webview.webview_id == webview_id {
+                            return Some(true);
+                        }
+                        None
+                    })
+                    .unwrap_or(false);
+            }
+        }
+        false
     }
 
     #[cfg(any(target_os = "macos", target_os = "windows"))]

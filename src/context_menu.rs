@@ -11,7 +11,7 @@ use raw_window_handle::{HasWindowHandle, RawWindowHandle};
 #[cfg(linux)]
 use crate::webview::WebView;
 #[cfg(linux)]
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 #[cfg(linux)]
 use webrender_api::units::DeviceIntPoint;
 #[cfg(linux)]
@@ -147,4 +147,14 @@ impl MenuItem {
         self.enabled = enabled;
         self
     }
+}
+
+/// Context Menu Click Result
+#[cfg(linux)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ContextMenuClickResult {
+    /// The id of the menu item
+    pub id: String,
+    /// Close the context menu
+    pub close: bool,
 }

@@ -58,7 +58,13 @@
         menuItem.classList.add('disabled');
       } else {
         menuItem.onclick = () => {
-          console.log(`Clicked on ${id}:${label}`);
+          const msg = JSON.stringify({
+            id,
+            close: true,
+          });
+          console.log(`CONTEXT_MENU:${msg}`);
+          // FIXME: current using propmt will crash on verso's servo backend, IPCChannel seems disconnected before recv
+          // window.prompt(`CONTEXT_MENU:${msg}`);
         };
       }
 
