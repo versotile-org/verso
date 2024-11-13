@@ -22,6 +22,8 @@ pub struct CliArgs {
     pub no_panel: bool,
     /// Window settings for the initial winit window
     pub window_attributes: WindowAttributes,
+    /// Port number to start a server to listen to remote Firefox devtools connections. 0 for random port.
+    pub devtools_port: Option<u16>,
 }
 
 /// Configuration of Verso instance.
@@ -47,6 +49,12 @@ fn parse_cli_args() -> Result<CliArgs, getopts::Fail> {
         "",
     );
     opts.optflag("", "no-panel", "Launch Verso without control panel");
+    opts.optopt(
+        "",
+        "devtools-port",
+        "Launch Verso with devtools server enabled and listening on port",
+        "port",
+    );
 
     opts.optopt(
         "w",
@@ -90,6 +98,10 @@ fn parse_cli_args() -> Result<CliArgs, getopts::Fail> {
         });
     let ipc_channel = matches.opt_str("ipc-channel");
     let no_panel = matches.opt_present("no-panel");
+    let devtools_port = matches.opt_get::<u16>("devtools-port").unwrap_or_else(|e| {
+        log::error!("Failed to parse devtools-port command line argument: {e}");
+        None
+    });
 
     let mut window_attributes = winit::window::Window::default_attributes();
 
@@ -141,6 +153,7 @@ fn parse_cli_args() -> Result<CliArgs, getopts::Fail> {
         ipc_channel,
         no_panel,
         window_attributes,
+        devtools_port,
     })
 }
 
@@ -148,11 +161,18 @@ impl Config {
     /// Create a new configuration for creating Verso instance. It must provide the path of
     /// resources directory.
     pub fn new(resource_dir: PathBuf) -> Self {
-        let opts = default_opts();
+        let mut opts = default_opts();
+        let args = parse_cli_args().unwrap_or_default();
+
+        if let Some(devtools_port) = args.devtools_port {
+            opts.devtools_server_enabled = true;
+            opts.devtools_port = devtools_port;
+        }
+
         Self {
             opts,
             resource_dir,
-            args: parse_cli_args().unwrap_or_default(),
+            args,
         }
     }
 
