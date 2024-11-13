@@ -52,7 +52,7 @@ fn parse_cli_args() -> Result<CliArgs, getopts::Fail> {
     opts.optopt(
         "",
         "devtools-port",
-        "Launch Verso with devtools server enabled and listening on port",
+        "Launch Verso with devtools server enabled and listen to port",
         "port",
     );
 
