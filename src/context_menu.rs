@@ -1,21 +1,21 @@
 use base::id::WebViewId;
-use compositing_traits::ConstellationMsg;
-use crossbeam_channel::Sender;
 use euclid::{Point2D, Size2D};
+
 /* macOS, Windows Native Implementation */
 #[cfg(any(target_os = "macos", target_os = "windows"))]
 use muda::{ContextMenu as MudaContextMenu, Menu};
 #[cfg(any(target_os = "macos", target_os = "windows"))]
 use raw_window_handle::{HasWindowHandle, RawWindowHandle};
 
-use servo_url::ServoUrl;
 /* Wayland Implementation */
 #[cfg(linux)]
+use crate::webview::WebView;
+#[cfg(linux)]
+use serde::Serialize;
+#[cfg(linux)]
 use webrender_api::units::DeviceIntPoint;
+#[cfg(linux)]
 use webrender_api::units::DeviceIntRect;
-use winit::dpi::PhysicalPosition;
-
-use crate::{verso::send_to_constellation, webview::WebView, window::Window};
 
 /// Context Menu
 #[cfg(any(target_os = "macos", target_os = "windows"))]
@@ -84,16 +84,16 @@ impl ContextMenu {
         self.menu_items = menu_items;
     }
     /// Show the context menu on position
-    pub fn create_webview(&mut self, position: DeviceIntPoint) -> WebView {
+    pub fn create_webview(&mut self, position: DeviceIntPoint, scale_factor: f64) -> WebView {
         // Translate position to origin
         let origin = Point2D::new(position.x, position.y);
 
         // Calculate menu size
         // Each menu item is 30px height
         // Menu has 10px padding top and bottom
-        let menu_height = self.menu_items.len() as i32 * 30 + 20;
-        let menu_width = 200;
-        let size = Size2D::new(menu_width, menu_height);
+        let menu_height = (self.menu_items.len() * 30 + 20) as f64 * scale_factor;
+        let menu_width = 200.0 * scale_factor;
+        let size = Size2D::new(menu_width as i32, menu_height as i32);
         let rect = DeviceIntRect::from_origin_and_size(origin, size);
 
         let webview_id = WebViewId::new();
@@ -104,10 +104,15 @@ impl ContextMenu {
 
         webview
     }
+
+    /// get item json
+    pub fn get_items_json(&self) -> String {
+        serde_json::to_string(&self.menu_items).unwrap()
+    }
 }
 
 /// Menu Item
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize)]
 pub struct MenuItem {
     id: String,
     label: String,

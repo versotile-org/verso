@@ -535,7 +535,6 @@ impl Window {
 
     /// Get the painting order of this window.
     pub fn painting_order(&self) -> Vec<&WebView> {
-        dbg!(&self.dialog_webviews);
         let mut order = vec![];
         if let Some(panel) = &self.panel {
             order.push(&panel.webview);
@@ -638,13 +637,15 @@ impl Window {
 
     #[cfg(linux)]
     pub(crate) fn show_context_menu(&mut self, sender: &Sender<ConstellationMsg>) {
+        let scale_factor = self.scale_factor();
+
         if let Some(ref mut context_menu) = self.context_menu {
             let mouse_position = self.mouse_position.get().unwrap();
             let position = Point2D::new(mouse_position.x as i32, mouse_position.y as i32);
-
-            let url = ServoUrl::parse("https://example.com").unwrap();
-            let menu_webview = context_menu.create_webview(position);
-
+            let items_json = context_menu.get_items_json();
+            let url_str = format!("verso://context_menu.html?items={}", items_json);
+            let url = ServoUrl::parse(&url_str).unwrap();
+            let menu_webview = context_menu.create_webview(position, scale_factor);
             send_to_constellation(
                 sender,
                 ConstellationMsg::NewWebView(url, menu_webview.webview_id),
