@@ -13,7 +13,10 @@ use compositing_traits::{CompositorMsg, CompositorProxy, CompositorReceiver, Con
 use constellation::{Constellation, FromCompositorLogger, InitialConstellationState};
 use crossbeam_channel::{unbounded, Sender};
 use devtools;
-use embedder_traits::{EmbedderMsg, EmbedderProxy, EmbedderReceiver, EventLoopWaker};
+use embedder_traits::{
+    EmbedderMsg, EmbedderProxy, EmbedderReceiver, EventLoopWaker, PromptDefinition, PromptOrigin,
+    PromptResult,
+};
 use euclid::Scale;
 use fonts::SystemFontService;
 use ipc_channel::ipc::{self, IpcSender};
@@ -514,6 +517,26 @@ impl Verso {
                                         }
                                     }
                                     EmbedderMsg::Shutdown | EmbedderMsg::ReadyToPresent(_) => {}
+                                    EmbedderMsg::Prompt(definition, origin) => match origin {
+                                        // TODO: actually prompt the user with a dialog
+                                        PromptOrigin::Trusted => match definition {
+                                            PromptDefinition::YesNo(question, ipc_sender) => {
+                                                if question
+                                                    == "Accept incoming devtools connection?"
+                                                {
+                                                    if let Err(err) =
+                                                        ipc_sender.send(PromptResult::Primary)
+                                                    {
+                                                        log::error!(
+                                                            "Failed to send prompt result back: {err}"
+                                                        );
+                                                    }
+                                                }
+                                            }
+                                            _ => {}
+                                        },
+                                        _ => {}
+                                    },
                                     e => {
                                         log::trace!("Verso Window isn't supporting handling this message yet: {e:?}")
                                     }
