@@ -24,6 +24,9 @@ pub struct CliArgs {
     pub window_attributes: WindowAttributes,
     /// Port number to start a server to listen to remote Firefox devtools connections. 0 for random port.
     pub devtools_port: Option<u16>,
+    /// Path to resource directory. If None, Verso will try to get default directory. And if that
+    /// still doesn't exist, all resource configuration will set to default values.
+    pub resource_dir: Option<PathBuf>,
 }
 
 /// Configuration of Verso instance.
@@ -31,8 +34,6 @@ pub struct CliArgs {
 pub struct Config {
     /// Global flag options of Servo.
     pub opts: Opts,
-    /// Path to resources directory.
-    pub resource_dir: PathBuf,
     /// Command line arguments.
     pub args: CliArgs,
 }
@@ -42,6 +43,7 @@ fn parse_cli_args() -> Result<CliArgs, getopts::Fail> {
 
     let mut opts = getopts::Options::new();
     opts.optopt("", "url", "URL to load on start", "URL");
+    opts.optopt("", "resources", "Path to resource directory", "PATH");
     opts.optopt(
         "",
         "ipc-channel",
@@ -96,6 +98,7 @@ fn parse_cli_args() -> Result<CliArgs, getopts::Fail> {
                 None
             }
         });
+    let resource_dir = matches.opt_str("resources").map(|r| PathBuf::from(r));
     let ipc_channel = matches.opt_str("ipc-channel");
     let no_panel = matches.opt_present("no-panel");
     let devtools_port = matches.opt_get::<u16>("devtools-port").unwrap_or_else(|e| {
@@ -150,6 +153,7 @@ fn parse_cli_args() -> Result<CliArgs, getopts::Fail> {
 
     Ok(CliArgs {
         url,
+        resource_dir,
         ipc_channel,
         no_panel,
         window_attributes,
@@ -160,7 +164,7 @@ fn parse_cli_args() -> Result<CliArgs, getopts::Fail> {
 impl Config {
     /// Create a new configuration for creating Verso instance. It must provide the path of
     /// resources directory.
-    pub fn new(resource_dir: PathBuf) -> Self {
+    pub fn new() -> Self {
         let mut opts = default_opts();
         let args = parse_cli_args().unwrap_or_default();
 
@@ -169,16 +173,17 @@ impl Config {
             opts.devtools_port = devtools_port;
         }
 
-        Self {
-            opts,
-            resource_dir,
-            args,
-        }
+        Self { opts, args }
     }
 
     /// Register URL scheme protocols
     pub fn create_protocols(&self) -> ProtocolRegistry {
-        let handler = ResourceReader(self.resource_dir.clone());
+        let path = self
+            .args
+            .resource_dir
+            .clone()
+            .unwrap_or(resources_dir_path());
+        let handler = ResourceReader(path);
         let mut protocols = ProtocolRegistry::with_internal_protocols();
         protocols.register("verso", handler);
         protocols
@@ -186,8 +191,13 @@ impl Config {
 
     /// Init options and preferences.
     pub fn init(self) {
+        let path = self
+            .args
+            .resource_dir
+            .clone()
+            .unwrap_or(resources_dir_path());
         // Set the resource files and preferences of Servo.
-        resources::set(Box::new(ResourceReader(self.resource_dir)));
+        resources::set(Box::new(ResourceReader(path)));
 
         // Set the global options of Servo.
         set_options(self.opts);
@@ -239,4 +249,22 @@ impl ProtocolHandler for ResourceReader {
 
         Box::pin(std::future::ready(response))
     }
+}
+
+/// Helper function to get default resource directory if it's not provided.
+fn resources_dir_path() -> PathBuf {
+    #[cfg(feature = "packager")]
+    let root_dir = {
+        use cargo_packager_resource_resolver::{current_format, resources_dir};
+        current_format().and_then(|format| resources_dir(format))
+    };
+    #[cfg(feature = "flatpak")]
+    let root_dir = {
+        use std::str::FromStr;
+        std::path::PathBuf::from_str("/app")
+    };
+    #[cfg(not(any(feature = "packager", feature = "flatpak")))]
+    let root_dir = std::env::current_dir();
+
+    root_dir.ok().map(|dir| dir.join("resources")).unwrap()
 }
