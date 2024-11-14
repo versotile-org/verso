@@ -73,7 +73,7 @@ fn parse_cli_args() -> Result<CliArgs, getopts::Fail> {
         "1234",
     );
     opts.optopt(
-        "",
+        "p",
         "profiler",
         "Launch Verso with servo time profiler enabled and output to stdout with an interval",
         "5",
