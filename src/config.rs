@@ -169,14 +169,14 @@ impl Config {
     /// resources directory.
     pub fn new() -> Self {
         let mut opts = default_opts();
-        let mut args = parse_cli_args().unwrap_or_default();
+        let args = parse_cli_args().unwrap_or_default();
 
         if let Some(devtools_port) = args.devtools_port {
             opts.devtools_server_enabled = true;
             opts.devtools_port = devtools_port;
         }
 
-        let resource_dir = args.resource_dir.take().unwrap_or(resources_dir_path());
+        let resource_dir = args.resource_dir.clone().unwrap_or(resources_dir_path());
 
         Self {
             opts,
@@ -196,7 +196,7 @@ impl Config {
     /// Init options and preferences.
     pub fn init(self) {
         // Set the resource files and preferences of Servo.
-        resources::set(Box::new(ResourceReader(self.resource_dir.clone())));
+        resources::set(Box::new(ResourceReader(self.resource_dir)));
 
         // Set the global options of Servo.
         set_options(self.opts);
