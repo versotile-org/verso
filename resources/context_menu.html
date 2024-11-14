@@ -59,7 +59,11 @@
       if (!enabled) {
         menuItem.classList.add('disabled');
       } else {
-        menuItem.onclick = () => {
+        menuItem.onclick = (ev) => {
+          // accept left click only
+          if (ev.buttons != 1) {
+            return;
+          }
           const msg = JSON.stringify({
             id,
             close: true,

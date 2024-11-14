@@ -292,26 +292,48 @@ impl Window {
                 };
 
                 /* handle context menu */
-
                 // TODO(context-menu): should create on ShowContextMenu event
-                #[cfg(linux)]
-                let is_click_on_context_menu =
-                    self.is_position_on_context_menu(compositor, position);
 
-                // Close context menu when clicking outside of it
                 #[cfg(linux)]
-                if !is_click_on_context_menu
-                    && *button == winit::event::MouseButton::Left
-                    && *state == ElementState::Pressed
                 {
-                    if self.close_context_menu(sender) {
-                        // do not prcoess event for underlying elements
-                        return;
+                    let is_click_on_context_menu =
+                        self.is_position_on_context_menu(compositor, position);
+
+                    if !is_click_on_context_menu {
+                        if *state == ElementState::Pressed {
+                            match *button {
+                                winit::event::MouseButton::Left => {
+                                    if self.close_context_menu(sender) {
+                                        // return here to bypass following mouse event for underlying element
+                                        return;
+                                    }
+                                }
+                                winit::event::MouseButton::Right => {
+                                    // Close old context menu
+                                    self.close_context_menu(sender);
+                                    // Create new context menu
+                                    self.context_menu = Some(self.create_context_menu());
+                                    self.show_context_menu(sender);
+                                    return;
+                                }
+                                _ => {}
+                            }
+                        } else if *state == ElementState::Released {
+                            match *button {
+                                winit::event::MouseButton::Right => {
+                                    if self.context_menu.is_some() {
+                                        return;
+                                    }
+                                }
+                                _ => {}
+                            }
+                        }
                     }
+                    // TODO(context-menu): ignore first release event after context menu open or close to prevent click on backgound element
                 }
 
+                #[cfg(any(target_os = "macos", target_os = "windows"))]
                 if *button == winit::event::MouseButton::Right && *state == ElementState::Pressed {
-                    #[cfg(any(target_os = "macos", target_os = "windows"))]
                     {
                         self.show_context_menu();
                         // FIXME: there's chance to lose the event since the channel is async.
@@ -319,20 +341,10 @@ impl Window {
                             self.handle_context_menu_event(sender, event);
                         }
                     }
-                    #[cfg(linux)]
-                    {
-                        // Close old context menu
-                        self.close_context_menu(sender);
-                        // Create new context menu
-                        self.context_menu = Some(self.create_context_menu());
-                        self.show_context_menu(sender);
-                        return;
-                    }
                 }
 
-                // TODO(context-menu): ignore first release event after context menu open or close to prevent click on backgound element
+                /* handle Windows and Linux non-decoration window resize */
 
-                // handle Windows and Linux non-decoration window resize
                 #[cfg(any(linux, target_os = "windows"))]
                 {
                     if *state == ElementState::Pressed && *button == winit::event::MouseButton::Left
@@ -342,6 +354,8 @@ impl Window {
                         }
                     }
                 }
+
+                /* handle mouse events */
 
                 let button: script_traits::MouseButton = match button {
                     winit::event::MouseButton::Left => script_traits::MouseButton::Left,
@@ -455,7 +469,6 @@ impl Window {
         clipboard: Option<&mut Clipboard>,
         compositor: &mut IOCompositor,
     ) -> bool {
-        println!("{:?} handle_servo_message: {:?}", webview_id, message);
         // Handle message in Verso Panel
         if let Some(panel) = &self.panel {
             if panel.webview.webview_id == webview_id {
