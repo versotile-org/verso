@@ -36,7 +36,6 @@ use webgpu;
 use webrender::{create_webrender_instance, ShaderPrecacheFlags, WebRenderOptions};
 use webrender_api::*;
 use webrender_traits::*;
-use webxr_api::{LayerGrandManager, LayerGrandManagerAPI, LayerManager, LayerManagerFactory};
 use winit::{
     event::WindowEvent,
     event_loop::{ActiveEventLoop, ControlFlow, EventLoopProxy},
@@ -256,20 +255,6 @@ impl Verso {
         // Set webrender external image handler for WebGL textures
         // external_image_handlers.set_handler(image_handler, WebrenderImageHandlerType::WebGL);
 
-        // Create WebXR dummy
-        let webxr_layer_grand_manager = LayerGrandManager::new(DummyLayer);
-        let webxr_registry =
-            webxr_api::MainThreadRegistry::new(event_loop_waker, webxr_layer_grand_manager)
-                .expect("Failed to create WebXR device registry");
-        // if pref!(dom.webxr.enabled) {
-        // TODO if pref!(dom.webxr.test) {
-        //     webxr_main_thread.register_mock(webxr::headless::HeadlessMockDiscovery::new());
-        // }
-        // else if let Some(xr_discovery) = self.xr_discovery.take() {
-        //     webxr_main_thread.register(xr_discovery);
-        // }
-        // }
-
         // Set webrender external image handler for WebGPU textures
         let wgpu_image_handler = webgpu::WGPUExternalImages::default();
         let wgpu_image_map = wgpu_image_handler.images.clone();
@@ -334,7 +319,7 @@ impl Verso {
             mem_profiler_chan: mem_profiler_sender.clone(),
             webrender_document,
             webrender_api_sender,
-            webxr_registry: webxr_registry.registry(),
+            webxr_registry: None,
             webgl_threads: None,
             glplayer_threads: None,
             player_context: glplayer_context,
@@ -388,7 +373,6 @@ impl Verso {
                 webrender_api,
                 rendering_context,
                 webrender_gl,
-                webxr_main_thread: webxr_registry,
             },
             opts.exit_after_load,
             opts.debug.convert_mouse_to_touch,
@@ -734,21 +718,5 @@ pub(crate) fn send_to_constellation(sender: &Sender<ConstellationMsg>, msg: Cons
     let variant_name = msg.variant_name();
     if let Err(e) = sender.send(msg) {
         log::warn!("Sending {variant_name} to constellation failed: {e:?}");
-    }
-}
-
-#[derive(Clone, Copy, Debug)]
-struct DummyLayer;
-
-impl LayerGrandManagerAPI<()> for DummyLayer {
-    fn create_layer_manager(
-        &self,
-        _: LayerManagerFactory<()>,
-    ) -> Result<LayerManager, webxr_api::Error> {
-        Err(webxr_api::Error::CommunicationError)
-    }
-
-    fn clone_layer_grand_manager(&self) -> LayerGrandManager<()> {
-        LayerGrandManager::new(DummyLayer)
     }
 }

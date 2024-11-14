@@ -71,8 +71,6 @@ pub struct InitialCompositorState {
     pub rendering_context: RenderingContext,
     /// Webrender GL handle
     pub webrender_gl: Rc<dyn gl::Gl>,
-    /// WebXR registry
-    pub webxr_main_thread: webxr_api::MainThreadRegistry<()>,
 }
 
 /// Various debug and profiling flags that WebRender supports.
@@ -183,9 +181,6 @@ pub struct IOCompositor {
 
     /// The GL bindings for webrender
     webrender_gl: Rc<dyn gl::Gl>,
-
-    /// Some XR devices want to run on the main thread.
-    pub webxr_main_thread: webxr_api::MainThreadRegistry<()>,
 
     /// Map of the pending paint metrics per Layout.
     /// The Layout for each specific pipeline expects the compositor to
@@ -376,7 +371,6 @@ impl IOCompositor {
             webrender_api: state.webrender_api,
             rendering_context: state.rendering_context,
             webrender_gl: state.webrender_gl,
-            webxr_main_thread: state.webxr_main_thread,
             pending_paint_metrics: HashMap::new(),
             cursor: Cursor::None,
             cursor_pos: DevicePoint::new(0.0, 0.0),
@@ -1714,7 +1708,7 @@ impl IOCompositor {
                 pipeline_ids.push(*pipeline_id);
             }
         }
-        self.is_animating = !pipeline_ids.is_empty() || self.webxr_main_thread.running();
+        self.is_animating = !pipeline_ids.is_empty();
         for pipeline_id in &pipeline_ids {
             self.tick_animations_for_pipeline(*pipeline_id)
         }
@@ -2089,14 +2083,6 @@ impl IOCompositor {
                     window.request_redraw();
                 }
             }
-
-            // Run the WebXR main thread
-            self.webxr_main_thread.run_one_frame();
-
-            // The WebXR thread may make a different context current
-            let _ = self
-                .rendering_context
-                .make_gl_context_current(&window.surface);
 
             if !self.pending_scroll_zoom_events.is_empty() {
                 self.process_pending_scroll_events(window)
