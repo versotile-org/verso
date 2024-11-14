@@ -36,6 +36,9 @@ pub struct Config {
     pub opts: Opts,
     /// Command line arguments.
     pub args: CliArgs,
+    /// Path to resource directory. If None, Verso will try to get default directory. And if that
+    /// still doesn't exist, all resource configuration will set to default values.
+    pub resource_dir: PathBuf,
 }
 
 fn parse_cli_args() -> Result<CliArgs, getopts::Fail> {
@@ -166,24 +169,25 @@ impl Config {
     /// resources directory.
     pub fn new() -> Self {
         let mut opts = default_opts();
-        let args = parse_cli_args().unwrap_or_default();
+        let mut args = parse_cli_args().unwrap_or_default();
 
         if let Some(devtools_port) = args.devtools_port {
             opts.devtools_server_enabled = true;
             opts.devtools_port = devtools_port;
         }
 
-        Self { opts, args }
+        let resource_dir = args.resource_dir.take().unwrap_or(resources_dir_path());
+
+        Self {
+            opts,
+            args,
+            resource_dir,
+        }
     }
 
     /// Register URL scheme protocols
     pub fn create_protocols(&self) -> ProtocolRegistry {
-        let path = self
-            .args
-            .resource_dir
-            .clone()
-            .unwrap_or(resources_dir_path());
-        let handler = ResourceReader(path);
+        let handler = ResourceReader(self.resource_dir.clone());
         let mut protocols = ProtocolRegistry::with_internal_protocols();
         protocols.register("verso", handler);
         protocols
@@ -191,13 +195,8 @@ impl Config {
 
     /// Init options and preferences.
     pub fn init(self) {
-        let path = self
-            .args
-            .resource_dir
-            .clone()
-            .unwrap_or(resources_dir_path());
         // Set the resource files and preferences of Servo.
-        resources::set(Box::new(ResourceReader(path)));
+        resources::set(Box::new(ResourceReader(self.resource_dir.clone())));
 
         // Set the global options of Servo.
         set_options(self.opts);
