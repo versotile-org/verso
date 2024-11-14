@@ -106,7 +106,7 @@ impl ContextMenu {
     }
 
     /// get item json
-    pub fn get_items_json(&self) -> String {
+    pub fn to_items_json(&self) -> String {
         serde_json::to_string(&self.menu_items).unwrap()
     }
 }

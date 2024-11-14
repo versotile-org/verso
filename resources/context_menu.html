@@ -13,12 +13,14 @@
         justify-content: start;
       }
       .menu-item {
-        display: flex;
+        display: inline-block;
         height: 30px;
         width: 100%;
         line-height: 30px;
-        align-items: center;
         padding-left: 5px;
+        overflow: hidden;
+        white-space: nowrap;
+        text-overflow: ellipsis;
       }
       .menu-item:hover {
         background: #cecece;

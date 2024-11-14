@@ -299,7 +299,7 @@ impl Window {
         &mut self,
         webview_id: WebViewId,
         message: EmbedderMsg,
-        _sender: &Sender<ConstellationMsg>,
+        sender: &Sender<ConstellationMsg>,
         _clipboard: Option<&mut Clipboard>,
         _compositor: &mut IOCompositor,
     ) -> bool {
@@ -313,7 +313,7 @@ impl Window {
                         let result =
                             serde_json::from_str::<ContextMenuClickResult>(json_str_msg).unwrap();
 
-                        dbg!(result);
+                        self.handle_context_menu_event(sender, result);
                     }
                 }
                 _ => log::trace!("Verso Panel isn't supporting this prompt yet"),
