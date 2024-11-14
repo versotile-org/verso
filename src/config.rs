@@ -8,8 +8,18 @@ use net_traits::{
     response::{Response, ResponseBody},
     ResourceFetchTiming,
 };
-use servo_config::opts::{default_opts, set_options, Opts};
+use servo_config::opts::{default_opts, set_options, Opts, OutputOptions};
 use winit::{dpi, window::WindowAttributes};
+
+/// Servo time profile settings
+#[derive(Clone, Debug)]
+pub struct ProfilerSettings {
+    /// Servo time profile settings
+    output_options: OutputOptions,
+    /// When servo profiler is enabled, this is an optional path to dump a self-contained HTML file
+    /// visualizing the traces as a timeline.
+    trace_path: Option<String>,
+}
 
 /// Command line arguments.
 #[derive(Clone, Debug, Default)]
@@ -24,6 +34,8 @@ pub struct CliArgs {
     pub window_attributes: WindowAttributes,
     /// Port number to start a server to listen to remote Firefox devtools connections. 0 for random port.
     pub devtools_port: Option<u16>,
+    /// Servo time profile settings
+    pub profiler_settings: Option<ProfilerSettings>,
 }
 
 /// Configuration of Verso instance.
@@ -41,7 +53,7 @@ fn parse_cli_args() -> Result<CliArgs, getopts::Fail> {
     let args: Vec<String> = std::env::args().collect();
 
     let mut opts = getopts::Options::new();
-    opts.optopt("", "url", "URL to load on start", "URL");
+    opts.optopt("", "url", "URL to load on start", "docs.rs");
     opts.optopt(
         "",
         "ipc-channel",
@@ -53,32 +65,50 @@ fn parse_cli_args() -> Result<CliArgs, getopts::Fail> {
         "",
         "devtools-port",
         "Launch Verso with devtools server enabled and listen to port",
-        "port",
+        "1234",
+    );
+    opts.optopt(
+        "",
+        "profiler",
+        "Launch Verso with servo time profiler enabled and output to stdout with an interval",
+        "5",
+    );
+    opts.optopt(
+        "",
+        "profiler-output-file",
+        "Make servo profiler output to this file instead of stdout",
+        "out.tsv",
+    );
+    opts.optopt(
+        "",
+        "profiler-trace-path",
+        "Path to dump a self-contained HTML timeline of profiler traces",
+        "out.html",
     );
 
     opts.optopt(
         "w",
         "width",
         "Initial window's width in physical unit, the height command line arg must also be set",
-        "",
+        "1280",
     );
     opts.optopt(
         "h",
         "height",
         "Initial window's height in physical unit, the width command line arg must also be set",
-        "",
+        "720",
     );
     opts.optopt(
         "x",
         "",
         "Initial window's top left x position in physical unit, the y command line arg must also be set. Wayland isn't supported.",
-        "",
+        "200",
     );
     opts.optopt(
         "y",
         "",
         "Initial window's top left y position in physical unit, the x command line arg must also be set. Wayland isn't supported.",
-        "",
+        "200",
     );
 
     let matches: getopts::Matches = opts.parse(&args[1..])?;
@@ -102,6 +132,21 @@ fn parse_cli_args() -> Result<CliArgs, getopts::Fail> {
         log::error!("Failed to parse devtools-port command line argument: {e}");
         None
     });
+
+    let profiler_settings = if let Ok(Some(profiler_interval)) = matches.opt_get("profiler") {
+        let profile_output = matches.opt_str("profiler-output-file");
+        let trace_output = matches.opt_str("profiler-trace-path");
+        Some(ProfilerSettings {
+            output_options: if let Some(output_file) = profile_output {
+                OutputOptions::FileName(output_file)
+            } else {
+                OutputOptions::Stdout(profiler_interval)
+            },
+            trace_path: trace_output,
+        })
+    } else {
+        None
+    };
 
     let mut window_attributes = winit::window::Window::default_attributes();
 
@@ -154,6 +199,7 @@ fn parse_cli_args() -> Result<CliArgs, getopts::Fail> {
         no_panel,
         window_attributes,
         devtools_port,
+        profiler_settings,
     })
 }
 
@@ -167,6 +213,11 @@ impl Config {
         if let Some(devtools_port) = args.devtools_port {
             opts.devtools_server_enabled = true;
             opts.devtools_port = devtools_port;
+        }
+
+        if let Some(ref profiler_settings) = args.profiler_settings {
+            opts.time_profiling = Some(profiler_settings.output_options.clone());
+            opts.time_profiler_trace_path = profiler_settings.trace_path.clone();
         }
 
         Self {
