@@ -9,13 +9,19 @@ use raw_window_handle::{HasWindowHandle, RawWindowHandle};
 
 /* Wayland Implementation */
 #[cfg(linux)]
-use crate::webview::WebView;
+use crate::{verso::send_to_constellation, webview::WebView, window::Window};
+#[cfg(linux)]
+use compositing_traits::ConstellationMsg;
+#[cfg(linux)]
+use crossbeam_channel::Sender;
 #[cfg(linux)]
 use serde::{Deserialize, Serialize};
 #[cfg(linux)]
-use webrender_api::units::DeviceIntPoint;
+use servo_url::ServoUrl;
 #[cfg(linux)]
 use webrender_api::units::DeviceIntRect;
+#[cfg(linux)]
+use winit::dpi::PhysicalPosition;
 
 /// Context Menu
 #[cfg(any(target_os = "macos", target_os = "windows"))]
@@ -65,7 +71,7 @@ impl ContextMenu {
 pub struct ContextMenu {
     menu_items: Vec<MenuItem>,
     /// The webview that the context menu is attached to
-    pub webview: Option<WebView>,
+    webview: WebView,
 }
 
 #[cfg(linux)]
@@ -74,19 +80,48 @@ impl ContextMenu {
     ///
     /// Often used by calling window.alert() or window.confirm() in the web page.
     pub fn new_with_menu(menu_items: Vec<MenuItem>) -> Self {
+        let webview_id = WebViewId::new();
+        let webview = WebView::new(webview_id, DeviceIntRect::zero());
+
         Self {
             menu_items,
-            webview: None,
+            webview,
         }
     }
-    /// Set the context menu's options
-    pub fn set_menu_items(&mut self, menu_items: Vec<MenuItem>) {
-        self.menu_items = menu_items;
+
+    /// Show the context menu to current cursor position
+    pub fn show(
+        &mut self,
+        sender: &Sender<ConstellationMsg>,
+        window: &mut Window,
+        position: PhysicalPosition<f64>,
+    ) {
+        let scale_factor = window.scale_factor();
+        self.set_position(position, scale_factor);
+
+        send_to_constellation(
+            sender,
+            ConstellationMsg::NewWebView(self.resource_url(), self.webview.webview_id),
+        );
+        window.append_dialog_webview(self.webview.clone());
     }
-    /// Show the context menu on position
-    pub fn create_webview(&mut self, position: DeviceIntPoint, scale_factor: f64) -> WebView {
+
+    /// Get webview of the context menu
+    pub fn webview(&self) -> &WebView {
+        &self.webview
+    }
+
+    /// Get resource URL of the context menu
+    fn resource_url(&self) -> ServoUrl {
+        let items_json: String = self.to_items_json();
+        let url_str = format!("verso://context_menu.html?items={}", items_json);
+        ServoUrl::parse(&url_str).unwrap()
+    }
+
+    /// Set the position of the context menu
+    fn set_position(&mut self, position: PhysicalPosition<f64>, scale_factor: f64) {
         // Translate position to origin
-        let origin = Point2D::new(position.x, position.y);
+        let origin = Point2D::new(position.x as i32, position.y as i32);
 
         // Calculate menu size
         // Each menu item is 30px height
@@ -96,17 +131,11 @@ impl ContextMenu {
         let size = Size2D::new(menu_width as i32, menu_height as i32);
         let rect = DeviceIntRect::from_origin_and_size(origin, size);
 
-        let webview_id = WebViewId::new();
-        let webview = WebView::new(webview_id, rect);
-        // let url = ServoUrl::parse("https://example.com").unwrap();
-
-        self.webview = Some(webview.clone());
-
-        webview
+        self.webview.set_size(rect);
     }
 
     /// get item json
-    pub fn to_items_json(&self) -> String {
+    fn to_items_json(&self) -> String {
         serde_json::to_string(&self.menu_items).unwrap()
     }
 }
@@ -115,8 +144,10 @@ impl ContextMenu {
 #[derive(Debug, Clone, Serialize)]
 pub struct MenuItem {
     id: String,
-    label: String,
-    enabled: bool,
+    /// label of the menu item
+    pub label: String,
+    /// Whether the menu item is enabled
+    pub enabled: bool,
 }
 
 impl MenuItem {
@@ -133,27 +164,13 @@ impl MenuItem {
     pub fn id(&self) -> &str {
         &self.id
     }
-    /// Get the label of the menu item
-    pub fn label(&self) -> &str {
-        &self.label
-    }
-    /// Set the label of the menu item
-    pub fn set_label(&mut self, label: &str) -> &Self {
-        self.label = label.to_string();
-        self
-    }
-    /// Enable or disable menu item
-    pub fn set_enabled(&mut self, enabled: bool) -> &Self {
-        self.enabled = enabled;
-        self
-    }
 }
 
 /// Context Menu Click Result
 #[cfg(linux)]
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ContextMenuClickResult {
-    /// The id of the menu item
+    /// The id of the menu ite    /// Get the label of the menu item
     pub id: String,
     /// Close the context menu
     pub close: bool,

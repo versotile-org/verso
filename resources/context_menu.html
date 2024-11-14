@@ -13,6 +13,7 @@
         justify-content: start;
       }
       .menu-item {
+        cursor: pointer;
         display: inline-block;
         height: 30px;
         width: 100%;
@@ -27,6 +28,7 @@
         border-radius: 5px;
       }
       .menu-item.disabled {
+        cursor: default;
         background: #dfdfdf;
         color: #505050;
         cursor: pointer;
@@ -61,7 +63,7 @@
       } else {
         menuItem.onclick = (ev) => {
           // accept left click only
-          if (ev.buttons != 1) {
+          if (ev.buttons !== 1) {
             return;
           }
           const msg = JSON.stringify({

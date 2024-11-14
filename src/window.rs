@@ -312,8 +312,7 @@ impl Window {
                                     // Close old context menu
                                     self.close_context_menu(sender);
                                     // Create new context menu
-                                    self.context_menu = Some(self.create_context_menu());
-                                    self.show_context_menu(sender);
+                                    self.context_menu = Some(self.show_context_menu(sender));
                                     return;
                                 }
                                 _ => {}
@@ -447,19 +446,6 @@ impl Window {
         }
     }
 
-    /// Close the context menu
-    ///
-    /// If context menu exists, return true.
-    pub(crate) fn close_context_menu(&mut self, sender: &Sender<ConstellationMsg>) -> bool {
-        if let Some(context_menu) = self.context_menu.take() {
-            if let Some(webview) = context_menu.webview {
-                send_to_constellation(sender, ConstellationMsg::CloseWebView(webview.webview_id));
-                return true;
-            }
-        }
-        false
-    }
-
     /// Handle servo messages. Return true if it requests a new window
     pub fn handle_servo_message(
         &mut self,
@@ -478,13 +464,11 @@ impl Window {
             }
         }
         if let Some(context_menu) = &self.context_menu {
-            if let Some(webview) = &context_menu.webview {
-                if webview.webview_id == webview_id {
-                    self.handle_servo_messages_with_context_menu(
-                        webview_id, message, sender, clipboard, compositor,
-                    );
-                    return false;
-                }
+            if context_menu.webview().webview_id == webview_id {
+                self.handle_servo_messages_with_context_menu(
+                    webview_id, message, sender, clipboard, compositor,
+                );
+                return false;
             }
         }
         // Handle message in Verso WebView
@@ -514,8 +498,8 @@ impl Window {
     }
 
     /// Append a dialog webview to the window.
-    pub fn append_dialog_webview(&mut self, webview: &WebView) {
-        self.dialog_webviews.push(webview.clone());
+    pub fn append_dialog_webview(&mut self, webview: WebView) {
+        self.dialog_webviews.push(webview);
     }
 
     /// Remove a dialog webview from the window.
@@ -660,85 +644,10 @@ impl Window {
         context_menu.show(self.window.window_handle().unwrap());
     }
 
-    #[cfg(linux)]
-    pub(crate) fn create_context_menu(&mut self) -> ContextMenu {
-        use crate::context_menu::MenuItem;
-        let history_len = self.history.len();
-
-        // items
-        let back = MenuItem::new(Some("back"), "Back", self.current_history_index > 0);
-        let forward = MenuItem::new(
-            Some("forward"),
-            "Forward",
-            self.current_history_index + 1 < history_len,
-        );
-        let reload = MenuItem::new(Some("reload"), "Reload", true);
-
-        ContextMenu::new_with_menu([back, forward, reload].to_vec())
-    }
-
-    #[cfg(linux)]
-    pub(crate) fn show_context_menu(&mut self, sender: &Sender<ConstellationMsg>) {
-        let scale_factor = self.scale_factor();
-
-        if let Some(ref mut context_menu) = self.context_menu {
-            let mouse_position = self.mouse_position.get().unwrap();
-            let position = Point2D::new(mouse_position.x as i32, mouse_position.y as i32);
-            let items_json = context_menu.to_items_json();
-            let url_str = format!("verso://context_menu.html?items={}", items_json);
-            let url = ServoUrl::parse(&url_str).unwrap();
-            let menu_webview = context_menu.create_webview(position, scale_factor);
-            send_to_constellation(
-                sender,
-                ConstellationMsg::NewWebView(url, menu_webview.webview_id),
-            );
-
-            self.append_dialog_webview(&menu_webview);
-        }
-    }
-
-    #[cfg(linux)]
-    fn is_position_on_context_menu(
-        &self,
-        compositor: &mut IOCompositor,
-        position: DevicePoint,
-    ) -> bool {
-        let result = compositor.hit_test_at_point(position);
-
-        if let Some(result) = result {
-            let pipeline_id = result.pipeline_id;
-            if let Some(webview_id) = compositor.webview_id_by_pipeline_id(pipeline_id) {
-                return self
-                    .context_menu
-                    .as_ref()
-                    .and_then(|context_menu| context_menu.webview.as_ref())
-                    .and_then(|webview| {
-                        if webview.webview_id == webview_id {
-                            return Some(true);
-                        }
-                        None
-                    })
-                    .unwrap_or(false);
-            }
-        }
-        false
-    }
-
-    /// Handle linux context menu event
-    // TODO(context-menu): should make the call in synchronous way after calling show_context_menu, otherwise
-    // we'll have to deal with constellation sender and other parameter's lifetime, also we lose the context that why this context menu popup
-    #[cfg(linux)]
-    pub(crate) fn handle_context_menu_event(
-        &mut self,
-        sender: &Sender<ConstellationMsg>,
-        event: crate::context_menu::ContextMenuClickResult,
-    ) {
-        // FIXME: (context-menu) find the reason that close after doing action (traverse history) will hang the window
-        // Close context menu somehow must put before other actions, or it will hang the window
-        if event.close {
-            self.close_context_menu(sender);
-        }
-        match event.id.as_str() {
+    #[cfg(any(target_os = "macos", target_os = "windows"))]
+    fn handle_context_menu_event(&self, sender: &Sender<ConstellationMsg>, event: MenuEvent) {
+        // TODO: should be more flexible to handle different menu items
+        match event.id().0.as_str() {
             "back" => {
                 send_to_constellation(
                     sender,
@@ -767,10 +676,85 @@ impl Window {
         }
     }
 
-    #[cfg(any(target_os = "macos", target_os = "windows"))]
-    fn handle_context_menu_event(&self, sender: &Sender<ConstellationMsg>, event: MenuEvent) {
-        // TODO: should be more flexible to handle different menu items
-        match event.id().0.as_str() {
+    #[cfg(linux)]
+    pub(crate) fn show_context_menu(&mut self, sender: &Sender<ConstellationMsg>) -> ContextMenu {
+        use crate::context_menu::MenuItem;
+
+        let history_len = self.history.len();
+
+        // items
+        let back = MenuItem::new(Some("back"), "Back", self.current_history_index > 0);
+        let forward = MenuItem::new(
+            Some("forward"),
+            "Forward",
+            self.current_history_index + 1 < history_len,
+        );
+        let reload = MenuItem::new(Some("reload"), "Reload", true);
+
+        let mut context_menu = ContextMenu::new_with_menu([back, forward, reload].to_vec());
+
+        let position = self.mouse_position.get().unwrap();
+        context_menu.show(sender, self, position);
+
+        context_menu
+    }
+
+    /// Close the context menu
+    ///
+    /// If context menu exists, return true.
+    #[cfg(linux)]
+    pub(crate) fn close_context_menu(&mut self, sender: &Sender<ConstellationMsg>) -> bool {
+        if let Some(context_menu) = self.context_menu.take() {
+            send_to_constellation(
+                sender,
+                ConstellationMsg::CloseWebView(context_menu.webview().webview_id),
+            );
+            return true;
+        }
+        false
+    }
+
+    #[cfg(linux)]
+    fn is_position_on_context_menu(
+        &self,
+        compositor: &mut IOCompositor,
+        position: DevicePoint,
+    ) -> bool {
+        let result = compositor.hit_test_at_point(position);
+
+        if let Some(result) = result {
+            let pipeline_id = result.pipeline_id;
+            if let Some(webview_id) = compositor.webview_id_by_pipeline_id(pipeline_id) {
+                return self
+                    .context_menu
+                    .as_ref()
+                    .and_then(|context_menu| {
+                        if context_menu.webview().webview_id == webview_id {
+                            return Some(true);
+                        }
+                        None
+                    })
+                    .unwrap_or(false);
+            }
+        }
+        false
+    }
+
+    /// Handle linux context menu event
+    // TODO(context-menu): should make the call in synchronous way after calling show_context_menu, otherwise
+    // we'll have to deal with constellation sender and other parameter's lifetime, also we lose the context that why this context menu popup
+    #[cfg(linux)]
+    pub(crate) fn handle_context_menu_event(
+        &mut self,
+        sender: &Sender<ConstellationMsg>,
+        event: crate::context_menu::ContextMenuClickResult,
+    ) {
+        // FIXME: (context-menu) find the reason that close after doing action (traverse history) will hang the window
+        // Close context menu somehow must put before other actions, or it will hang the window
+        if event.close {
+            self.close_context_menu(sender);
+        }
+        match event.id.as_str() {
             "back" => {
                 send_to_constellation(
                     sender,
