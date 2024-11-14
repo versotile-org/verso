@@ -1,6 +1,3 @@
-use base::id::WebViewId;
-use euclid::{Point2D, Size2D};
-
 /* macOS, Windows Native Implementation */
 #[cfg(any(target_os = "macos", target_os = "windows"))]
 use muda::{ContextMenu as MudaContextMenu, Menu};
@@ -11,9 +8,13 @@ use raw_window_handle::{HasWindowHandle, RawWindowHandle};
 #[cfg(linux)]
 use crate::{verso::send_to_constellation, webview::WebView, window::Window};
 #[cfg(linux)]
+use base::id::WebViewId;
+#[cfg(linux)]
 use compositing_traits::ConstellationMsg;
 #[cfg(linux)]
 use crossbeam_channel::Sender;
+#[cfg(linux)]
+use euclid::{Point2D, Size2D};
 #[cfg(linux)]
 use serde::{Deserialize, Serialize};
 #[cfg(linux)]
@@ -141,6 +142,7 @@ impl ContextMenu {
 }
 
 /// Menu Item
+#[cfg(linux)]
 #[derive(Debug, Clone, Serialize)]
 pub struct MenuItem {
     id: String,
@@ -150,6 +152,7 @@ pub struct MenuItem {
     pub enabled: bool,
 }
 
+#[cfg(linux)]
 impl MenuItem {
     /// Create a new menu item
     pub fn new(id: Option<&str>, label: &str, enabled: bool) -> Self {

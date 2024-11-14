@@ -14,7 +14,6 @@ use glutin_winit::DisplayBuilder;
 use muda::{Menu, MenuEvent, MenuEventReceiver, MenuItem};
 #[cfg(any(target_os = "macos", target_os = "windows"))]
 use raw_window_handle::HasWindowHandle;
-// #[cfg(any(target_os = "macos", target_os = "windows"))]
 use script_traits::TraversalDirection;
 use script_traits::{TouchEventType, WheelDelta, WheelMode};
 use servo_url::ServoUrl;
@@ -67,7 +66,8 @@ pub struct Window {
     /// dialog webviews
     dialog_webviews: Vec<WebView>,
 
-    /// context_menu
+    /// Linux context_menu
+    #[cfg(linux)]
     pub(crate) context_menu: Option<ContextMenu>,
 
     /// Global menu evnet receiver for muda crate
@@ -124,6 +124,7 @@ impl Window {
                 current_history_index: 0,
                 resizing: false,
                 dialog_webviews: vec![],
+                #[cfg(linux)]
                 context_menu: None,
                 #[cfg(any(target_os = "macos", target_os = "windows"))]
                 menu_event_receiver: MenuEvent::receiver().clone(),
@@ -167,6 +168,7 @@ impl Window {
             current_history_index: 0,
             resizing: false,
             dialog_webviews: vec![],
+            #[cfg(linux)]
             context_menu: None,
             #[cfg(any(target_os = "macos", target_os = "windows"))]
             menu_event_receiver: MenuEvent::receiver().clone(),
@@ -463,6 +465,7 @@ impl Window {
                 );
             }
         }
+        #[cfg(linux)]
         if let Some(context_menu) = &self.context_menu {
             if context_menu.webview().webview_id == webview_id {
                 self.handle_servo_messages_with_context_menu(

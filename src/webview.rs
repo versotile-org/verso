@@ -12,10 +12,10 @@ use servo_url::ServoUrl;
 use url::Url;
 use webrender_api::units::DeviceIntRect;
 
-use crate::{
-    compositor::IOCompositor, context_menu::ContextMenuClickResult, verso::send_to_constellation,
-    window::Window,
-};
+use crate::{compositor::IOCompositor, verso::send_to_constellation, window::Window};
+
+#[cfg(linux)]
+use crate::context_menu::ContextMenuClickResult;
 
 /// A web view is an area to display web browsing context. It's what user will treat as a "web page".
 #[derive(Debug, Clone)]
@@ -295,6 +295,7 @@ impl Window {
     }
 
     /// Handle servo messages with main panel. Return true it requests a new window.
+    #[cfg(linux)]
     pub fn handle_servo_messages_with_context_menu(
         &mut self,
         webview_id: WebViewId,

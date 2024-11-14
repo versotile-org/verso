@@ -5,3 +5,7 @@ Cargo.lock
 .flatpak-builder/
 libmozjs*
 cargo-sources.json
+
+resources/
+!resources/panel.html
+!resources/context-menu.html
