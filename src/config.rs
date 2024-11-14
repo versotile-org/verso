@@ -209,7 +209,13 @@ struct ResourceReader(PathBuf);
 impl ResourceReaderMethods for ResourceReader {
     fn read(&self, file: Resource) -> Vec<u8> {
         let path = self.0.join(file.filename());
-        fs::read(path).expect("Can't read file")
+        // Rigppy image is the only one needs to be valid bytes.
+        // Others can be empty and Servo will set to default.
+        if let Resource::RippyPNG = file {
+            fs::read(path).unwrap_or(include_bytes!("../resources/rippy.png").to_vec())
+        } else {
+            fs::read(path).unwrap_or_default()
+        }
     }
 
     fn sandbox_access_files(&self) -> Vec<PathBuf> {
