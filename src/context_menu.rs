@@ -98,7 +98,7 @@ impl ContextMenu {
         position: PhysicalPosition<f64>,
     ) {
         let scale_factor = window.scale_factor();
-        self.set_position(position, scale_factor);
+        self.set_position(window, position, scale_factor);
 
         send_to_constellation(
             sender,
@@ -120,19 +120,52 @@ impl ContextMenu {
     }
 
     /// Set the position of the context menu
-    fn set_position(&mut self, position: PhysicalPosition<f64>, scale_factor: f64) {
-        // Translate position to origin
-        let origin = Point2D::new(position.x as i32, position.y as i32);
-
+    fn set_position(
+        &mut self,
+        window: &Window,
+        position: PhysicalPosition<f64>,
+        scale_factor: f64,
+    ) {
         // Calculate menu size
         // Each menu item is 30px height
         // Menu has 10px padding top and bottom
-        let menu_height = (self.menu_items.len() * 30 + 20) as f64 * scale_factor;
-        let menu_width = 200.0 * scale_factor;
-        let size = Size2D::new(menu_width as i32, menu_height as i32);
-        let rect = DeviceIntRect::from_origin_and_size(origin, size);
+        let height = (self.menu_items.len() * 30 + 20) as f64 * scale_factor;
+        let width = 200.0 * scale_factor;
+        let menu_size = Size2D::new(width as i32, height as i32);
 
-        self.webview.set_size(rect);
+        // Translate position to origin
+        let mut origin = Point2D::new(position.x as i32, position.y as i32);
+
+        // Avoid overflow to the window, adjust position if necessary
+        let window_size = window.size();
+        let x_overflow: i32 = origin.x + menu_size.width - window_size.width;
+        let y_overflow: i32 = origin.y + menu_size.height - window_size.height;
+
+        if x_overflow >= 0 {
+            // check if the menu can be shown on left side of the cursor
+            if (origin.x - menu_size.width) >= 0 {
+                origin.x = i32::max(0, origin.x - menu_size.width);
+            } else {
+                // if menu can't fit to left side of the cursor,
+                // shift left the menu, but not less than zero.
+                // TODO: if still smaller than screen, should show scroller
+                origin.x = i32::max(0, origin.x - x_overflow);
+            }
+        }
+        if y_overflow >= 0 {
+            // check if the menu can be shown above the cursor
+            if (origin.y - menu_size.height) >= 0 {
+                origin.y = i32::max(0, origin.y - menu_size.height);
+            } else {
+                // if menu can't fit to top of the cursor
+                // shift up the menu, but not less than zero.
+                // TODO: if still smaller than screen, should show scroller
+                origin.y = i32::max(0, origin.y - y_overflow);
+            }
+        }
+
+        self.webview
+            .set_size(DeviceIntRect::from_origin_and_size(origin, menu_size));
     }
 
     /// get item json
