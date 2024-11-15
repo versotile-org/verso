@@ -115,7 +115,11 @@ fn parse_cli_args() -> Result<CliArgs, getopts::Fail> {
         "Initial window's top left y position in physical unit, the x command line arg must also be set. Wayland isn't supported.",
         "200",
     );
-    opts.optflag("", "maximized", "Launch the initial window maximized");
+    opts.optflag(
+        "",
+        "no-maximized",
+        "Launch the initial window without maximized",
+    );
 
     let matches: getopts::Matches = opts.parse(&args[1..])?;
     let url = matches
@@ -200,7 +204,7 @@ fn parse_cli_args() -> Result<CliArgs, getopts::Fail> {
         _ => {}
     };
 
-    if matches.opt_present("maximized") {
+    if !matches.opt_present("no-maximized") {
         window_attributes = window_attributes.with_maximized(true);
     }
 
