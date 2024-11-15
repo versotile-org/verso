@@ -1,6 +1,7 @@
 use std::{
     borrow::Cow,
     collections::HashMap,
+    rc::Rc,
     sync::{atomic::Ordering, Arc},
 };
 
@@ -48,6 +49,11 @@ use crate::{
     window::Window,
 };
 
+/// Verso's runtime settings
+pub struct VersoRuntimeSettings {
+    pub(crate) pinch_zoom: bool,
+}
+
 /// Main entry point of Verso browser.
 pub struct Verso {
     windows: HashMap<WindowId, (Window, DocumentId)>,
@@ -60,6 +66,9 @@ pub struct Verso {
     _js_engine_setup: Option<JSEngineSetup>,
     /// FIXME: It's None on wayland in Flatpak. Find a way to support this.
     clipboard: Option<Clipboard>,
+    #[allow(dead_code)]
+    // TODO: Allow IPC to change some of these settings dynamically
+    settings: Rc<VersoRuntimeSettings>,
 }
 
 impl Verso {
@@ -108,6 +117,9 @@ impl Verso {
         let initial_url = config.args.url.clone();
         let with_panel = !config.args.no_panel;
         let window_settings = config.args.window_attributes.clone();
+        let pinch_zoom = !config.args.no_pinch_zoom;
+
+        let settings = Rc::new(VersoRuntimeSettings { pinch_zoom });
 
         config.init();
         // Reserving a namespace to create TopLevelBrowsingContextId.
@@ -373,6 +385,7 @@ impl Verso {
             },
             opts.exit_after_load,
             opts.debug.convert_mouse_to_touch,
+            settings.clone(),
         );
 
         if with_panel {
@@ -392,6 +405,7 @@ impl Verso {
             embedder_receiver,
             _js_engine_setup: js_engine_setup,
             clipboard: Clipboard::new().ok(),
+            settings,
         };
 
         verso.setup_logging();

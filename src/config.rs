@@ -39,6 +39,8 @@ pub struct CliArgs {
     /// Path to resource directory. If None, Verso will try to get default directory. And if that
     /// still doesn't exist, all resource configuration will set to default values.
     pub resource_dir: Option<PathBuf>,
+    /// Disable pinching motions on touch input enabled devices to scale the web content
+    pub no_pinch_zoom: bool,
 }
 
 /// Configuration of Verso instance.
@@ -119,6 +121,12 @@ fn parse_cli_args() -> Result<CliArgs, getopts::Fail> {
         "",
         "no-maximized",
         "Launch the initial window without maximized",
+    );
+
+    opts.optflag(
+        "",
+        "no-pinch-zoom",
+        "Disable pinching motions on touch input enabled devices to scale the web content",
     );
 
     let matches: getopts::Matches = opts.parse(&args[1..])?;
@@ -208,6 +216,8 @@ fn parse_cli_args() -> Result<CliArgs, getopts::Fail> {
         window_attributes = window_attributes.with_maximized(true);
     }
 
+    let no_pinch_zoom = matches.opt_present("no-pinch-zoom");
+
     Ok(CliArgs {
         url,
         resource_dir,
@@ -216,6 +226,7 @@ fn parse_cli_args() -> Result<CliArgs, getopts::Fail> {
         window_attributes,
         devtools_port,
         profiler_settings,
+        no_pinch_zoom,
     })
 }
 

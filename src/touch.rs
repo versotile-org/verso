@@ -133,10 +133,14 @@ impl TouchHandler {
                 self.active_touch_points[idx].point = point;
                 let (d1, c1) = self.pinch_distance_and_center();
 
-                let magnification = d1 / d0;
-                let scroll_delta = c1 - c0 * Scale::new(magnification);
+                if d0 == 0.0 {
+                    TouchAction::NoAction
+                } else {
+                    let magnification = d1 / d0;
+                    let scroll_delta = c1 - c0 * Scale::new(magnification);
 
-                TouchAction::Zoom(magnification, scroll_delta)
+                    TouchAction::Zoom(magnification, scroll_delta)
+                }
             }
             WaitingForScript => TouchAction::NoAction,
             MultiTouch => TouchAction::NoAction,

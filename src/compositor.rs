@@ -47,6 +47,7 @@ use winit::window::WindowId;
 
 use crate::rendering::RenderingContext;
 use crate::touch::{TouchAction, TouchHandler};
+use crate::verso::VersoRuntimeSettings;
 use crate::window::Window;
 
 /// Data used to construct a compositor.
@@ -213,6 +214,9 @@ pub struct IOCompositor {
     /// will want to avoid blocking on UI events, and just
     /// run the event loop at the vsync interval.
     pub is_animating: bool,
+
+    /// Verso's runtime settings
+    verso_settings: Rc<VersoRuntimeSettings>,
 }
 
 #[derive(Clone, Copy)]
@@ -344,6 +348,7 @@ impl IOCompositor {
         state: InitialCompositorState,
         exit_after_load: bool,
         convert_mouse_to_touch: bool,
+        verso_settings: Rc<VersoRuntimeSettings>,
     ) -> Self {
         let compositor = IOCompositor {
             current_window,
@@ -380,6 +385,7 @@ impl IOCompositor {
             last_animation_tick: Instant::now(),
             is_animating: false,
             ready_to_present: false,
+            verso_settings,
         };
 
         // Make sure the GL state is OK
@@ -1562,7 +1568,9 @@ impl IOCompositor {
         for scroll_event in self.pending_scroll_zoom_events.drain(..) {
             match scroll_event {
                 ScrollZoomEvent::PinchZoom(magnification) => {
-                    combined_magnification *= magnification
+                    if self.verso_settings.pinch_zoom {
+                        combined_magnification *= magnification
+                    }
                 }
                 ScrollZoomEvent::Scroll(scroll_event_info) => {
                     let combined_event = match combined_scroll_event.as_mut() {
