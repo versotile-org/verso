@@ -32,8 +32,8 @@ use winit::{
 };
 
 use crate::{
+    components::context_menu::ContextMenu,
     compositor::{IOCompositor, MouseWindowEvent},
-    context_menu::ContextMenu,
     keyboard::keyboard_event_from_winit,
     rendering::{gl_config_picker, RenderingContext},
     verso::send_to_constellation,
@@ -202,7 +202,7 @@ impl Window {
             initial_url: if let Some(initial_url) = initial_url {
                 ServoUrl::from_url(initial_url)
             } else {
-                ServoUrl::parse("https://example.com").unwrap()
+                ServoUrl::parse("https://www.w3schools.com/js/tryit.asp?filename=tryjs_alert").unwrap()
             },
         });
 
@@ -502,11 +502,13 @@ impl Window {
 
     /// Append a dialog webview to the window.
     pub fn append_dialog_webview(&mut self, webview: WebView) {
+        dbg!("append");
         self.dialog_webviews.push(webview);
     }
 
     /// Remove a dialog webview from the window.
     pub fn remove_dialog_webview(&mut self, id: WebViewId) {
+        dbg!("remove");
         self.dialog_webviews.retain(|w| w.webview_id != id);
     }
 
@@ -556,6 +558,7 @@ impl Window {
             (self.webview.take(), self.panel.is_none())
         } else if let Some(index) = self.dialog_webviews.iter().position(|w| w.webview_id == id) {
             let webview = self.dialog_webviews.remove(index);
+            dbg!("removing...");
             (Some(webview), false)
         } else {
             (None, false)
@@ -681,7 +684,7 @@ impl Window {
 
     #[cfg(linux)]
     pub(crate) fn show_context_menu(&mut self, sender: &Sender<ConstellationMsg>) -> ContextMenu {
-        use crate::context_menu::MenuItem;
+        use crate::components::context_menu::MenuItem;
 
         let history_len = self.history.len();
 
@@ -750,7 +753,7 @@ impl Window {
     pub(crate) fn handle_context_menu_event(
         &mut self,
         sender: &Sender<ConstellationMsg>,
-        event: crate::context_menu::ContextMenuClickResult,
+        event: crate::components::context_menu::ContextMenuClickResult,
     ) {
         // FIXME: (context-menu) find the reason that close after doing action (traverse history) will hang the window
         // Close context menu somehow must put before other actions, or it will hang the window

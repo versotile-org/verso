@@ -4,7 +4,7 @@ fn main() {
     let versoview_path = current_exe().unwrap().parent().unwrap().join("versoview");
     let controller = verso::VersoviewController::new(
         versoview_path,
-        url::Url::parse("https://example.com").unwrap(),
+        url::Url::parse("https://www.w3schools.com/js/tryit.asp?filename=tryjs_alert").unwrap(),
     );
     sleep(Duration::from_secs(10));
     dbg!(controller

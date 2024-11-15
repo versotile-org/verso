@@ -12,10 +12,13 @@ use servo_url::ServoUrl;
 use url::Url;
 use webrender_api::units::DeviceIntRect;
 
-use crate::{compositor::IOCompositor, verso::send_to_constellation, window::Window};
+use crate::{
+    components::prompt::PromptDialogBuilder, compositor::IOCompositor,
+    verso::send_to_constellation, window::Window,
+};
 
 #[cfg(linux)]
-use crate::context_menu::ContextMenuClickResult;
+use crate::components::context_menu::ContextMenuClickResult;
 
 /// A web view is an area to display web browsing context. It's what user will treat as a "web page".
 #[derive(Debug, Clone)]
@@ -145,6 +148,20 @@ impl Window {
             EmbedderMsg::ShowContextMenu(_sender, _title, _options) => {
                 // TODO: Implement context menu
             }
+            EmbedderMsg::Prompt(prompt, _origin) => match prompt {
+                PromptDefinition::Alert(msg, prompt_sender) => {
+                    dbg!(msg);
+                    let mut prompt = PromptDialogBuilder::new()
+                        .with_prompt_type(crate::components::prompt::PromptType::Alert)
+                        .build();
+                    prompt.show(sender, self, None);
+
+                    prompt_sender.send(());
+                }
+                _ => {
+                    log::trace!("Verso WebView isn't supporting this prompt yet")
+                }
+            },
             e => {
                 log::trace!("Verso WebView isn't supporting this message yet: {e:?}")
             }

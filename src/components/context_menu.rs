@@ -148,7 +148,7 @@ impl ContextMenu {
             } else {
                 // if menu can't fit to left side of the cursor,
                 // shift left the menu, but not less than zero.
-                // TODO: if still smaller than screen, should show scroller
+                // TODO: if still smaller than viewport, should adjust menu width and show scroll.
                 origin.x = i32::max(0, origin.x - x_overflow);
             }
         }
@@ -159,7 +159,7 @@ impl ContextMenu {
             } else {
                 // if menu can't fit to top of the cursor
                 // shift up the menu, but not less than zero.
-                // TODO: if still smaller than screen, should show scroller
+                // TODO: if still smaller than viewport, should adjust menu height and show scroll.
                 origin.y = i32::max(0, origin.y - y_overflow);
             }
         }
