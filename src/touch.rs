@@ -7,6 +7,8 @@ use self::TouchState::*;
 
 /// Minimum number of `DeviceIndependentPixel` to begin touch scrolling.
 const TOUCH_PAN_MIN_SCREEN_PX: f32 = 20.0;
+/// Minimum number of `DeviceIndependentPixel` to begin touch pinch zoom.
+const TOUCH_PINCH_ZOOM_MIN_SCREEN_PX: f32 = 50.0;
 
 /// Handler of touch inputs and states.
 pub struct TouchHandler {
@@ -133,13 +135,14 @@ impl TouchHandler {
                 self.active_touch_points[idx].point = point;
                 let (d1, c1) = self.pinch_distance_and_center();
 
-                if d0 == 0.0 {
-                    TouchAction::NoAction
-                } else {
+                // Only start pinch zooming if the distance between the touch points are big enough
+                if d0 > TOUCH_PINCH_ZOOM_MIN_SCREEN_PX {
                     let magnification = d1 / d0;
                     let scroll_delta = c1 - c0 * Scale::new(magnification);
 
                     TouchAction::Zoom(magnification, scroll_delta)
+                } else {
+                    TouchAction::NoAction
                 }
             }
             WaitingForScript => TouchAction::NoAction,
