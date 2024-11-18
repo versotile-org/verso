@@ -39,6 +39,8 @@ pub struct CliArgs {
     /// Path to resource directory. If None, Verso will try to get default directory. And if that
     /// still doesn't exist, all resource configuration will set to default values.
     pub resource_dir: Option<PathBuf>,
+    /// Override the user agent
+    pub user_agent: Option<String>,
 }
 
 /// Configuration of Verso instance.
@@ -89,6 +91,13 @@ fn parse_cli_args() -> Result<CliArgs, getopts::Fail> {
         "profiler-trace-path",
         "Path to dump a self-contained HTML timeline of profiler traces",
         "out.html",
+    );
+
+    opts.optopt(
+        "",
+        "user-agent",
+        "Override the user agent",
+        "'VersoView/1.0'",
     );
 
     opts.optopt(
@@ -159,6 +168,8 @@ fn parse_cli_args() -> Result<CliArgs, getopts::Fail> {
         None
     };
 
+    let user_agent = matches.opt_str("user-agent");
+
     let mut window_attributes = winit::window::Window::default_attributes();
 
     let width = matches.opt_get::<u32>("width").unwrap_or_else(|e| {
@@ -216,12 +227,12 @@ fn parse_cli_args() -> Result<CliArgs, getopts::Fail> {
         window_attributes,
         devtools_port,
         profiler_settings,
+        user_agent,
     })
 }
 
 impl Config {
-    /// Create a new configuration for creating Verso instance. It must provide the path of
-    /// resources directory.
+    /// Create a new configuration for creating Verso instance.
     pub fn new() -> Self {
         let mut opts = default_opts();
         let args = parse_cli_args().unwrap_or_default();
