@@ -25,7 +25,6 @@ use script_traits::{
     ScrollState, TouchEventType, TouchId, WheelDelta, WindowSizeData, WindowSizeType,
 };
 use servo_geometry::{DeviceIndependentIntSize, DeviceIndependentPixel};
-use style::computed_values::position;
 use style_traits::{CSSPixel, DevicePixel, PinchZoomFactor};
 use webrender::{RenderApi, Transaction};
 use webrender_api::units::{
