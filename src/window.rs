@@ -330,7 +330,7 @@ impl Window {
                             }
                         }
                     }
-                    // TODO(context-menu): ignore first release event after context menu open or close to prevent click on backgound element
+                    // TODO(context-menu): ignore first release event after context menu open or close to prevent click on background element
                 }
 
                 #[cfg(any(target_os = "macos", target_os = "windows"))]
