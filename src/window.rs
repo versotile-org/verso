@@ -33,7 +33,7 @@ use winit::{
 
 use crate::{
     compositor::{IOCompositor, MouseWindowEvent},
-    context_menu::ContextMenu,
+    context_menu::{ContextMenu, Menu},
     keyboard::keyboard_event_from_winit,
     rendering::{gl_config_picker, RenderingContext},
     verso::send_to_constellation,
@@ -660,7 +660,7 @@ impl Window {
         let menu = Menu::new();
         let _ = menu.append_items(&[&back, &forward, &reload]);
 
-        let context_menu = ContextMenu::new_with_menu(menu);
+        let context_menu = ContextMenu::new_with_menu(Menu(menu));
         context_menu.show(self.window.window_handle().unwrap());
     }
 
@@ -711,7 +711,7 @@ impl Window {
         );
         let reload = MenuItem::new(Some("reload"), "Reload", true);
 
-        let mut context_menu = ContextMenu::new_with_menu([back, forward, reload].to_vec());
+        let mut context_menu = ContextMenu::new_with_menu(Menu([back, forward, reload].to_vec()));
 
         let position = self.mouse_position.get().unwrap();
         context_menu.show(sender, self, position);
