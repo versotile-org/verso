@@ -511,7 +511,7 @@ impl Window {
     }
 
     /// Check has dialog webview in the window.
-    pub fn has_dialog_webview(&self, id: WebViewId) -> bool {
+    fn has_dialog_webview(&self, id: WebViewId) -> bool {
         self.dialog_webviews
             .iter()
             .find(|w| w.webview_id == id)
@@ -525,6 +525,10 @@ impl Window {
             .map_or(false, |w| w.webview.webview_id == id)
             || self.webview.as_ref().map_or(false, |w| w.webview_id == id)
             || self.has_dialog_webview(id)
+            || self
+                .context_menu
+                .as_ref()
+                .map_or(false, |w| w.webview().webview_id == id)
     }
 
     /// Remove the webview in this window by provided webview ID. If this is the panel, it will
@@ -557,6 +561,14 @@ impl Window {
         } else if let Some(index) = self.dialog_webviews.iter().position(|w| w.webview_id == id) {
             let webview = self.dialog_webviews.remove(index);
             (Some(webview), false)
+        } else if self
+            .context_menu
+            .as_ref()
+            .filter(|menu| menu.webview().webview_id == id)
+            .is_some()
+        {
+            let context_menu = self.context_menu.take().expect("Context menu should exist");
+            (Some(context_menu.webview().clone()), false)
         } else {
             (None, false)
         }
@@ -571,7 +583,12 @@ impl Window {
         if let Some(webview) = &self.webview {
             order.push(webview);
         }
+
         self.dialog_webviews.iter().for_each(|w| order.push(w));
+
+        if let Some(context_menu) = &self.context_menu {
+            order.push(context_menu.webview());
+        }
         order
     }
 
@@ -706,8 +723,8 @@ impl Window {
     ///
     /// If context menu exists, return true.
     #[cfg(linux)]
-    pub(crate) fn close_context_menu(&mut self, sender: &Sender<ConstellationMsg>) -> bool {
-        if let Some(context_menu) = self.context_menu.take() {
+    pub(crate) fn close_context_menu(&self, sender: &Sender<ConstellationMsg>) -> bool {
+        if let Some(context_menu) = &self.context_menu {
             send_to_constellation(
                 sender,
                 ConstellationMsg::CloseWebView(context_menu.webview().webview_id),

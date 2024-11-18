@@ -104,7 +104,6 @@ impl ContextMenu {
             sender,
             ConstellationMsg::NewWebView(self.resource_url(), self.webview.webview_id),
         );
-        window.append_dialog_webview(self.webview.clone());
     }
 
     /// Get webview of the context menu
