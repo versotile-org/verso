@@ -16,7 +16,7 @@ use muda::{Menu, MenuEvent, MenuEventReceiver, MenuItem};
 use raw_window_handle::HasWindowHandle;
 #[cfg(any(target_os = "macos", target_os = "windows"))]
 use script_traits::TraversalDirection;
-use script_traits::{TouchEventType, WheelDelta, WheelMode};
+use script_traits::{TouchEventType, TouchId, WheelDelta, WheelMode};
 use servo_url::ServoUrl;
 use webrender_api::{
     units::{DeviceIntPoint, DeviceIntRect, DeviceIntSize, DevicePoint, LayoutVector2D},
@@ -368,17 +368,17 @@ impl Window {
                     y = 0.0;
                 }
 
-                let phase: TouchEventType = match phase {
-                    TouchPhase::Started => TouchEventType::Down,
-                    TouchPhase::Moved => TouchEventType::Move,
-                    TouchPhase::Ended => TouchEventType::Up,
-                    TouchPhase::Cancelled => TouchEventType::Cancel,
-                };
-
                 compositor.on_scroll_event(
                     ScrollLocation::Delta(LayoutVector2D::new(x as f32, y as f32)),
                     DeviceIntPoint::new(position.x as i32, position.y as i32),
-                    phase,
+                    to_touch_event(*phase),
+                );
+            }
+            WindowEvent::Touch(touch) => {
+                compositor.on_touch_event(
+                    to_touch_event(touch.phase),
+                    TouchId(touch.id as i32),
+                    DevicePoint::new(touch.location.x as f32, touch.location.y as f32),
                 );
             }
             WindowEvent::ModifiersChanged(modifier) => self.modifiers_state.set(modifier.state()),
@@ -706,4 +706,13 @@ pub unsafe fn decorate_window(view: *mut AnyObject, _position: LogicalPosition<f
             | NSWindowStyleMask::Resizable
             | NSWindowStyleMask::Miniaturizable,
     );
+}
+
+fn to_touch_event(phase: TouchPhase) -> TouchEventType {
+    match phase {
+        TouchPhase::Started => TouchEventType::Down,
+        TouchPhase::Moved => TouchEventType::Move,
+        TouchPhase::Ended => TouchEventType::Up,
+        TouchPhase::Cancelled => TouchEventType::Cancel,
+    }
 }
