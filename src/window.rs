@@ -11,7 +11,7 @@ use glutin::{
 };
 use glutin_winit::DisplayBuilder;
 #[cfg(any(target_os = "macos", target_os = "windows"))]
-use muda::{Menu, MenuEvent, MenuEventReceiver, MenuItem};
+use muda::{Menu as MudaMenu, MenuEvent, MenuEventReceiver, MenuItem};
 #[cfg(any(target_os = "macos", target_os = "windows"))]
 use raw_window_handle::HasWindowHandle;
 use script_traits::TraversalDirection;
@@ -520,15 +520,20 @@ impl Window {
 
     /// Check if the window has such webview.
     pub fn has_webview(&self, id: WebViewId) -> bool {
+        #[cfg(linux)]
+        if self
+            .context_menu
+            .as_ref()
+            .map_or(false, |w| w.webview().webview_id == id)
+        {
+            return true;
+        }
+
         self.panel
             .as_ref()
             .map_or(false, |w| w.webview.webview_id == id)
             || self.webview.as_ref().map_or(false, |w| w.webview_id == id)
             || self.has_dialog_webview(id)
-            || self
-                .context_menu
-                .as_ref()
-                .map_or(false, |w| w.webview().webview_id == id)
     }
 
     /// Remove the webview in this window by provided webview ID. If this is the panel, it will
@@ -538,6 +543,17 @@ impl Window {
         id: WebViewId,
         compositor: &mut IOCompositor,
     ) -> (Option<WebView>, bool) {
+        #[cfg(linux)]
+        if self
+            .context_menu
+            .as_ref()
+            .filter(|menu| menu.webview().webview_id == id)
+            .is_some()
+        {
+            let context_menu = self.context_menu.take().expect("Context menu should exist");
+            return (Some(context_menu.webview().clone()), false);
+        }
+
         if self
             .panel
             .as_ref()
@@ -561,14 +577,6 @@ impl Window {
         } else if let Some(index) = self.dialog_webviews.iter().position(|w| w.webview_id == id) {
             let webview = self.dialog_webviews.remove(index);
             (Some(webview), false)
-        } else if self
-            .context_menu
-            .as_ref()
-            .filter(|menu| menu.webview().webview_id == id)
-            .is_some()
-        {
-            let context_menu = self.context_menu.take().expect("Context menu should exist");
-            (Some(context_menu.webview().clone()), false)
         } else {
             (None, false)
         }
@@ -586,9 +594,11 @@ impl Window {
 
         self.dialog_webviews.iter().for_each(|w| order.push(w));
 
+        #[cfg(linux)]
         if let Some(context_menu) = &self.context_menu {
             order.push(context_menu.webview());
         }
+
         order
     }
 
@@ -657,7 +667,7 @@ impl Window {
         );
         let reload = MenuItem::with_id("reload", "Reload", true, None);
 
-        let menu = Menu::new();
+        let menu = MudaMenu::new();
         let _ = menu.append_items(&[&back, &forward, &reload]);
 
         let context_menu = ContextMenu::new_with_menu(Menu(menu));
