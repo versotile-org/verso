@@ -70,7 +70,7 @@ pub struct Window {
     #[cfg(linux)]
     pub(crate) context_menu: Option<ContextMenu>,
 
-    /// Global menu evnet receiver for muda crate
+    /// Global menu event receiver for muda crate
     #[cfg(any(target_os = "macos", target_os = "windows"))]
     menu_event_receiver: MenuEventReceiver,
 }
