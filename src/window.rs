@@ -740,22 +740,17 @@ impl Window {
         compositor: &mut IOCompositor,
         position: DevicePoint,
     ) -> bool {
-        let result = compositor.hit_test_at_point(position);
-
-        if let Some(result) = result {
-            let pipeline_id = result.pipeline_id;
-            if let Some(webview_id) = compositor.webview_id_by_pipeline_id(pipeline_id) {
-                return self
-                    .context_menu
-                    .as_ref()
-                    .and_then(|context_menu| {
-                        if context_menu.webview().webview_id == webview_id {
-                            return Some(true);
-                        }
-                        None
-                    })
-                    .unwrap_or(false);
-            }
+        if let Some(webview_id) = compositor.webview_id_on_position(position) {
+            return self
+                .context_menu
+                .as_ref()
+                .and_then(|context_menu| {
+                    if context_menu.webview().webview_id == webview_id {
+                        return Some(true);
+                    }
+                    None
+                })
+                .unwrap_or(false);
         }
         false
     }
