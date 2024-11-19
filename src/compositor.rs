@@ -17,7 +17,7 @@ use euclid::{vec2, Point2D, Scale, Size2D, Transform3D, Vector2D};
 use gleam::gl;
 use ipc_channel::ipc::{self, IpcSharedMemory};
 use log::{debug, error, trace, warn};
-use profile_traits::time::{self as profile_time, profile, ProfilerCategory};
+use profile_traits::time::{self as profile_time, ProfilerCategory};
 use profile_traits::{mem, time, time_profile};
 use script_traits::CompositorEvent::{MouseButtonEvent, MouseMoveEvent, TouchEvent, WheelEvent};
 use script_traits::{
