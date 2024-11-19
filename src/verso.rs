@@ -114,6 +114,7 @@ impl Verso {
             .clone()
             .unwrap_or_else(|| default_user_agent_string().to_string())
             .into();
+        let zoom_level = config.args.zoom_level;
 
         config.init();
         // Reserving a namespace to create TopLevelBrowsingContextId.
@@ -360,7 +361,7 @@ impl Verso {
 
         // The compositor coordinates with the client window to create the final
         // rendered page and display it somewhere.
-        let compositor = IOCompositor::new(
+        let mut compositor = IOCompositor::new(
             window.id(),
             window.size(),
             Scale::new(window.scale_factor() as f32),
@@ -379,6 +380,10 @@ impl Verso {
             opts.exit_after_load,
             opts.debug.convert_mouse_to_touch,
         );
+
+        if let Some(zoom_level) = zoom_level {
+            compositor.on_zoom_window_event(zoom_level, &window);
+        }
 
         if with_panel {
             window.create_panel(&constellation_sender, initial_url);

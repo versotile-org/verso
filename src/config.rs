@@ -41,6 +41,8 @@ pub struct CliArgs {
     pub resource_dir: Option<PathBuf>,
     /// Override the user agent
     pub user_agent: Option<String>,
+    /// Initial window's zoom level
+    pub zoom_level: Option<f32>,
 }
 
 /// Configuration of Verso instance.
@@ -129,6 +131,8 @@ fn parse_cli_args() -> Result<CliArgs, getopts::Fail> {
         "no-maximized",
         "Launch the initial window without maximized",
     );
+
+    opts.optopt("", "zoom", "Initial window's zoom level", "1.5");
 
     let matches: getopts::Matches = opts.parse(&args[1..])?;
     let url = matches
@@ -219,6 +223,11 @@ fn parse_cli_args() -> Result<CliArgs, getopts::Fail> {
         window_attributes = window_attributes.with_maximized(true);
     }
 
+    let zoom_level = matches.opt_get::<f32>("zoom").unwrap_or_else(|e| {
+        log::error!("Failed to parse zoom command line argument: {e}");
+        None
+    });
+
     Ok(CliArgs {
         url,
         resource_dir,
@@ -228,6 +237,7 @@ fn parse_cli_args() -> Result<CliArgs, getopts::Fail> {
         devtools_port,
         profiler_settings,
         user_agent,
+        zoom_level,
     })
 }
 
