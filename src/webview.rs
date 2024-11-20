@@ -20,9 +20,6 @@ use crate::{
 #[cfg(linux)]
 use crate::components::context_menu::ContextMenuClickResult;
 
-#[cfg(linux)]
-use crate::components::context_menu::ContextMenuClickResult;
-
 /// A web view is an area to display web browsing context. It's what user will treat as a "web page".
 #[derive(Debug, Clone)]
 pub struct WebView {
