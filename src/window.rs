@@ -202,7 +202,7 @@ impl Window {
             initial_url: if let Some(initial_url) = initial_url {
                 ServoUrl::from_url(initial_url)
             } else {
-                ServoUrl::parse("https://www.w3schools.com/js/tryit.asp?filename=tryjs_alert").unwrap()
+                ServoUrl::parse("verso://prompt_test.html").unwrap()
             },
         });
 
@@ -474,6 +474,13 @@ impl Window {
                 return false;
             }
         }
+        if self.has_dialog_webview(webview_id) {
+            self.handle_servo_messages_with_dialog(
+                webview_id, message, sender, clipboard, compositor,
+            );
+            return false;
+        }
+
         // Handle message in Verso WebView
         self.handle_servo_messages_with_webview(webview_id, message, sender, clipboard, compositor);
         false
@@ -502,13 +509,11 @@ impl Window {
 
     /// Append a dialog webview to the window.
     pub fn append_dialog_webview(&mut self, webview: WebView) {
-        dbg!("append");
         self.dialog_webviews.push(webview);
     }
 
     /// Remove a dialog webview from the window.
     pub fn remove_dialog_webview(&mut self, id: WebViewId) {
-        dbg!("remove");
         self.dialog_webviews.retain(|w| w.webview_id != id);
     }
 

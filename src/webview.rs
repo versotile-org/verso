@@ -123,6 +123,7 @@ impl Window {
                 }
             }
             EmbedderMsg::HistoryChanged(list, index) => {
+                dbg!("HistoryChanged");
                 self.update_history(&list, index);
                 let url = list.get(index).unwrap();
                 if let Some(panel) = self.panel.as_ref() {
@@ -150,13 +151,10 @@ impl Window {
             }
             EmbedderMsg::Prompt(prompt, _origin) => match prompt {
                 PromptDefinition::Alert(msg, prompt_sender) => {
-                    dbg!(msg);
-                    let mut prompt = PromptDialogBuilder::new()
-                        .with_prompt_type(crate::components::prompt::PromptType::Alert)
-                        .build();
-                    prompt.show(sender, self, None);
+                    let mut prompt = PromptDialogBuilder::new().build();
+                    prompt.alert(sender, self, &msg);
 
-                    prompt_sender.send(());
+                    let _ = prompt_sender.send(());
                 }
                 _ => {
                     log::trace!("Verso WebView isn't supporting this prompt yet")
@@ -311,7 +309,7 @@ impl Window {
         false
     }
 
-    /// Handle servo messages with main panel. Return true it requests a new window.
+    /// Handle servo messages with context menu. Return true it requests a new window.
     #[cfg(linux)]
     pub fn handle_servo_messages_with_context_menu(
         &mut self,
@@ -338,6 +336,24 @@ impl Window {
             },
             e => {
                 log::trace!("Verso Panel isn't supporting this message yet: {e:?}")
+            }
+        }
+        false
+    }
+
+    /// Handle servo messages with dialog. Return true it requests a new window.
+    pub fn handle_servo_messages_with_dialog(
+        &mut self,
+        webview_id: WebViewId,
+        message: EmbedderMsg,
+        _sender: &Sender<ConstellationMsg>,
+        _clipboard: Option<&mut Clipboard>,
+        _compositor: &mut IOCompositor,
+    ) -> bool {
+        log::trace!("Verso Dialog {webview_id:?} is handling Embedder message: {message:?}",);
+        match message {
+            e => {
+                log::trace!("Verso Dialog isn't supporting this message yet: {e:?}")
             }
         }
         false

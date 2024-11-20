@@ -1,0 +1,47 @@
+<html>
+  <head>
+    <style>
+      body {
+        font-family: Arial, Helvetica, sans-serif;
+        background: #f5f5f5;
+        width: 500px;
+        min-height: 110px;
+        max-height: 300px;
+      }
+      .alert {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+      }
+      .msg {
+        display: inline-block;
+        width: 100%;
+        min-height: 90px;
+        padding: 5px;
+        text-align: center;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="alert">
+      <div id="msg" class="msg"></div>
+      <button onclick="window.close()">Ok</button>
+    </div>
+  </body>
+  <script>
+    const msgEl = document.getElementById('msg');
+
+    let url = URL.parse(window.location.href);
+    let params = url.searchParams;
+    msgEl.textContent = params.get('msg'); // beaware of XSS attacks
+
+    // function escapeHtml(input) {
+    //   return input
+    //     .replace(/&/g, '&amp;')
+    //     .replace(/</g, '&lt;')
+    //     .replace(/>/g, '&gt;')
+    //     .replace(/"/g, '&quot;')
+    //     .replace(/'/g, '&#39;');
+    // };
+  </script>
+</html>
