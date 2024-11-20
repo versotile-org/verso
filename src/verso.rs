@@ -108,6 +108,12 @@ impl Verso {
         let initial_url = config.args.url.clone();
         let with_panel = !config.args.no_panel;
         let window_settings = config.args.window_attributes.clone();
+        let user_agent: Cow<'static, str> = config
+            .args
+            .user_agent
+            .clone()
+            .unwrap_or_else(|| default_user_agent_string().to_string())
+            .into();
 
         config.init();
         // Reserving a namespace to create TopLevelBrowsingContextId.
@@ -275,7 +281,6 @@ impl Verso {
             BluetoothThreadFactory::new(embedder_sender.clone());
 
         // Create resource thread pool
-        let user_agent: Cow<'static, str> = default_user_agent_string().into();
         let (public_resource_threads, private_resource_threads) =
             resource_thread::new_resource_threads(
                 user_agent.clone(),
