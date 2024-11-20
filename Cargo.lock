@@ -6682,6 +6682,8 @@ dependencies = [
  "raw-window-handle",
  "script",
  "script_traits",
+ "serde",
+ "serde_json",
  "servo-media",
  "servo-media-dummy",
  "servo_config",

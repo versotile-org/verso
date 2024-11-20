@@ -14,6 +14,9 @@ use webrender_api::units::DeviceIntRect;
 
 use crate::{compositor::IOCompositor, verso::send_to_constellation, window::Window};
 
+#[cfg(linux)]
+use crate::context_menu::ContextMenuClickResult;
+
 /// A web view is an area to display web browsing context. It's what user will treat as a "web page".
 #[derive(Debug, Clone)]
 pub struct WebView {
@@ -284,6 +287,38 @@ impl Window {
                     send_to_constellation(sender, ConstellationMsg::FocusWebView(panel_id));
                 }
             }
+            e => {
+                log::trace!("Verso Panel isn't supporting this message yet: {e:?}")
+            }
+        }
+        false
+    }
+
+    /// Handle servo messages with main panel. Return true it requests a new window.
+    #[cfg(linux)]
+    pub fn handle_servo_messages_with_context_menu(
+        &mut self,
+        webview_id: WebViewId,
+        message: EmbedderMsg,
+        sender: &Sender<ConstellationMsg>,
+        _clipboard: Option<&mut Clipboard>,
+        _compositor: &mut IOCompositor,
+    ) -> bool {
+        log::trace!("Verso Context Menu {webview_id:?} is handling Embedder message: {message:?}",);
+        match message {
+            EmbedderMsg::Prompt(definition, _origin) => match definition {
+                PromptDefinition::Input(msg, _, prompt_sender) => {
+                    let _ = prompt_sender.send(None);
+                    if msg.starts_with("CONTEXT_MENU:") {
+                        let json_str_msg = msg.strip_prefix("CONTEXT_MENU:").unwrap();
+                        let result =
+                            serde_json::from_str::<ContextMenuClickResult>(json_str_msg).unwrap();
+
+                        self.handle_context_menu_event(sender, result);
+                    }
+                }
+                _ => log::trace!("Verso Panel isn't supporting this prompt yet"),
+            },
             e => {
                 log::trace!("Verso Panel isn't supporting this message yet: {e:?}")
             }
