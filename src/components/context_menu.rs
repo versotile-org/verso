@@ -1,6 +1,6 @@
 /* macOS, Windows Native Implementation */
 #[cfg(any(target_os = "macos", target_os = "windows"))]
-use muda::{ContextMenu as MudaContextMenu, Menu};
+use muda::{ContextMenu as MudaContextMenu, Menu as MudaMenu};
 #[cfg(any(target_os = "macos", target_os = "windows"))]
 use raw_window_handle::{HasWindowHandle, RawWindowHandle};
 
@@ -24,19 +24,46 @@ use webrender_api::units::DeviceIntRect;
 #[cfg(linux)]
 use winit::dpi::PhysicalPosition;
 
+/// Context Menu inner menu
+#[cfg(any(target_os = "macos", target_os = "windows"))]
+pub struct Menu(pub MudaMenu);
+/// Context Menu inner menu
+#[cfg(linux)]
+#[derive(Debug, Clone)]
+pub struct Menu(pub Vec<MenuItem>);
+
+impl ContextMenu {
+    /// Create context menu with custom items
+    ///
+    /// **Platform Specific**
+    /// - macOS / Windows: Creates a context menu by muda crate with natvie OS support
+    /// - Linux: Creates a context menu with webview implementation
+    pub fn new_with_menu(menu: Menu) -> Self {
+        #[cfg(any(target_os = "macos", target_os = "windows"))]
+        {
+            Self { menu: menu.0 }
+        }
+        #[cfg(linux)]
+        {
+            let webview_id = WebViewId::new();
+            let webview = WebView::new(webview_id, DeviceIntRect::zero());
+
+            Self {
+                menu_items: menu.0,
+                webview,
+            }
+        }
+    }
+}
+
 /// Context Menu
 #[cfg(any(target_os = "macos", target_os = "windows"))]
 pub struct ContextMenu {
-    menu: Menu,
+    menu: MudaMenu,
 }
 
 #[cfg(any(target_os = "macos", target_os = "windows"))]
 impl ContextMenu {
-    /// Create context menu with custom items
-    pub fn new_with_menu(menu: Menu) -> Self {
-        Self { menu }
-    }
-
     /// Show the context menu on current cursor position
     ///
     /// This function returns when the context menu is dismissed
@@ -77,19 +104,6 @@ pub struct ContextMenu {
 
 #[cfg(linux)]
 impl ContextMenu {
-    /// Create a dialog in the window.
-    ///
-    /// Often used by calling window.alert() or window.confirm() in the web page.
-    pub fn new_with_menu(menu_items: Vec<MenuItem>) -> Self {
-        let webview_id = WebViewId::new();
-        let webview = WebView::new(webview_id, DeviceIntRect::zero());
-
-        Self {
-            menu_items,
-            webview,
-        }
-    }
-
     /// Show the context menu to current cursor position
     pub fn show(
         &mut self,
@@ -104,7 +118,6 @@ impl ContextMenu {
             sender,
             ConstellationMsg::NewWebView(self.resource_url(), self.webview.webview_id),
         );
-        window.append_dialog_webview(self.webview.clone());
     }
 
     /// Get webview of the context menu
@@ -148,7 +161,7 @@ impl ContextMenu {
             } else {
                 // if menu can't fit to left side of the cursor,
                 // shift left the menu, but not less than zero.
-                // TODO: if still smaller than viewport, should adjust menu width and show scroll.
+                // TODO: if still smaller than screen, should show scroller
                 origin.x = i32::max(0, origin.x - x_overflow);
             }
         }
@@ -159,7 +172,7 @@ impl ContextMenu {
             } else {
                 // if menu can't fit to top of the cursor
                 // shift up the menu, but not less than zero.
-                // TODO: if still smaller than viewport, should adjust menu height and show scroll.
+                // TODO: if still smaller than screen, should show scroller
                 origin.y = i32::max(0, origin.y - y_overflow);
             }
         }

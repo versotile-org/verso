@@ -32,8 +32,8 @@ use winit::{
 };
 
 use crate::{
+    components::context_menu::{ContextMenu, Menu},
     compositor::{IOCompositor, MouseWindowEvent},
-    context_menu::{ContextMenu, Menu},
     keyboard::keyboard_event_from_winit,
     rendering::{gl_config_picker, RenderingContext},
     verso::send_to_constellation,
@@ -715,7 +715,7 @@ impl Window {
 
     #[cfg(linux)]
     pub(crate) fn show_context_menu(&mut self, sender: &Sender<ConstellationMsg>) -> ContextMenu {
-        use crate::context_menu::MenuItem;
+        use crate::components::context_menu::MenuItem;
 
         let history_len = self.history.len();
 
@@ -779,7 +779,7 @@ impl Window {
     pub(crate) fn handle_context_menu_event(
         &mut self,
         sender: &Sender<ConstellationMsg>,
-        event: crate::context_menu::ContextMenuClickResult,
+        event: crate::components::context_menu::ContextMenuClickResult,
     ) {
         // FIXME: (context-menu) find the reason that close after doing action (traverse history) will hang the window
         // Close context menu somehow must put before other actions, or it will hang the window

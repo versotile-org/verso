@@ -13,15 +13,15 @@ use url::Url;
 use webrender_api::units::DeviceIntRect;
 
 use crate::{
-    compositor::IOCompositor, prompt::PromptDialogBuilder, verso::send_to_constellation,
-    window::Window,
+    components::prompt::PromptDialogBuilder, compositor::IOCompositor,
+    verso::send_to_constellation, window::Window,
 };
 
 #[cfg(linux)]
-use crate::context_menu::ContextMenuClickResult;
+use crate::components::context_menu::ContextMenuClickResult;
 
 #[cfg(linux)]
-use crate::context_menu::ContextMenuClickResult;
+use crate::components::context_menu::ContextMenuClickResult;
 
 /// A web view is an area to display web browsing context. It's what user will treat as a "web page".
 #[derive(Debug, Clone)]
