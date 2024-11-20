@@ -2164,14 +2164,18 @@ impl IOCompositor {
             .send_transaction(self.webrender_document, transaction);
     }
 
-    /// Get webview id by pipeline id.
-    pub fn webview_id_by_pipeline_id(
+    /// Get webview id on the position
+    pub fn webview_id_on_position(
         &self,
-        pipeline_id: PipelineId,
+        position: DevicePoint,
     ) -> Option<TopLevelBrowsingContextId> {
-        for (w_id, p_id) in &self.webviews {
-            if *p_id == pipeline_id {
-                return Some(*w_id);
+        let hit_result: Option<CompositorHitTestResult> = self.hit_test_at_point(position);
+        if let Some(result) = hit_result {
+            let pipeline_id = result.pipeline_id;
+            for (w_id, p_id) in &self.webviews {
+                if *p_id == pipeline_id {
+                    return Some(*w_id);
+                }
             }
         }
         None

@@ -30,4 +30,6 @@ pub use verso::Verso;
 /// Re-exporting Winit for the sake of convenience.
 pub use winit;
 /// Context
-pub mod components;
+pub mod context_menu;
+/// Prompt
+pub mod prompt;

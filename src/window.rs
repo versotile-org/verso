@@ -11,7 +11,7 @@ use glutin::{
 };
 use glutin_winit::DisplayBuilder;
 #[cfg(any(target_os = "macos", target_os = "windows"))]
-use muda::{Menu, MenuEvent, MenuEventReceiver, MenuItem};
+use muda::{Menu as MudaMenu, MenuEvent, MenuEventReceiver, MenuItem};
 #[cfg(any(target_os = "macos", target_os = "windows"))]
 use raw_window_handle::HasWindowHandle;
 use script_traits::TraversalDirection;
@@ -32,8 +32,8 @@ use winit::{
 };
 
 use crate::{
-    components::context_menu::ContextMenu,
     compositor::{IOCompositor, MouseWindowEvent},
+    context_menu::{ContextMenu, Menu},
     keyboard::keyboard_event_from_winit,
     rendering::{gl_config_picker, RenderingContext},
     verso::send_to_constellation,
@@ -70,7 +70,7 @@ pub struct Window {
     #[cfg(linux)]
     pub(crate) context_menu: Option<ContextMenu>,
 
-    /// Global menu evnet receiver for muda crate
+    /// Global menu event receiver for muda crate
     #[cfg(any(target_os = "macos", target_os = "windows"))]
     menu_event_receiver: MenuEventReceiver,
 }
@@ -330,7 +330,7 @@ impl Window {
                             }
                         }
                     }
-                    // TODO(context-menu): ignore first release event after context menu open or close to prevent click on backgound element
+                    // TODO(context-menu): ignore first release event after context menu open or close to prevent click on background element
                 }
 
                 #[cfg(any(target_os = "macos", target_os = "windows"))]
@@ -527,6 +527,15 @@ impl Window {
 
     /// Check if the window has such webview.
     pub fn has_webview(&self, id: WebViewId) -> bool {
+        #[cfg(linux)]
+        if self
+            .context_menu
+            .as_ref()
+            .map_or(false, |w| w.webview().webview_id == id)
+        {
+            return true;
+        }
+
         self.panel
             .as_ref()
             .map_or(false, |w| w.webview.webview_id == id)
@@ -541,6 +550,17 @@ impl Window {
         id: WebViewId,
         compositor: &mut IOCompositor,
     ) -> (Option<WebView>, bool) {
+        #[cfg(linux)]
+        if self
+            .context_menu
+            .as_ref()
+            .filter(|menu| menu.webview().webview_id == id)
+            .is_some()
+        {
+            let context_menu = self.context_menu.take().expect("Context menu should exist");
+            return (Some(context_menu.webview().clone()), false);
+        }
+
         if self
             .panel
             .as_ref()
@@ -563,7 +583,6 @@ impl Window {
             (self.webview.take(), self.panel.is_none())
         } else if let Some(index) = self.dialog_webviews.iter().position(|w| w.webview_id == id) {
             let webview = self.dialog_webviews.remove(index);
-            dbg!("removing...");
             (Some(webview), false)
         } else {
             (None, false)
@@ -579,7 +598,14 @@ impl Window {
         if let Some(webview) = &self.webview {
             order.push(webview);
         }
+
         self.dialog_webviews.iter().for_each(|w| order.push(w));
+
+        #[cfg(linux)]
+        if let Some(context_menu) = &self.context_menu {
+            order.push(context_menu.webview());
+        }
+
         order
     }
 
@@ -648,10 +674,10 @@ impl Window {
         );
         let reload = MenuItem::with_id("reload", "Reload", true, None);
 
-        let menu = Menu::new();
+        let menu = MudaMenu::new();
         let _ = menu.append_items(&[&back, &forward, &reload]);
 
-        let context_menu = ContextMenu::new_with_menu(menu);
+        let context_menu = ContextMenu::new_with_menu(Menu(menu));
         context_menu.show(self.window.window_handle().unwrap());
     }
 
@@ -689,7 +715,7 @@ impl Window {
 
     #[cfg(linux)]
     pub(crate) fn show_context_menu(&mut self, sender: &Sender<ConstellationMsg>) -> ContextMenu {
-        use crate::components::context_menu::MenuItem;
+        use crate::context_menu::MenuItem;
 
         let history_len = self.history.len();
 
@@ -702,7 +728,7 @@ impl Window {
         );
         let reload = MenuItem::new(Some("reload"), "Reload", true);
 
-        let mut context_menu = ContextMenu::new_with_menu([back, forward, reload].to_vec());
+        let mut context_menu = ContextMenu::new_with_menu(Menu([back, forward, reload].to_vec()));
 
         let position = self.mouse_position.get().unwrap();
         context_menu.show(sender, self, position);
@@ -714,8 +740,8 @@ impl Window {
     ///
     /// If context menu exists, return true.
     #[cfg(linux)]
-    pub(crate) fn close_context_menu(&mut self, sender: &Sender<ConstellationMsg>) -> bool {
-        if let Some(context_menu) = self.context_menu.take() {
+    pub(crate) fn close_context_menu(&self, sender: &Sender<ConstellationMsg>) -> bool {
+        if let Some(context_menu) = &self.context_menu {
             send_to_constellation(
                 sender,
                 ConstellationMsg::CloseWebView(context_menu.webview().webview_id),
@@ -731,22 +757,17 @@ impl Window {
         compositor: &mut IOCompositor,
         position: DevicePoint,
     ) -> bool {
-        let result = compositor.hit_test_at_point(position);
-
-        if let Some(result) = result {
-            let pipeline_id = result.pipeline_id;
-            if let Some(webview_id) = compositor.webview_id_by_pipeline_id(pipeline_id) {
-                return self
-                    .context_menu
-                    .as_ref()
-                    .and_then(|context_menu| {
-                        if context_menu.webview().webview_id == webview_id {
-                            return Some(true);
-                        }
-                        None
-                    })
-                    .unwrap_or(false);
-            }
+        if let Some(webview_id) = compositor.webview_id_on_position(position) {
+            return self
+                .context_menu
+                .as_ref()
+                .and_then(|context_menu| {
+                    if context_menu.webview().webview_id == webview_id {
+                        return Some(true);
+                    }
+                    None
+                })
+                .unwrap_or(false);
         }
         false
     }
@@ -758,7 +779,7 @@ impl Window {
     pub(crate) fn handle_context_menu_event(
         &mut self,
         sender: &Sender<ConstellationMsg>,
-        event: crate::components::context_menu::ContextMenuClickResult,
+        event: crate::context_menu::ContextMenuClickResult,
     ) {
         // FIXME: (context-menu) find the reason that close after doing action (traverse history) will hang the window
         // Close context menu somehow must put before other actions, or it will hang the window

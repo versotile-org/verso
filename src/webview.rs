@@ -13,12 +13,15 @@ use url::Url;
 use webrender_api::units::DeviceIntRect;
 
 use crate::{
-    components::prompt::PromptDialogBuilder, compositor::IOCompositor,
-    verso::send_to_constellation, window::Window,
+    compositor::IOCompositor, prompt::PromptDialogBuilder, verso::send_to_constellation,
+    window::Window,
 };
 
 #[cfg(linux)]
-use crate::components::context_menu::ContextMenuClickResult;
+use crate::context_menu::ContextMenuClickResult;
+
+#[cfg(linux)]
+use crate::context_menu::ContextMenuClickResult;
 
 /// A web view is an area to display web browsing context. It's what user will treat as a "web page".
 #[derive(Debug, Clone)]
@@ -123,7 +126,6 @@ impl Window {
                 }
             }
             EmbedderMsg::HistoryChanged(list, index) => {
-                dbg!("HistoryChanged");
                 self.update_history(&list, index);
                 let url = list.get(index).unwrap();
                 if let Some(panel) = self.panel.as_ref() {
@@ -309,7 +311,7 @@ impl Window {
         false
     }
 
-    /// Handle servo messages with context menu. Return true it requests a new window.
+    /// Handle servo messages with main panel. Return true it requests a new window.
     #[cfg(linux)]
     pub fn handle_servo_messages_with_context_menu(
         &mut self,
