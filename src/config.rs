@@ -43,6 +43,8 @@ pub struct CliArgs {
     pub user_agent: Option<String>,
     /// Script to run on document started to load
     pub init_script: Option<String>,
+    /// The directory to load userscripts from
+    pub userscripts_directory: Option<String>,
     /// Initial window's zoom level
     pub zoom_level: Option<f32>,
 }
@@ -108,6 +110,12 @@ fn parse_cli_args() -> Result<CliArgs, getopts::Fail> {
         "init-script",
         "Script to run on document started to load",
         "console.log('hello world')",
+    );
+    opts.optopt(
+        "",
+        "userscripts-directory",
+        "The directory to load userscripts from",
+        "resources/user-agent-js/",
     );
 
     opts.optopt(
@@ -182,6 +190,7 @@ fn parse_cli_args() -> Result<CliArgs, getopts::Fail> {
 
     let user_agent = matches.opt_str("user-agent");
     let init_script = matches.opt_str("init-script");
+    let userscripts_directory = matches.opt_str("userscripts-directory");
 
     let mut window_attributes = winit::window::Window::default_attributes();
 
@@ -247,6 +256,7 @@ fn parse_cli_args() -> Result<CliArgs, getopts::Fail> {
         profiler_settings,
         user_agent,
         init_script,
+        userscripts_directory,
         zoom_level,
     })
 }
@@ -265,6 +275,10 @@ impl Config {
         if let Some(ref profiler_settings) = args.profiler_settings {
             opts.time_profiling = Some(profiler_settings.output_options.clone());
             opts.time_profiler_trace_path = profiler_settings.trace_path.clone();
+        }
+
+        if let Some(ref userscripts_directory) = args.userscripts_directory {
+            opts.userscripts = Some(userscripts_directory.clone());
         }
 
         let resource_dir = args.resource_dir.clone().unwrap_or(resources_dir_path());
