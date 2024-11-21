@@ -5,7 +5,9 @@ use crossbeam_channel::Sender;
 use embedder_traits::{CompositorEventVariant, EmbedderMsg, PromptDefinition};
 use ipc_channel::ipc;
 use script_traits::{
-    webdriver_msg::{WebDriverJSResult, WebDriverScriptCommand},
+    webdriver_msg::{
+        WebDriverJSError, WebDriverJSResult, WebDriverJSValue, WebDriverScriptCommand,
+    },
     TraversalDirection, WebDriverCommandMsg,
 };
 use servo_url::ServoUrl;
@@ -27,7 +29,7 @@ pub struct WebView {
 }
 
 impl WebView {
-    /// Create a web view from Winit window.
+    /// Create a web view.
     pub fn new(webview_id: WebViewId, rect: DeviceIntRect) -> Self {
         Self { webview_id, rect }
     }
@@ -68,8 +70,7 @@ impl Window {
     ) {
         log::trace!("Verso WebView {webview_id:?} is handling Embedder message: {message:?}",);
         match message {
-            EmbedderMsg::LoadStart
-            | EmbedderMsg::HeadParsed
+            EmbedderMsg::HeadParsed
             | EmbedderMsg::WebViewOpened(_)
             | EmbedderMsg::WebViewClosed(_) => {
                 // Most WebView messages are ignored because it's done by compositor.
@@ -81,6 +82,11 @@ impl Window {
                     self.id(),
                     w
                 );
+            }
+            EmbedderMsg::LoadStart => {
+                if let Some(init_script) = &self.init_script {
+                    execute_script_async(&sender, &webview_id, init_script);
+                }
             }
             EmbedderMsg::LoadComplete => {
                 self.window.request_redraw();
@@ -325,4 +331,48 @@ impl Window {
         }
         false
     }
+}
+
+/// Blocking execute a script on this webview
+pub fn execute_script(
+    constellation_sender: &Sender<ConstellationMsg>,
+    webview: &WebViewId,
+    js: impl ToString,
+) -> Result<WebDriverJSValue, WebDriverJSError> {
+    let (result_sender, result_receiver) = ipc::channel::<WebDriverJSResult>().unwrap();
+    send_to_constellation(
+        constellation_sender,
+        ConstellationMsg::WebDriverCommand(script_traits::WebDriverCommandMsg::ScriptCommand(
+            webview.0,
+            WebDriverScriptCommand::ExecuteScript(js.to_string(), result_sender),
+        )),
+    );
+    result_receiver.recv().unwrap()
+}
+
+/// Execute a script asynchronous on this webview
+pub fn execute_script_async(
+    constellation_sender: &Sender<ConstellationMsg>,
+    webview: &WebViewId,
+    js: impl ToString,
+) {
+    execute_script_async_with_callback(constellation_sender, webview, js, |_| {})
+}
+
+/// Execute a script asynchronous on this webview with a callback processing the result
+pub fn execute_script_async_with_callback(
+    constellation_sender: &Sender<ConstellationMsg>,
+    webview: &WebViewId,
+    js: impl ToString,
+    callback: impl FnOnce(Result<WebDriverJSValue, WebDriverJSError>) + Send + 'static,
+) {
+    let (result_sender, result_receiver) = ipc::channel::<WebDriverJSResult>().unwrap();
+    send_to_constellation(
+        constellation_sender,
+        ConstellationMsg::WebDriverCommand(script_traits::WebDriverCommandMsg::ScriptCommand(
+            webview.0,
+            WebDriverScriptCommand::ExecuteAsyncScript(js.to_string(), result_sender),
+        )),
+    );
+    std::thread::spawn(move || callback(result_receiver.recv().unwrap()));
 }

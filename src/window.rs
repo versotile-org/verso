@@ -52,6 +52,8 @@ pub struct Window {
     pub(crate) panel: Option<Panel>,
     /// The WebView of this window.
     pub(crate) webview: Option<WebView>,
+    /// Script to run on document started to load
+    pub(crate) init_script: Option<String>,
     /// The mouse physical position in the web view.
     mouse_position: Cell<Option<PhysicalPosition<f64>>>,
     /// Modifiers state of the keyboard.
@@ -118,6 +120,7 @@ impl Window {
                 surface,
                 panel: None,
                 webview: None,
+                init_script: None,
                 mouse_position: Default::default(),
                 modifiers_state: Cell::new(ModifiersState::default()),
                 history: vec![],
@@ -162,6 +165,7 @@ impl Window {
             surface,
             panel: None,
             webview: None,
+            init_script: None,
             mouse_position: Default::default(),
             modifiers_state: Cell::new(ModifiersState::default()),
             history: vec![],
@@ -230,6 +234,11 @@ impl Window {
             ConstellationMsg::NewWebView(initial_url, webview_id),
         );
         log::debug!("Verso Window {:?} adds webview {}", self.id(), webview_id);
+    }
+
+    /// Set the init script that runs on document started to load.
+    pub fn set_init_script(&mut self, init_script: Option<String>) {
+        self.init_script = init_script;
     }
 
     /// Handle Winit window event and return a boolean to indicate if the compositor should repaint immediately.

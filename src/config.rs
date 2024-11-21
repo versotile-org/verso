@@ -41,6 +41,8 @@ pub struct CliArgs {
     pub resource_dir: Option<PathBuf>,
     /// Override the user agent
     pub user_agent: Option<String>,
+    /// Script to run on document started to load
+    pub init_script: Option<String>,
     /// Initial window's zoom level
     pub zoom_level: Option<f32>,
 }
@@ -100,6 +102,12 @@ fn parse_cli_args() -> Result<CliArgs, getopts::Fail> {
         "user-agent",
         "Override the user agent",
         "'VersoView/1.0'",
+    );
+    opts.optopt(
+        "",
+        "init-script",
+        "Script to run on document started to load",
+        "console.log('hello world')",
     );
 
     opts.optopt(
@@ -173,6 +181,7 @@ fn parse_cli_args() -> Result<CliArgs, getopts::Fail> {
     };
 
     let user_agent = matches.opt_str("user-agent");
+    let init_script = matches.opt_str("init-script");
 
     let mut window_attributes = winit::window::Window::default_attributes();
 
@@ -237,6 +246,7 @@ fn parse_cli_args() -> Result<CliArgs, getopts::Fail> {
         devtools_port,
         profiler_settings,
         user_agent,
+        init_script,
         zoom_level,
     })
 }
