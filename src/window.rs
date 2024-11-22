@@ -62,10 +62,6 @@ pub struct Window {
     current_history_index: usize,
     /// State to indicate if the window is resizing.
     pub(crate) resizing: bool,
-
-    /// dialog webviews
-    dialog_webviews: Vec<WebView>,
-
     /// Linux context_menu
     #[cfg(linux)]
     pub(crate) context_menu: Option<ContextMenu>,
@@ -123,7 +119,6 @@ impl Window {
                 history: vec![],
                 current_history_index: 0,
                 resizing: false,
-                dialog_webviews: vec![],
                 #[cfg(linux)]
                 context_menu: None,
                 #[cfg(any(target_os = "macos", target_os = "windows"))]
@@ -167,7 +162,6 @@ impl Window {
             history: vec![],
             current_history_index: 0,
             resizing: false,
-            dialog_webviews: vec![],
             #[cfg(linux)]
             context_menu: None,
             #[cfg(any(target_os = "macos", target_os = "windows"))]
@@ -500,24 +494,6 @@ impl Window {
         self.window.scale_factor()
     }
 
-    /// Append a dialog webview to the window.
-    pub fn append_dialog_webview(&mut self, webview: WebView) {
-        self.dialog_webviews.push(webview);
-    }
-
-    /// Remove a dialog webview from the window.
-    pub fn remove_dialog_webview(&mut self, id: WebViewId) {
-        self.dialog_webviews.retain(|w| w.webview_id != id);
-    }
-
-    /// Check has dialog webview in the window.
-    fn has_dialog_webview(&self, id: WebViewId) -> bool {
-        self.dialog_webviews
-            .iter()
-            .find(|w| w.webview_id == id)
-            .is_some()
-    }
-
     /// Check if the window has such webview.
     pub fn has_webview(&self, id: WebViewId) -> bool {
         #[cfg(linux)]
@@ -533,7 +509,6 @@ impl Window {
             .as_ref()
             .map_or(false, |w| w.webview.webview_id == id)
             || self.webview.as_ref().map_or(false, |w| w.webview_id == id)
-            || self.has_dialog_webview(id)
     }
 
     /// Remove the webview in this window by provided webview ID. If this is the panel, it will
@@ -574,9 +549,6 @@ impl Window {
             .is_some()
         {
             (self.webview.take(), self.panel.is_none())
-        } else if let Some(index) = self.dialog_webviews.iter().position(|w| w.webview_id == id) {
-            let webview = self.dialog_webviews.remove(index);
-            (Some(webview), false)
         } else {
             (None, false)
         }
@@ -591,8 +563,6 @@ impl Window {
         if let Some(webview) = &self.webview {
             order.push(webview);
         }
-
-        self.dialog_webviews.iter().for_each(|w| order.push(w));
 
         #[cfg(linux)]
         if let Some(context_menu) = &self.context_menu {
