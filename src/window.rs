@@ -32,7 +32,10 @@ use winit::{
 };
 
 use crate::{
-    components::context_menu::{ContextMenu, Menu},
+    components::{
+        context_menu::{ContextMenu, Menu},
+        prompt::PromptDialog,
+    },
     compositor::{IOCompositor, MouseWindowEvent},
     keyboard::keyboard_event_from_winit,
     rendering::{gl_config_picker, RenderingContext},
@@ -73,6 +76,9 @@ pub struct Window {
     /// Global menu event receiver for muda crate
     #[cfg(any(target_os = "macos", target_os = "windows"))]
     menu_event_receiver: MenuEventReceiver,
+
+    /// Current Prompt
+    pub(crate) prompt: Option<PromptDialog>,
 }
 
 impl Window {
@@ -128,6 +134,7 @@ impl Window {
                 context_menu: None,
                 #[cfg(any(target_os = "macos", target_os = "windows"))]
                 menu_event_receiver: MenuEvent::receiver().clone(),
+                prompt: None,
             },
             rendering_context,
         )
@@ -172,6 +179,7 @@ impl Window {
             context_menu: None,
             #[cfg(any(target_os = "macos", target_os = "windows"))]
             menu_event_receiver: MenuEvent::receiver().clone(),
+            prompt: None,
         };
         compositor.swap_current_window(&mut window);
         window
@@ -469,6 +477,14 @@ impl Window {
         if let Some(context_menu) = &self.context_menu {
             if context_menu.webview().webview_id == webview_id {
                 self.handle_servo_messages_with_context_menu(
+                    webview_id, message, sender, clipboard, compositor,
+                );
+                return false;
+            }
+        }
+        if let Some(prompt) = &self.prompt {
+            if prompt.webview().webview_id == webview_id {
+                self.handle_servo_messages_with_prompt(
                     webview_id, message, sender, clipboard, compositor,
                 );
                 return false;

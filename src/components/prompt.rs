@@ -1,10 +1,10 @@
 use base::id::WebViewId;
 use compositing_traits::ConstellationMsg;
 use crossbeam_channel::Sender;
-use euclid::Size2D;
+use embedder_traits::PromptResult;
+use ipc_channel::ipc::IpcSender;
 use servo_url::ServoUrl;
-use webrender_api::units::{DeviceIntPoint, DeviceIntRect, DeviceIntSize};
-use winit::dpi::PhysicalPosition;
+use webrender_api::units::DeviceIntRect;
 
 use crate::{verso::send_to_constellation, webview::WebView, window::Window};
 
@@ -13,68 +13,66 @@ use crate::{verso::send_to_constellation, webview::WebView, window::Window};
 enum PromptType {
     /// Alert
     Alert(String),
-    /// Message + OK button
-    Confirm,
-    /// Input included
-    Prompt,
+    /// Confirm, Cancel / Ok
+    OkCancel(String),
+    /// Confirm, No, Yes
+    YesNo(String),
+    /// TODO: Input included
+    _Input,
 }
 
 /// Prompt Dialog
-#[derive(Debug, Clone)]
+#[derive(Clone)]
 pub struct PromptDialog {
     webview: WebView,
-}
-
-/// PromptDialogAttributes
-#[derive(Debug, Clone)]
-pub struct PromptDialogAttributes {
-    size: DeviceIntSize,
-    position: DeviceIntPoint,
-}
-
-/// Prompt Dialog Builder
-#[derive(Debug, Clone)]
-pub struct PromptDialogBuilder {
-    attributes: PromptDialogAttributes,
-}
-
-impl PromptDialogBuilder {
-    /// new builder
-    pub fn new() -> Self {
-        Self {
-            attributes: PromptDialogAttributes {
-                size: DeviceIntSize::zero(),
-                position: DeviceIntPoint::zero(),
-            },
-        }
-    }
-
-    /// build prompt
-    pub fn build(&self) -> PromptDialog {
-        let rect =
-            DeviceIntRect::from_origin_and_size(self.attributes.position, self.attributes.size);
-
-        PromptDialog {
-            webview: WebView::new(WebViewId::new(), rect),
-        }
-    }
-
-    /// set prompt width and height
-    pub fn with_size(mut self, size: DeviceIntSize) -> Self {
-        self.attributes.size = size;
-        self
-    }
+    prompt_sender: Option<IpcSender<PromptResult>>,
 }
 
 impl PromptDialog {
+    /// new prompt dialog
+    pub fn new() -> Self {
+        PromptDialog {
+            webview: WebView::new(WebViewId::new(), DeviceIntRect::zero()),
+            prompt_sender: None,
+        }
+    }
     /// get prompt webview
     pub fn webview(&self) -> &WebView {
         &self.webview
     }
 
+    /// get prompt sender
+    pub fn sender(&self) -> Option<IpcSender<PromptResult>> {
+        self.prompt_sender.clone()
+    }
+
     /// show alert dialog on a window
     pub fn alert(&mut self, sender: &Sender<ConstellationMsg>, window: &mut Window, message: &str) {
-        self.show(sender, window, PromptType::Alert(message.to_string()), None);
+        self.show(sender, window, PromptType::Alert(message.to_string()));
+    }
+
+    /// show alert dialog on a window
+    pub fn ok_cancel(
+        &mut self,
+        sender: &Sender<ConstellationMsg>,
+        window: &mut Window,
+        message: &str,
+        prompt_sender: IpcSender<PromptResult>,
+    ) {
+        self.prompt_sender = Some(prompt_sender);
+        self.show(sender, window, PromptType::OkCancel(message.to_string()));
+    }
+
+    /// show alert dialog on a window
+    pub fn yes_no(
+        &mut self,
+        sender: &Sender<ConstellationMsg>,
+        window: &mut Window,
+        message: &str,
+        prompt_sender: IpcSender<PromptResult>,
+    ) {
+        self.prompt_sender = Some(prompt_sender);
+        self.show(sender, window, PromptType::YesNo(message.to_string()));
     }
 
     /// show prompt dialog on a window
@@ -83,14 +81,8 @@ impl PromptDialog {
         sender: &Sender<ConstellationMsg>,
         window: &mut Window,
         prompt_type: PromptType,
-        _position: Option<PhysicalPosition<f64>>,
     ) {
-        let scale_factor = window.scale_factor();
-        // self.set_position(window, position, scale_factor);
-        let x = PromptDialog::calc_dialog_start_x(window, (500.0 * scale_factor) as i32);
-        let origin = DeviceIntPoint::new(x, (72.0 * scale_factor) as i32);
-        let size = Size2D::new((500.0 * scale_factor) as i32, (150.0 * scale_factor) as i32);
-        let rect = DeviceIntRect::from_origin_and_size(origin, size);
+        let rect = window.webview.as_ref().unwrap().rect.clone();
         self.webview.set_size(rect);
 
         send_to_constellation(
@@ -106,13 +98,16 @@ impl PromptDialog {
                 // TODO: sanitize message
                 format!("verso://alert.html?msg={msg}")
             }
+            PromptType::OkCancel(msg) => {
+                // TODO: sanitize message
+                format!("verso://ok_cancel.html?msg={msg}")
+            }
+            PromptType::YesNo(msg) => {
+                // TODO: sanitize message
+                format!("verso://ok_cancel.html?msg={msg}")
+            }
             _ => format!("verso://alert.html"),
         };
         ServoUrl::parse(&url).unwrap()
-    }
-
-    fn calc_dialog_start_x(verso_window: &Window, logical_width: i32) -> i32 {
-        let size = verso_window.window.inner_size();
-        std::cmp::max(0, (size.width as i32 - logical_width) / 2)
     }
 }

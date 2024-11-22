@@ -2,7 +2,7 @@ use arboard::Clipboard;
 use base::id::{BrowsingContextId, WebViewId};
 use compositing_traits::ConstellationMsg;
 use crossbeam_channel::Sender;
-use embedder_traits::{CompositorEventVariant, EmbedderMsg, PromptDefinition};
+use embedder_traits::{CompositorEventVariant, EmbedderMsg, PromptDefinition, PromptResult};
 use ipc_channel::ipc;
 use script_traits::{
     webdriver_msg::{WebDriverJSResult, WebDriverScriptCommand},
@@ -13,8 +13,8 @@ use url::Url;
 use webrender_api::units::DeviceIntRect;
 
 use crate::{
-    components::prompt::PromptDialogBuilder, compositor::IOCompositor,
-    verso::send_to_constellation, window::Window,
+    components::prompt::PromptDialog, compositor::IOCompositor, verso::send_to_constellation,
+    window::Window,
 };
 
 #[cfg(linux)]
@@ -150,10 +150,27 @@ impl Window {
             }
             EmbedderMsg::Prompt(prompt, _origin) => match prompt {
                 PromptDefinition::Alert(msg, prompt_sender) => {
-                    let mut prompt = PromptDialogBuilder::new().build();
+                    let mut prompt = PromptDialog::new();
                     prompt.alert(sender, self, &msg);
-
                     let _ = prompt_sender.send(());
+                }
+                PromptDefinition::OkCancel(msg, prompt_sender) => {
+                    let mut prompt = PromptDialog::new();
+                    prompt.ok_cancel(sender, self, &msg, prompt_sender);
+                    dbg!(msg);
+
+                    // save prompt in window to keep prompt_sender alive
+                    // so that we can send the result back to the prompt after user clicked the button
+                    self.prompt = Some(prompt);
+                }
+                PromptDefinition::YesNo(msg, prompt_sender) => {
+                    let mut prompt = PromptDialog::new();
+                    prompt.yes_no(sender, self, &msg, prompt_sender);
+                    dbg!(msg);
+
+                    // save prompt in window to keep prompt_sender alive
+                    // so that we can send the result back to the prompt after user clicked the button
+                    self.prompt = Some(prompt);
                 }
                 _ => {
                     log::trace!("Verso WebView isn't supporting this prompt yet")
@@ -335,6 +352,43 @@ impl Window {
             },
             e => {
                 log::trace!("Verso Panel isn't supporting this message yet: {e:?}")
+            }
+        }
+        false
+    }
+
+    /// Handle servo messages with prompt. Return true it requests a new window.
+    pub fn handle_servo_messages_with_prompt(
+        &mut self,
+        webview_id: WebViewId,
+        message: EmbedderMsg,
+        _sender: &Sender<ConstellationMsg>,
+        _clipboard: Option<&mut Clipboard>,
+        _compositor: &mut IOCompositor,
+    ) -> bool {
+        log::trace!("Verso Prompt {webview_id:?} is handling Embedder message: {message:?}",);
+        match message {
+            EmbedderMsg::Prompt(prompt, _origin) => match prompt {
+                PromptDefinition::Alert(msg, ignored_prompt_sender) => {
+                    let prompt = self.prompt.take().unwrap();
+                    let prompt_sender = prompt.sender().unwrap();
+                    let result: PromptResult = match msg.as_str() {
+                        "ok" | "yes" => PromptResult::Primary,
+                        "cancel" | "no" => PromptResult::Secondary,
+                        _ => {
+                            log::error!("prompt result message invalid: {msg}");
+                            PromptResult::Dismissed
+                        }
+                    };
+                    let _ = prompt_sender.send(result);
+                    let _ = ignored_prompt_sender.send(());
+                }
+                _ => {
+                    log::trace!("Verso WebView isn't supporting this prompt yet")
+                }
+            },
+            e => {
+                log::trace!("Verso Dialog isn't supporting this message yet: {e:?}")
             }
         }
         false
