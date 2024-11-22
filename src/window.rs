@@ -62,10 +62,10 @@ pub struct Window {
     current_history_index: usize,
     /// State to indicate if the window is resizing.
     pub(crate) resizing: bool,
+    // TODO: These two fields should unified once we figure out servo's menu events.
     /// Linux context_menu
     #[cfg(linux)]
     pub(crate) context_menu: Option<ContextMenu>,
-
     /// Global menu event receiver for muda crate
     #[cfg(any(target_os = "macos", target_os = "windows"))]
     menu_event_receiver: MenuEventReceiver,
@@ -290,38 +290,33 @@ impl Window {
                 /* handle context menu */
                 // TODO(context-menu): should create on ShowContextMenu event
 
-                #[cfg(linux)]
-                {
-                    match (state, button) {
-                        (ElementState::Pressed, winit::event::MouseButton::Right) => {
-                            if self.context_menu.is_none() {
-                                self.context_menu = Some(self.show_context_menu(sender));
-                                return;
-                            }
-                        }
-                        (ElementState::Released, winit::event::MouseButton::Right) => {
-                            if self.context_menu.is_some() {
-                                return;
-                            }
-                        }
-                        _ => {}
-                    }
-                    // TODO(context-menu): ignore first release event after context menu open or close to prevent click on background element
-                }
-
-                #[cfg(any(target_os = "macos", target_os = "windows"))]
-                if *button == winit::event::MouseButton::Right && *state == ElementState::Pressed {
-                    {
+                match (state, button) {
+                    #[cfg(any(target_os = "macos", target_os = "windows"))]
+                    (ElementState::Pressed, winit::event::MouseButton::Right) => {
                         self.show_context_menu();
                         // FIXME: there's chance to lose the event since the channel is async.
                         if let Ok(event) = self.menu_event_receiver.try_recv() {
                             self.handle_context_menu_event(sender, event);
                         }
                     }
+                    #[cfg(linux)]
+                    (ElementState::Pressed, winit::event::MouseButton::Right) => {
+                        if self.context_menu.is_none() {
+                            self.context_menu = Some(self.show_context_menu(sender));
+                            return;
+                        }
+                    }
+                    #[cfg(linux)]
+                    // TODO(context-menu): ignore first release event after context menu open or close to prevent click on background element
+                    (ElementState::Released, winit::event::MouseButton::Right) => {
+                        if self.context_menu.is_some() {
+                            return;
+                        }
+                    }
+                    _ => {}
                 }
 
                 /* handle Windows and Linux non-decoration window resize */
-
                 #[cfg(any(linux, target_os = "windows"))]
                 {
                     if *state == ElementState::Pressed && *button == winit::event::MouseButton::Left
@@ -603,7 +598,7 @@ impl Window {
     }
 }
 
-// Dummy Context Menu
+// Context Menu methods
 impl Window {
     #[cfg(any(target_os = "macos", target_os = "windows"))]
     pub(crate) fn show_context_menu(&self) {
@@ -624,6 +619,40 @@ impl Window {
 
         let context_menu = ContextMenu::new_with_menu(Menu(menu));
         context_menu.show(self.window.window_handle().unwrap());
+    }
+
+    #[cfg(linux)]
+    pub(crate) fn show_context_menu(&mut self, sender: &Sender<ConstellationMsg>) -> ContextMenu {
+        use crate::context_menu::MenuItem;
+
+        let history_len = self.history.len();
+
+        // items
+        let back = MenuItem::new(Some("back"), "Back", self.current_history_index > 0);
+        let forward = MenuItem::new(
+            Some("forward"),
+            "Forward",
+            self.current_history_index + 1 < history_len,
+        );
+        let reload = MenuItem::new(Some("reload"), "Reload", true);
+
+        let mut context_menu = ContextMenu::new_with_menu(Menu(vec![back, forward, reload]));
+
+        let position = self.mouse_position.get().unwrap();
+        context_menu.show(sender, self, position);
+
+        context_menu
+    }
+
+    /// Close window's context menu
+    #[cfg(linux)]
+    pub(crate) fn close_context_menu(&self, sender: &Sender<ConstellationMsg>) {
+        if let Some(context_menu) = &self.context_menu {
+            send_to_constellation(
+                sender,
+                ConstellationMsg::CloseWebView(context_menu.webview().webview_id),
+            );
+        }
     }
 
     #[cfg(any(target_os = "macos", target_os = "windows"))]
@@ -658,40 +687,6 @@ impl Window {
         }
     }
 
-    #[cfg(linux)]
-    pub(crate) fn show_context_menu(&mut self, sender: &Sender<ConstellationMsg>) -> ContextMenu {
-        use crate::context_menu::MenuItem;
-
-        let history_len = self.history.len();
-
-        // items
-        let back = MenuItem::new(Some("back"), "Back", self.current_history_index > 0);
-        let forward = MenuItem::new(
-            Some("forward"),
-            "Forward",
-            self.current_history_index + 1 < history_len,
-        );
-        let reload = MenuItem::new(Some("reload"), "Reload", true);
-
-        let mut context_menu = ContextMenu::new_with_menu(Menu([back, forward, reload].to_vec()));
-
-        let position = self.mouse_position.get().unwrap();
-        context_menu.show(sender, self, position);
-
-        context_menu
-    }
-
-    /// Close window's context menu
-    #[cfg(linux)]
-    pub(crate) fn close_context_menu(&self, sender: &Sender<ConstellationMsg>) {
-        if let Some(context_menu) = &self.context_menu {
-            send_to_constellation(
-                sender,
-                ConstellationMsg::CloseWebView(context_menu.webview().webview_id),
-            );
-        }
-    }
-
     /// Handle linux context menu event
     // TODO(context-menu): should make the call in synchronous way after calling show_context_menu, otherwise
     // we'll have to deal with constellation sender and other parameter's lifetime, also we lose the context that why this context menu popup
@@ -699,13 +694,9 @@ impl Window {
     pub(crate) fn handle_context_menu_event(
         &mut self,
         sender: &Sender<ConstellationMsg>,
-        event: crate::context_menu::ContextMenuClickResult,
+        event: crate::context_menu::ContextMenuResult,
     ) {
-        // FIXME: (context-menu) find the reason that close after doing action (traverse history) will hang the window
-        // Close context menu somehow must put before other actions, or it will hang the window
-        if event.close {
-            self.close_context_menu(sender);
-        }
+        self.close_context_menu(sender);
         match event.id.as_str() {
             "back" => {
                 send_to_constellation(

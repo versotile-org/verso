@@ -15,7 +15,7 @@ use webrender_api::units::DeviceIntRect;
 use crate::{compositor::IOCompositor, verso::send_to_constellation, window::Window};
 
 #[cfg(linux)]
-use crate::context_menu::ContextMenuClickResult;
+use crate::context_menu::ContextMenuResult;
 
 /// A web view is an area to display web browsing context. It's what user will treat as a "web page".
 #[derive(Debug, Clone)]
@@ -314,7 +314,7 @@ impl Window {
                     if msg.starts_with("CONTEXT_MENU:") {
                         let json_str_msg = msg.strip_prefix("CONTEXT_MENU:").unwrap();
                         let result =
-                            serde_json::from_str::<ContextMenuClickResult>(json_str_msg).unwrap();
+                            serde_json::from_str::<ContextMenuResult>(json_str_msg).unwrap();
 
                         self.handle_context_menu_event(sender, result);
                     }

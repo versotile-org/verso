@@ -24,20 +24,38 @@ use webrender_api::units::DeviceIntRect;
 #[cfg(linux)]
 use winit::dpi::PhysicalPosition;
 
-/// Context Menu inner menu
+/// Basic menu type building block
 #[cfg(any(target_os = "macos", target_os = "windows"))]
 pub struct Menu(pub MudaMenu);
-/// Context Menu inner menu
+/// Basic menu type building block
 #[cfg(linux)]
 #[derive(Debug, Clone)]
 pub struct Menu(pub Vec<MenuItem>);
+
+/// The Context Menu of the Window. It will be opened when users right click on any window's
+/// webview.
+///
+/// **Platform Specific**
+/// - macOS / Windows: This will be native context menu supported by each OS.
+/// - Wayland: Winit doesn't support popup surface of Wayland at the moment. So we utilize a custom
+/// webview implementation.
+#[derive(Debug, Clone)]
+pub struct ContextMenu {
+    #[cfg(any(target_os = "macos", target_os = "windows"))]
+    menu: MudaMenu,
+    #[cfg(linux)]
+    menu_items: Vec<MenuItem>,
+    /// The webview that the context menu is attached to
+    #[cfg(linux)]
+    webview: WebView,
+}
 
 impl ContextMenu {
     /// Create context menu with custom items
     ///
     /// **Platform Specific**
     /// - macOS / Windows: Creates a context menu by muda crate with natvie OS support
-    /// - Linux: Creates a context menu with webview implementation
+    /// - Wayland: Creates a context menu with webview implementation
     pub fn new_with_menu(menu: Menu) -> Self {
         #[cfg(any(target_os = "macos", target_os = "windows"))]
         {
@@ -54,12 +72,6 @@ impl ContextMenu {
             }
         }
     }
-}
-
-/// Context Menu
-#[cfg(any(target_os = "macos", target_os = "windows"))]
-pub struct ContextMenu {
-    menu: MudaMenu,
 }
 
 #[cfg(any(target_os = "macos", target_os = "windows"))]
@@ -91,15 +103,6 @@ impl ContextMenu {
             }
         }
     }
-}
-
-/// Context Menu
-#[cfg(linux)]
-#[derive(Debug, Clone)]
-pub struct ContextMenu {
-    menu_items: Vec<MenuItem>,
-    /// The webview that the context menu is attached to
-    webview: WebView,
 }
 
 #[cfg(linux)]
@@ -218,7 +221,7 @@ impl MenuItem {
 /// Context Menu Click Result
 #[cfg(linux)]
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct ContextMenuClickResult {
+pub struct ContextMenuResult {
     /// The id of the menu ite    /// Get the label of the menu item
     pub id: String,
     /// Close the context menu
