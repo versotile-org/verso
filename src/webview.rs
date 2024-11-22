@@ -13,7 +13,9 @@ use url::Url;
 use webrender_api::units::DeviceIntRect;
 
 use crate::{
-    components::prompt::PromptDialog, compositor::IOCompositor, verso::send_to_constellation,
+    components::prompt::{InputPromptResult, PromptDialog, PromptSender},
+    compositor::IOCompositor,
+    verso::send_to_constellation,
     window::Window,
 };
 
@@ -149,31 +151,34 @@ impl Window {
                 // TODO: Implement context menu
             }
             EmbedderMsg::Prompt(prompt, _origin) => match prompt {
-                PromptDefinition::Alert(msg, prompt_sender) => {
+                PromptDefinition::Alert(message, prompt_sender) => {
                     let mut prompt = PromptDialog::new();
-                    prompt.alert(sender, self, &msg);
+                    prompt.alert(sender, self, message);
                     let _ = prompt_sender.send(());
                 }
-                PromptDefinition::OkCancel(msg, prompt_sender) => {
+                PromptDefinition::OkCancel(message, prompt_sender) => {
                     let mut prompt = PromptDialog::new();
-                    prompt.ok_cancel(sender, self, &msg, prompt_sender);
-                    dbg!(msg);
+                    prompt.ok_cancel(sender, self, message, prompt_sender);
 
                     // save prompt in window to keep prompt_sender alive
                     // so that we can send the result back to the prompt after user clicked the button
                     self.prompt = Some(prompt);
                 }
-                PromptDefinition::YesNo(msg, prompt_sender) => {
+                PromptDefinition::YesNo(message, prompt_sender) => {
                     let mut prompt = PromptDialog::new();
-                    prompt.yes_no(sender, self, &msg, prompt_sender);
-                    dbg!(msg);
+                    prompt.yes_no(sender, self, message, prompt_sender);
 
                     // save prompt in window to keep prompt_sender alive
                     // so that we can send the result back to the prompt after user clicked the button
                     self.prompt = Some(prompt);
                 }
-                _ => {
-                    log::trace!("Verso WebView isn't supporting this prompt yet")
+                PromptDefinition::Input(message, default_value, prompt_sender) => {
+                    let mut prompt = PromptDialog::new();
+                    prompt.input(sender, self, message, Some(default_value), prompt_sender);
+
+                    // save prompt in window to keep prompt_sender alive
+                    // so that we can send the result back to the prompt after user clicked the button
+                    self.prompt = Some(prompt);
                 }
             },
             e => {
@@ -372,15 +377,36 @@ impl Window {
                 PromptDefinition::Alert(msg, ignored_prompt_sender) => {
                     let prompt = self.prompt.take().unwrap();
                     let prompt_sender = prompt.sender().unwrap();
-                    let result: PromptResult = match msg.as_str() {
-                        "ok" | "yes" => PromptResult::Primary,
-                        "cancel" | "no" => PromptResult::Secondary,
-                        _ => {
-                            log::error!("prompt result message invalid: {msg}");
-                            PromptResult::Dismissed
+
+                    match prompt_sender {
+                        PromptSender::ConfirmSender(sender) => {
+                            let result: PromptResult = match msg.as_str() {
+                                "ok" | "yes" => PromptResult::Primary,
+                                "cancel" | "no" => PromptResult::Secondary,
+                                _ => {
+                                    log::error!("prompt result message invalid: {msg}");
+                                    PromptResult::Dismissed
+                                }
+                            };
+                            let _ = sender.send(result);
                         }
-                    };
-                    let _ = prompt_sender.send(result);
+                        PromptSender::InputSender(sender) => {
+                            let result = serde_json::from_str::<InputPromptResult>(&msg).unwrap();
+                            match result.action.as_str() {
+                                "ok" => {
+                                    let _ = sender.send(Some(result.value));
+                                }
+                                "cancel" => {
+                                    let _ = sender.send(None);
+                                }
+                                _ => {
+                                    log::error!("prompt result message invalid: {msg}");
+                                    let _ = sender.send(None);
+                                }
+                            }
+                        }
+                    }
+
                     let _ = ignored_prompt_sender.send(());
                 }
                 _ => {

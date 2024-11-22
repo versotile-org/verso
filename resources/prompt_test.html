@@ -1,2 +1,30 @@
-<button onclick="window.alert('Alert Prompt');">alert</button>
-<button onclick="console.log(window.confirm('Confirm Prompt'));">confirm</button>
+<html>
+  <body>
+    <div style="display: block">
+      <button onclick="window.alert('Alert Prompt');">alert</button>
+      <button onclick="sendConfirm('Confirm Prompt');">confirm</button>
+      <button onclick="sendPrompt('Input Prompt:');">prompt</button>
+      <button onclick="sendPrompt('Input Prompt:', 'vvvvv');">
+        prompt with default value
+      </button>
+    </div>
+
+    <div style="display: inline-block" id="result"></div>
+
+    <script>
+      const resultEl = document.getElementById('result');
+
+      function sendConfirm(text) {
+        let result = window.confirm(text);
+        console.log(result);
+        resultEl.textContent = JSON.stringify(result);
+      }
+
+      function sendPrompt(text, defaultValue) {
+        let result = window.prompt(text, defaultValue);
+        console.log(result);
+        resultEl.textContent = JSON.stringify(result);
+      }
+    </script>
+  </body>
+</html>

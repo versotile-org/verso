@@ -1,0 +1,78 @@
+<html>
+  <head>
+    <style>
+      body {
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        width: 100%;
+        height: 100%;
+        background-color: #7d818644;
+        font-family: Arial, Helvetica, sans-serif;
+      }
+      .alert {
+        display: flex;
+        background: #ffffff;
+        width: 400px;
+        min-height: 110px;
+        max-height: 300px;
+        flex-direction: column;
+        align-items: center;
+        border-radius: 10px;
+        box-shadow: 0 0 50px #ccc;
+      }
+      .msg {
+        display: inline-block;
+        box-sizing: border-box;
+        width: 100%;
+        min-height: 90px;
+        padding: 5px;
+        text-align: center;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="alert">
+      <div id="msg" class="msg"></div>
+      <input type="text" id="input" />
+      <div class="btn-group">
+        <button onclick="sendAndClose('cancel')">Cancel</button>
+        <button onclick="sendAndClose('ok')">Ok</button>
+      </div>
+    </div>
+  </body>
+  <script>
+    const msgEl = document.getElementById('msg');
+    const inputEl = document.getElementById('input');
+
+    let url = URL.parse(window.location.href);
+    let params = url.searchParams;
+    msgEl.textContent = params.get('msg'); // beaware of XSS attacks
+
+    const defaultValue = params.get('defaultValue');
+    console.log(`default value: ${defaultValue}`);
+    if (defaultValue !== null && defaultValue !== void 0) {
+      inputEl.defaultValue = defaultValue;
+    }
+
+    function sendAndClose(action) {
+      console.log(`value: ${inputEl.value}`);
+      let result = {
+        action,
+        value: inputEl.value,
+      };
+      console.log(JSON.stringify(result));
+      window.alert(JSON.stringify(result));
+      window.close();
+    }
+
+    // function escapeHtml(input) {
+    //   return input
+    //     .replace(/&/g, '&amp;')
+    //     .replace(/</g, '&lt;')
+    //     .replace(/>/g, '&gt;')
+    //     .replace(/"/g, '&quot;')
+    //     .replace(/'/g, '&#39;');
+    // };
+  </script>
+</html>

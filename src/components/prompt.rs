@@ -3,6 +3,7 @@ use compositing_traits::ConstellationMsg;
 use crossbeam_channel::Sender;
 use embedder_traits::PromptResult;
 use ipc_channel::ipc::IpcSender;
+use serde::{Deserialize, Serialize};
 use servo_url::ServoUrl;
 use webrender_api::units::DeviceIntRect;
 
@@ -17,15 +18,33 @@ enum PromptType {
     OkCancel(String),
     /// Confirm, No, Yes
     YesNo(String),
-    /// TODO: Input included
-    _Input,
+    /// Input, message and default value
+    Input(String, Option<String>),
+}
+
+/// Prompt Sender, used to send prompt result back to the caller
+#[derive(Clone)]
+pub enum PromptSender {
+    /// Ok/Cancel, Yes/No sender
+    ConfirmSender(IpcSender<PromptResult>),
+    /// Input sender
+    InputSender(IpcSender<Option<String>>),
+}
+
+/// Input prompt result from prompt dialog
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct InputPromptResult {
+    /// User action: ok / cancel
+    pub action: String,
+    /// User input value
+    pub value: String,
 }
 
 /// Prompt Dialog
 #[derive(Clone)]
 pub struct PromptDialog {
     webview: WebView,
-    prompt_sender: Option<IpcSender<PromptResult>>,
+    prompt_sender: Option<PromptSender>,
 }
 
 impl PromptDialog {
@@ -42,13 +61,18 @@ impl PromptDialog {
     }
 
     /// get prompt sender
-    pub fn sender(&self) -> Option<IpcSender<PromptResult>> {
+    pub fn sender(&self) -> Option<PromptSender> {
         self.prompt_sender.clone()
     }
 
     /// show alert dialog on a window
-    pub fn alert(&mut self, sender: &Sender<ConstellationMsg>, window: &mut Window, message: &str) {
-        self.show(sender, window, PromptType::Alert(message.to_string()));
+    pub fn alert(
+        &mut self,
+        sender: &Sender<ConstellationMsg>,
+        window: &mut Window,
+        message: String,
+    ) {
+        self.show(sender, window, PromptType::Alert(message));
     }
 
     /// show alert dialog on a window
@@ -56,11 +80,11 @@ impl PromptDialog {
         &mut self,
         sender: &Sender<ConstellationMsg>,
         window: &mut Window,
-        message: &str,
+        message: String,
         prompt_sender: IpcSender<PromptResult>,
     ) {
-        self.prompt_sender = Some(prompt_sender);
-        self.show(sender, window, PromptType::OkCancel(message.to_string()));
+        self.prompt_sender = Some(PromptSender::ConfirmSender(prompt_sender));
+        self.show(sender, window, PromptType::OkCancel(message));
     }
 
     /// show alert dialog on a window
@@ -68,11 +92,24 @@ impl PromptDialog {
         &mut self,
         sender: &Sender<ConstellationMsg>,
         window: &mut Window,
-        message: &str,
+        message: String,
         prompt_sender: IpcSender<PromptResult>,
     ) {
-        self.prompt_sender = Some(prompt_sender);
-        self.show(sender, window, PromptType::YesNo(message.to_string()));
+        self.prompt_sender = Some(PromptSender::ConfirmSender(prompt_sender));
+        self.show(sender, window, PromptType::YesNo(message));
+    }
+
+    /// show alert dialog on a window
+    pub fn input(
+        &mut self,
+        sender: &Sender<ConstellationMsg>,
+        window: &mut Window,
+        message: String,
+        default_value: Option<String>,
+        prompt_sender: IpcSender<Option<String>>,
+    ) {
+        self.prompt_sender = Some(PromptSender::InputSender(prompt_sender));
+        self.show(sender, window, PromptType::Input(message, default_value));
     }
 
     /// show prompt dialog on a window
@@ -106,7 +143,14 @@ impl PromptDialog {
                 // TODO: sanitize message
                 format!("verso://ok_cancel.html?msg={msg}")
             }
-            _ => format!("verso://alert.html"),
+            PromptType::Input(msg, default_value) => {
+                // TODO: sanitize message
+                let mut url = format!("verso://prompt.html?msg={msg}");
+                if let Some(default_value) = default_value {
+                    url.push_str(&format!("&defaultValue={}", default_value));
+                }
+                url
+            }
         };
         ServoUrl::parse(&url).unwrap()
     }

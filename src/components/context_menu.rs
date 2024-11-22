@@ -219,7 +219,7 @@ impl MenuItem {
 #[cfg(linux)]
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ContextMenuClickResult {
-    /// The id of the menu ite    /// Get the label of the menu item
+    /// The id of the menu item
     pub id: String,
     /// Close the context menu
     pub close: bool,
