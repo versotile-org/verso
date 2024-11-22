@@ -63,7 +63,7 @@ pub struct Window {
     /// State to indicate if the window is resizing.
     pub(crate) resizing: bool,
     // TODO: These two fields should unified once we figure out servo's menu events.
-    /// Linux context_menu
+    /// Context menu webview. This is only used in wayland currently.
     #[cfg(linux)]
     pub(crate) context_menu: Option<ContextMenu>,
     /// Global menu event receiver for muda crate
@@ -645,11 +645,11 @@ impl Window {
     }
 
     /// Close window's context menu
-    #[cfg(linux)]
-    pub(crate) fn close_context_menu(&self, sender: &Sender<ConstellationMsg>) {
+    pub(crate) fn close_context_menu(&self, _sender: &Sender<ConstellationMsg>) {
+        #[cfg(linux)]
         if let Some(context_menu) = &self.context_menu {
             send_to_constellation(
-                sender,
+                _sender,
                 ConstellationMsg::CloseWebView(context_menu.webview().webview_id),
             );
         }

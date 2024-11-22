@@ -39,7 +39,7 @@ pub struct Menu(pub Vec<MenuItem>);
 /// - macOS / Windows: This will be native context menu supported by each OS.
 /// - Wayland: Winit doesn't support popup surface of Wayland at the moment. So we utilize a custom
 /// webview implementation.
-#[derive(Debug, Clone)]
+#[derive(Clone)]
 pub struct ContextMenu {
     #[cfg(any(target_os = "macos", target_os = "windows"))]
     menu: MudaMenu,
