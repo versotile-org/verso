@@ -1333,8 +1333,7 @@ impl IOCompositor {
         }
     }
 
-    /// TODO: doc
-    pub fn hit_test_at_point(&self, point: DevicePoint) -> Option<CompositorHitTestResult> {
+    fn hit_test_at_point(&self, point: DevicePoint) -> Option<CompositorHitTestResult> {
         return self
             .hit_test_at_point_with_flags_and_pipeline(point, HitTestFlags::empty(), None)
             .first()
@@ -2162,24 +2161,6 @@ impl IOCompositor {
         transaction.add_raw_font(font_key, (**data).into(), index);
         self.webrender_api
             .send_transaction(self.webrender_document, transaction);
-    }
-
-    /// Get webview id on the position
-    pub fn webview_id_on_position(
-        &self,
-        position: DevicePoint,
-    ) -> Option<TopLevelBrowsingContextId> {
-        let hit_result: Option<CompositorHitTestResult> = self.hit_test_at_point(position);
-        if let Some(result) = hit_result {
-            let pipeline_id = result.pipeline_id;
-            for (w_id, p_id) in &self.webviews {
-                if *p_id == pipeline_id {
-                    return Some(*w_id);
-                }
-            }
-        }
-
-        None
     }
 }
 

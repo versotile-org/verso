@@ -76,6 +76,7 @@ impl Window {
                 log::trace!("Verso WebView {webview_id:?} ignores this message: {message:?}")
             }
             EmbedderMsg::WebViewFocused(w) => {
+                self.close_context_menu(sender);
                 log::debug!(
                     "Verso Window {:?}'s webview {} has loaded completely.",
                     self.id(),
@@ -170,6 +171,7 @@ impl Window {
                 log::trace!("Verso Panel ignores this message: {message:?}")
             }
             EmbedderMsg::WebViewFocused(w) => {
+                self.close_context_menu(sender);
                 log::debug!(
                     "Verso Window {:?}'s panel {} has loaded completely.",
                     self.id(),
@@ -317,10 +319,10 @@ impl Window {
                         self.handle_context_menu_event(sender, result);
                     }
                 }
-                _ => log::trace!("Verso Panel isn't supporting this prompt yet"),
+                _ => log::trace!("Verso context menu isn't supporting this prompt yet"),
             },
             e => {
-                log::trace!("Verso Panel isn't supporting this message yet: {e:?}")
+                log::trace!("Verso context menu isn't supporting this message yet: {e:?}")
             }
         }
         false

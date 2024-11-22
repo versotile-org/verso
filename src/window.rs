@@ -292,37 +292,19 @@ impl Window {
 
                 #[cfg(linux)]
                 {
-                    let is_click_on_context_menu =
-                        self.is_position_on_context_menu(compositor, position);
-
-                    if !is_click_on_context_menu {
-                        if *state == ElementState::Pressed {
-                            match *button {
-                                winit::event::MouseButton::Left => {
-                                    if self.close_context_menu(sender) {
-                                        // return here to bypass following mouse event for underlying element
-                                        return;
-                                    }
-                                }
-                                winit::event::MouseButton::Right => {
-                                    // Close old context menu
-                                    self.close_context_menu(sender);
-                                    // Create new context menu
-                                    self.context_menu = Some(self.show_context_menu(sender));
-                                    return;
-                                }
-                                _ => {}
-                            }
-                        } else if *state == ElementState::Released {
-                            match *button {
-                                winit::event::MouseButton::Right => {
-                                    if self.context_menu.is_some() {
-                                        return;
-                                    }
-                                }
-                                _ => {}
+                    match (state, button) {
+                        (ElementState::Pressed, winit::event::MouseButton::Right) => {
+                            if self.context_menu.is_none() {
+                                self.context_menu = Some(self.show_context_menu(sender));
+                                return;
                             }
                         }
+                        (ElementState::Released, winit::event::MouseButton::Right) => {
+                            if self.context_menu.is_some() {
+                                return;
+                            }
+                        }
+                        _ => {}
                     }
                     // TODO(context-menu): ignore first release event after context menu open or close to prevent click on background element
                 }
@@ -699,40 +681,15 @@ impl Window {
         context_menu
     }
 
-    /// Close the context menu
-    ///
-    /// If context menu exists, return true.
+    /// Close window's context menu
     #[cfg(linux)]
-    pub(crate) fn close_context_menu(&self, sender: &Sender<ConstellationMsg>) -> bool {
+    pub(crate) fn close_context_menu(&self, sender: &Sender<ConstellationMsg>) {
         if let Some(context_menu) = &self.context_menu {
             send_to_constellation(
                 sender,
                 ConstellationMsg::CloseWebView(context_menu.webview().webview_id),
             );
-            return true;
         }
-        false
-    }
-
-    #[cfg(linux)]
-    fn is_position_on_context_menu(
-        &self,
-        compositor: &mut IOCompositor,
-        position: DevicePoint,
-    ) -> bool {
-        if let Some(webview_id) = compositor.webview_id_on_position(position) {
-            return self
-                .context_menu
-                .as_ref()
-                .and_then(|context_menu| {
-                    if context_menu.webview().webview_id == webview_id {
-                        return Some(true);
-                    }
-                    None
-                })
-                .unwrap_or(false);
-        }
-        false
     }
 
     /// Handle linux context menu event
