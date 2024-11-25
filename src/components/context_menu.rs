@@ -128,7 +128,10 @@ impl ContextMenu {
     /// Get resource URL of the context menu
     fn resource_url(&self) -> ServoUrl {
         let items_json: String = self.to_items_json();
-        let url_str = format!("verso://context_menu.html?items={}", items_json);
+        let url_str = format!(
+            "verso://resources/components/context_menu.html?items={}",
+            items_json
+        );
         ServoUrl::parse(&url_str).unwrap()
     }
 

@@ -314,7 +314,9 @@ impl ProtocolHandler for ResourceReader {
         _done_chan: &mut net::fetch::methods::DoneChannel,
         _context: &net::fetch::methods::FetchContext,
     ) -> std::pin::Pin<Box<dyn std::future::Future<Output = Response> + Send>> {
-        let path = self.0.join(request.current_url().domain().unwrap());
+        let current_url = request.current_url();
+        let path = current_url.path();
+        let path = self.0.join(path.strip_prefix('/').unwrap_or(path));
 
         let response = if let Ok(file) = fs::read(path) {
             let mut response = Response::new(

@@ -210,11 +210,11 @@ impl Window {
             initial_url: if let Some(initial_url) = initial_url {
                 ServoUrl::from_url(initial_url)
             } else {
-                ServoUrl::parse("verso://prompt_test.html").unwrap()
+                ServoUrl::parse("verso://resources/components/prompt_test.html").unwrap()
             },
         });
 
-        let url = ServoUrl::parse("verso://panel.html").unwrap();
+        let url = ServoUrl::parse("verso://resources/components/panel.html").unwrap();
         send_to_constellation(
             constellation_sender,
             ConstellationMsg::NewWebView(url, panel_id),
