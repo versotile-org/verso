@@ -7,4 +7,4 @@ libmozjs*
 cargo-sources.json
 
 resources/
-!resources/components
+!resources/components/

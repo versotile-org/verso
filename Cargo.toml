@@ -106,7 +106,7 @@ cargo-packager-resource-resolver = { version = "0.1.1", features = [
 url = { workspace = true }
 headers = "0.3"
 versoview_messages = { path = "./versoview_messages" }
-serde_json = "1.0.132"
+serde_json = "1.0"
 serde = { workspace = true }
 
 [target.'cfg(any(target_os = "macos", target_os = "windows"))'.dependencies]

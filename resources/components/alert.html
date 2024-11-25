@@ -34,7 +34,7 @@
   <body>
     <div class="alert">
       <div id="msg" class="msg"></div>
-      <button onclick="window.close()">Ok</button>
+      <button onclick="sendAndClose()">Ok</button>
     </div>
   </body>
   <script>
@@ -52,5 +52,10 @@
     //     .replace(/"/g, '&quot;')
     //     .replace(/'/g, '&#39;');
     // };
+
+    function sendAndClose() {
+      window.alert('');
+      window.close();
+    }
   </script>
 </html>

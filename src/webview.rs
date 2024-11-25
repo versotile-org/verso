@@ -20,7 +20,7 @@ use crate::{
 };
 
 #[cfg(linux)]
-use crate::components::context_menu::ContextMenuClickResult;
+use crate::components::context_menu::ContextMenuResult;
 
 /// A web view is an area to display web browsing context. It's what user will treat as a "web page".
 #[derive(Debug, Clone)]
@@ -81,6 +81,7 @@ impl Window {
                 log::trace!("Verso WebView {webview_id:?} ignores this message: {message:?}")
             }
             EmbedderMsg::WebViewFocused(w) => {
+                self.close_context_menu(sender);
                 log::debug!(
                     "Verso Window {:?}'s webview {} has loaded completely.",
                     self.id(),
@@ -153,8 +154,11 @@ impl Window {
             EmbedderMsg::Prompt(prompt, _origin) => match prompt {
                 PromptDefinition::Alert(message, prompt_sender) => {
                     let mut prompt = PromptDialog::new();
-                    prompt.alert(sender, self, message);
-                    let _ = prompt_sender.send(());
+                    prompt.alert(sender, self, message, prompt_sender);
+
+                    // save prompt in window to keep prompt_sender alive
+                    // so that we can send the result back to the prompt after user clicked the button
+                    self.prompt = Some(prompt);
                 }
                 PromptDefinition::OkCancel(message, prompt_sender) => {
                     let mut prompt = PromptDialog::new();
@@ -206,6 +210,7 @@ impl Window {
                 log::trace!("Verso Panel ignores this message: {message:?}")
             }
             EmbedderMsg::WebViewFocused(w) => {
+                self.close_context_menu(sender);
                 log::debug!(
                     "Verso Window {:?}'s panel {} has loaded completely.",
                     self.id(),
@@ -348,15 +353,15 @@ impl Window {
                     if msg.starts_with("CONTEXT_MENU:") {
                         let json_str_msg = msg.strip_prefix("CONTEXT_MENU:").unwrap();
                         let result =
-                            serde_json::from_str::<ContextMenuClickResult>(json_str_msg).unwrap();
+                            serde_json::from_str::<ContextMenuResult>(json_str_msg).unwrap();
 
                         self.handle_context_menu_event(sender, result);
                     }
                 }
-                _ => log::trace!("Verso Panel isn't supporting this prompt yet"),
+                _ => log::trace!("Verso context menu isn't supporting this prompt yet"),
             },
             e => {
-                log::trace!("Verso Panel isn't supporting this message yet: {e:?}")
+                log::trace!("Verso context menu isn't supporting this message yet: {e:?}")
             }
         }
         false
@@ -375,10 +380,13 @@ impl Window {
         match message {
             EmbedderMsg::Prompt(prompt, _origin) => match prompt {
                 PromptDefinition::Alert(msg, ignored_prompt_sender) => {
-                    let prompt = self.prompt.take().unwrap();
+                    let prompt = self.prompt.as_ref().unwrap();
                     let prompt_sender = prompt.sender().unwrap();
 
                     match prompt_sender {
+                        PromptSender::AlertSender(sender) => {
+                            let _ = sender.send(());
+                        }
                         PromptSender::ConfirmSender(sender) => {
                             let result: PromptResult = match msg.as_str() {
                                 "ok" | "yes" => PromptResult::Primary,
@@ -413,24 +421,6 @@ impl Window {
                     log::trace!("Verso WebView isn't supporting this prompt yet")
                 }
             },
-            e => {
-                log::trace!("Verso Dialog isn't supporting this message yet: {e:?}")
-            }
-        }
-        false
-    }
-
-    /// Handle servo messages with dialog. Return true it requests a new window.
-    pub fn handle_servo_messages_with_dialog(
-        &mut self,
-        webview_id: WebViewId,
-        message: EmbedderMsg,
-        _sender: &Sender<ConstellationMsg>,
-        _clipboard: Option<&mut Clipboard>,
-        _compositor: &mut IOCompositor,
-    ) -> bool {
-        log::trace!("Verso Dialog {webview_id:?} is handling Embedder message: {message:?}",);
-        match message {
             e => {
                 log::trace!("Verso Dialog isn't supporting this message yet: {e:?}")
             }

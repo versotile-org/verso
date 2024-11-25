@@ -25,6 +25,8 @@ enum PromptType {
 /// Prompt Sender, used to send prompt result back to the caller
 #[derive(Clone)]
 pub enum PromptSender {
+    /// Alert sender
+    AlertSender(IpcSender<()>),
     /// Ok/Cancel, Yes/No sender
     ConfirmSender(IpcSender<PromptResult>),
     /// Input sender
@@ -71,7 +73,9 @@ impl PromptDialog {
         sender: &Sender<ConstellationMsg>,
         window: &mut Window,
         message: String,
+        prompt_sender: IpcSender<()>,
     ) {
+        self.prompt_sender = Some(PromptSender::AlertSender(prompt_sender));
         self.show(sender, window, PromptType::Alert(message));
     }
 
@@ -126,7 +130,6 @@ impl PromptDialog {
             sender,
             ConstellationMsg::NewWebView(self.resource_url(prompt_type), self.webview.webview_id),
         );
-        window.append_dialog_webview(self.webview().clone());
     }
 
     fn resource_url(&self, prompt_type: PromptType) -> ServoUrl {
