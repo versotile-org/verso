@@ -136,19 +136,19 @@ impl PromptDialog {
         let url = match prompt_type {
             PromptType::Alert(msg) => {
                 // TODO: sanitize message
-                format!("verso://resources/components/alert.html?msg={msg}")
+                format!("verso://resources/components/prompt/alert.html?msg={msg}")
             }
             PromptType::OkCancel(msg) => {
                 // TODO: sanitize message
-                format!("verso://resources/components/ok_cancel.html?msg={msg}")
+                format!("verso://resources/components/prompt/ok_cancel.html?msg={msg}")
             }
             PromptType::YesNo(msg) => {
                 // TODO: sanitize message
-                format!("verso://resources/components/yes_no.html?msg={msg}")
+                format!("verso://resources/components/prompt/yes_no.html?msg={msg}")
             }
             PromptType::Input(msg, default_value) => {
                 // TODO: sanitize message
-                let mut url = format!("verso://resources/components/prompt.html?msg={msg}");
+                let mut url = format!("verso://resources/components/prompt/prompt.html?msg={msg}");
                 if let Some(default_value) = default_value {
                     url.push_str(&format!("&defaultValue={}", default_value));
                 }
