@@ -12,13 +12,21 @@ use crate::{verso::send_to_constellation, webview::WebView, window::Window};
 /// Prompt Type
 #[derive(Debug, Clone, Hash, PartialEq, Eq)]
 enum PromptType {
-    /// Alert
+    /// Alert dialog
+    ///
+    /// <https://developer.mozilla.org/en-US/docs/Web/API/Window/alert>
     Alert(String),
-    /// Confirm, Cancel / Ok
+    /// Confitm dialog, Ok/Cancel
+    ///
+    /// <https://developer.mozilla.org/en-US/docs/Web/API/Window/confirm>
     OkCancel(String),
-    /// Confirm, No, Yes
+    /// Confirm dialog, Yes/No
+    ///
+    /// <https://developer.mozilla.org/en-US/docs/Web/API/Window/confirm>
     YesNo(String),
-    /// Input, message and default value
+    /// Input dialog
+    ///
+    /// <https://developer.mozilla.org/en-US/docs/Web/API/Window/prompt>
     Input(String, Option<String>),
 }
 
@@ -33,10 +41,15 @@ pub enum PromptSender {
     InputSender(IpcSender<Option<String>>),
 }
 
-/// Input prompt result from prompt dialog
+/// Prompt input result send from prompt dialog to backend
+///
+/// - **Ok**: return string, or an empty string if user leave input empty
+/// - **Cancel**: return null
+///
+/// <https://developer.mozilla.org/en-US/docs/Web/API/Window/prompt#return_value>
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct InputPromptResult {
-    /// User action: ok / cancel
+pub struct PromptInputResult {
+    /// User action: "ok" / "cancel"
     pub action: String,
     /// User input value
     pub value: String,
@@ -71,59 +84,58 @@ impl PromptDialog {
     pub fn alert(
         &mut self,
         sender: &Sender<ConstellationMsg>,
-        window: &mut Window,
+        rect: DeviceIntRect,
         message: String,
         prompt_sender: IpcSender<()>,
     ) {
         self.prompt_sender = Some(PromptSender::AlertSender(prompt_sender));
-        self.show(sender, window, PromptType::Alert(message));
+        self.show(sender, rect, PromptType::Alert(message));
     }
 
     /// show alert dialog on a window
     pub fn ok_cancel(
         &mut self,
         sender: &Sender<ConstellationMsg>,
-        window: &mut Window,
+        rect: DeviceIntRect,
         message: String,
         prompt_sender: IpcSender<PromptResult>,
     ) {
         self.prompt_sender = Some(PromptSender::ConfirmSender(prompt_sender));
-        self.show(sender, window, PromptType::OkCancel(message));
+        self.show(sender, rect, PromptType::OkCancel(message));
     }
 
     /// show alert dialog on a window
     pub fn yes_no(
         &mut self,
         sender: &Sender<ConstellationMsg>,
-        window: &mut Window,
+        rect: DeviceIntRect,
         message: String,
         prompt_sender: IpcSender<PromptResult>,
     ) {
         self.prompt_sender = Some(PromptSender::ConfirmSender(prompt_sender));
-        self.show(sender, window, PromptType::YesNo(message));
+        self.show(sender, rect, PromptType::YesNo(message));
     }
 
     /// show alert dialog on a window
     pub fn input(
         &mut self,
         sender: &Sender<ConstellationMsg>,
-        window: &mut Window,
+        rect: DeviceIntRect,
         message: String,
         default_value: Option<String>,
         prompt_sender: IpcSender<Option<String>>,
     ) {
         self.prompt_sender = Some(PromptSender::InputSender(prompt_sender));
-        self.show(sender, window, PromptType::Input(message, default_value));
+        self.show(sender, rect, PromptType::Input(message, default_value));
     }
 
     /// show prompt dialog on a window
     fn show(
         &mut self,
         sender: &Sender<ConstellationMsg>,
-        window: &mut Window,
+        rect: DeviceIntRect,
         prompt_type: PromptType,
     ) {
-        let rect = window.webview.as_ref().unwrap().rect.clone();
         self.webview.set_size(rect);
 
         send_to_constellation(

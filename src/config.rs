@@ -317,7 +317,7 @@ impl ProtocolHandler for ResourceReader {
         let current_url = request.current_url();
         let path = current_url.path();
         let path = self.0.join(path.strip_prefix('/').unwrap_or(path));
-        dbg!(&path);
+
         let response = if let Ok(file) = fs::read(path) {
             let mut response = Response::new(
                 request.current_url(),

@@ -13,7 +13,7 @@ use url::Url;
 use webrender_api::units::DeviceIntRect;
 
 use crate::{
-    components::prompt::{InputPromptResult, PromptDialog, PromptSender},
+    components::prompt::{PromptDialog, PromptInputResult, PromptSender},
     compositor::IOCompositor,
     verso::send_to_constellation,
     window::Window,
@@ -151,40 +151,29 @@ impl Window {
             EmbedderMsg::ShowContextMenu(_sender, _title, _options) => {
                 // TODO: Implement context menu
             }
-            EmbedderMsg::Prompt(prompt, _origin) => match prompt {
-                PromptDefinition::Alert(message, prompt_sender) => {
-                    let mut prompt = PromptDialog::new();
-                    prompt.alert(sender, self, message, prompt_sender);
+            EmbedderMsg::Prompt(prompt_type, _origin) => {
+                let mut prompt = PromptDialog::new();
+                let rect = self.webview.as_ref().unwrap().rect;
 
-                    // save prompt in window to keep prompt_sender alive
-                    // so that we can send the result back to the prompt after user clicked the button
-                    self.prompt = Some(prompt);
+                match prompt_type {
+                    PromptDefinition::Alert(message, prompt_sender) => {
+                        prompt.alert(sender, rect, message, prompt_sender);
+                    }
+                    PromptDefinition::OkCancel(message, prompt_sender) => {
+                        prompt.ok_cancel(sender, rect, message, prompt_sender);
+                    }
+                    PromptDefinition::YesNo(message, prompt_sender) => {
+                        prompt.yes_no(sender, rect, message, prompt_sender);
+                    }
+                    PromptDefinition::Input(message, default_value, prompt_sender) => {
+                        prompt.input(sender, rect, message, Some(default_value), prompt_sender);
+                    }
                 }
-                PromptDefinition::OkCancel(message, prompt_sender) => {
-                    let mut prompt = PromptDialog::new();
-                    prompt.ok_cancel(sender, self, message, prompt_sender);
 
-                    // save prompt in window to keep prompt_sender alive
-                    // so that we can send the result back to the prompt after user clicked the button
-                    self.prompt = Some(prompt);
-                }
-                PromptDefinition::YesNo(message, prompt_sender) => {
-                    let mut prompt = PromptDialog::new();
-                    prompt.yes_no(sender, self, message, prompt_sender);
-
-                    // save prompt in window to keep prompt_sender alive
-                    // so that we can send the result back to the prompt after user clicked the button
-                    self.prompt = Some(prompt);
-                }
-                PromptDefinition::Input(message, default_value, prompt_sender) => {
-                    let mut prompt = PromptDialog::new();
-                    prompt.input(sender, self, message, Some(default_value), prompt_sender);
-
-                    // save prompt in window to keep prompt_sender alive
-                    // so that we can send the result back to the prompt after user clicked the button
-                    self.prompt = Some(prompt);
-                }
-            },
+                // save prompt in window to keep prompt_sender alive
+                // so that we can send the result back to the prompt after user clicked the button
+                self.prompt = Some(prompt);
+            }
             e => {
                 log::trace!("Verso WebView isn't supporting this message yet: {e:?}")
             }
@@ -399,7 +388,7 @@ impl Window {
                             let _ = sender.send(result);
                         }
                         PromptSender::InputSender(sender) => {
-                            let result = serde_json::from_str::<InputPromptResult>(&msg).unwrap();
+                            let result = serde_json::from_str::<PromptInputResult>(&msg).unwrap();
                             match result.action.as_str() {
                                 "ok" => {
                                     let _ = sender.send(Some(result.value));
