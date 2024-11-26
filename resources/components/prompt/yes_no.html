@@ -35,28 +35,21 @@
     <div class="alert">
       <div id="msg" class="msg"></div>
       <div class="btn-group">
-        <button onclick="sendAndClose('no')">No</button>
-        <button onclick="sendAndClose('yes')">Yes</button>
+        <button onclick="sendToVersoAndClose('no')">No</button>
+        <button onclick="sendToVersoAndClose('yes')">Yes</button>
       </div>
     </div>
   </body>
   <script>
-    const msgEl = document.getElementById('msg');
-
     let url = URL.parse(window.location.href);
-    let params = url.searchParams;
-    msgEl.textContent = params.get('msg'); // beaware of XSS attacks
+    let msg = url.searchParams.get('msg');
 
-    // function escapeHtml(input) {
-    //   return input
-    //     .replace(/&/g, '&amp;')
-    //     .replace(/</g, '&lt;')
-    //     .replace(/>/g, '&gt;')
-    //     .replace(/"/g, '&quot;')
-    //     .replace(/'/g, '&#39;');
-    // };
-    function sendAndClose(action) {
-      window.alert(action);
+    // Set dialog message
+    const msgEl = document.getElementById('msg');
+    msgEl.textContent = msg ?? '';
+
+    function sendToVersoAndClose(action) {
+      window.alert(action); // Use as an IPC between Verso and WebView
       window.close();
     }
   </script>

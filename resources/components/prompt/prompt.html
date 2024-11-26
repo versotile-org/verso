@@ -36,43 +36,36 @@
       <div id="msg" class="msg"></div>
       <input type="text" id="input" />
       <div class="btn-group">
-        <button onclick="sendAndClose('cancel')">Cancel</button>
-        <button onclick="sendAndClose('ok')">Ok</button>
+        <button onclick="sendToVersoAndClose('cancel')">Cancel</button>
+        <button onclick="sendToVersoAndClose('ok')">Ok</button>
       </div>
     </div>
   </body>
   <script>
-    const msgEl = document.getElementById('msg');
     const inputEl = document.getElementById('input');
+    const msgEl = document.getElementById('msg');
 
-    let url = URL.parse(window.location.href);
-    let params = url.searchParams;
-    msgEl.textContent = params.get('msg'); // beaware of XSS attacks
+    const params = URL.parse(window.location.href).searchParams;
 
+    // Set input default value
     const defaultValue = params.get('defaultValue');
-    console.log(`default value: ${defaultValue}`);
-    if (defaultValue !== null && defaultValue !== void 0) {
+    if (typeof defaultValue === 'string' || defaultValue instanceof String) {
       inputEl.defaultValue = defaultValue;
     }
 
-    function sendAndClose(action) {
-      console.log(`value: ${inputEl.value}`);
-      let result = {
-        action,
-        value: inputEl.value,
-      };
-      console.log(JSON.stringify(result));
-      window.alert(JSON.stringify(result));
+    // Set dialog message
+    const msg = params.get('msg');
+    msgEl.textContent = msg ?? '';
+
+    function sendToVersoAndClose(action) {
+      // Use as an IPC between Verso and WebView
+      window.alert(
+        JSON.stringify({
+          action,
+          value: inputEl.value,
+        })
+      );
       window.close();
     }
-
-    // function escapeHtml(input) {
-    //   return input
-    //     .replace(/&/g, '&amp;')
-    //     .replace(/</g, '&lt;')
-    //     .replace(/>/g, '&gt;')
-    //     .replace(/"/g, '&quot;')
-    //     .replace(/'/g, '&#39;');
-    // };
   </script>
 </html>

@@ -7,7 +7,7 @@ use serde::{Deserialize, Serialize};
 use servo_url::ServoUrl;
 use webrender_api::units::DeviceIntRect;
 
-use crate::{verso::send_to_constellation, webview::WebView, window::Window};
+use crate::{verso::send_to_constellation, webview::WebView};
 
 /// Prompt Type
 #[derive(Debug, Clone, Hash, PartialEq, Eq)]
@@ -42,7 +42,10 @@ pub enum PromptSender {
 }
 
 /// Prompt input result send from prompt dialog to backend
+/// - action: "ok" / "cancel"
+/// - value: user input value in input prompt
 ///
+/// Behavior:
 /// - **Ok**: return string, or an empty string if user leave input empty
 /// - **Cancel**: return null
 ///
@@ -80,7 +83,7 @@ impl PromptDialog {
         self.prompt_sender.clone()
     }
 
-    /// show alert dialog on a window
+    /// show alert prompt
     pub fn alert(
         &mut self,
         sender: &Sender<ConstellationMsg>,
@@ -92,7 +95,7 @@ impl PromptDialog {
         self.show(sender, rect, PromptType::Alert(message));
     }
 
-    /// show alert dialog on a window
+    /// show Ok/Cancel confirm prompt
     pub fn ok_cancel(
         &mut self,
         sender: &Sender<ConstellationMsg>,
@@ -104,7 +107,7 @@ impl PromptDialog {
         self.show(sender, rect, PromptType::OkCancel(message));
     }
 
-    /// show alert dialog on a window
+    /// show Yes/No confirm prompt
     pub fn yes_no(
         &mut self,
         sender: &Sender<ConstellationMsg>,
@@ -116,7 +119,7 @@ impl PromptDialog {
         self.show(sender, rect, PromptType::YesNo(message));
     }
 
-    /// show alert dialog on a window
+    /// show input prompt
     pub fn input(
         &mut self,
         sender: &Sender<ConstellationMsg>,
@@ -129,7 +132,6 @@ impl PromptDialog {
         self.show(sender, rect, PromptType::Input(message, default_value));
     }
 
-    /// show prompt dialog on a window
     fn show(
         &mut self,
         sender: &Sender<ConstellationMsg>,
@@ -137,7 +139,6 @@ impl PromptDialog {
         prompt_type: PromptType,
     ) {
         self.webview.set_size(rect);
-
         send_to_constellation(
             sender,
             ConstellationMsg::NewWebView(self.resource_url(prompt_type), self.webview.webview_id),
@@ -147,19 +148,15 @@ impl PromptDialog {
     fn resource_url(&self, prompt_type: PromptType) -> ServoUrl {
         let url = match prompt_type {
             PromptType::Alert(msg) => {
-                // TODO: sanitize message
                 format!("verso://resources/components/prompt/alert.html?msg={msg}")
             }
             PromptType::OkCancel(msg) => {
-                // TODO: sanitize message
                 format!("verso://resources/components/prompt/ok_cancel.html?msg={msg}")
             }
             PromptType::YesNo(msg) => {
-                // TODO: sanitize message
                 format!("verso://resources/components/prompt/yes_no.html?msg={msg}")
             }
             PromptType::Input(msg, default_value) => {
-                // TODO: sanitize message
                 let mut url = format!("verso://resources/components/prompt/prompt.html?msg={msg}");
                 if let Some(default_value) = default_value {
                     url.push_str(&format!("&defaultValue={}", default_value));

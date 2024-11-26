@@ -34,27 +34,20 @@
   <body>
     <div class="alert">
       <div id="msg" class="msg"></div>
-      <button onclick="sendAndClose()">Ok</button>
+      <button onclick="sendToVersoAndClose()">Ok</button>
     </div>
   </body>
   <script>
-    const msgEl = document.getElementById('msg');
-
     let url = URL.parse(window.location.href);
-    let params = url.searchParams;
-    msgEl.textContent = params.get('msg'); // beaware of XSS attacks
+    let msg = url.searchParams.get('msg');
 
-    // function escapeHtml(input) {
-    //   return input
-    //     .replace(/&/g, '&amp;')
-    //     .replace(/</g, '&lt;')
-    //     .replace(/>/g, '&gt;')
-    //     .replace(/"/g, '&quot;')
-    //     .replace(/'/g, '&#39;');
-    // };
+    // Set dialog message
+    const msgEl = document.getElementById('msg');
+    msgEl.textContent = msg ?? '';
 
-    function sendAndClose() {
-      window.alert('');
+
+    function sendToVersoAndClose() {
+      window.alert(''); // Use as an IPC between Verso and WebView
       window.close();
     }
   </script>

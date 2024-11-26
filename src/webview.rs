@@ -388,18 +388,24 @@ impl Window {
                             let _ = sender.send(result);
                         }
                         PromptSender::InputSender(sender) => {
-                            let result = serde_json::from_str::<PromptInputResult>(&msg).unwrap();
-                            match result.action.as_str() {
-                                "ok" => {
-                                    let _ = sender.send(Some(result.value));
+                            if let Ok(PromptInputResult { action, value }) =
+                                serde_json::from_str::<PromptInputResult>(&msg)
+                            {
+                                match action.as_str() {
+                                    "ok" => {
+                                        let _ = sender.send(Some(value));
+                                    }
+                                    "cancel" => {
+                                        let _ = sender.send(None);
+                                    }
+                                    _ => {
+                                        log::error!("prompt result message invalid: {msg}");
+                                        let _ = sender.send(None);
+                                    }
                                 }
-                                "cancel" => {
-                                    let _ = sender.send(None);
-                                }
-                                _ => {
-                                    log::error!("prompt result message invalid: {msg}");
-                                    let _ = sender.send(None);
-                                }
+                            } else {
+                                log::error!("prompt result message invalid: {msg}");
+                                let _ = sender.send(None);
                             }
                         }
                     }
