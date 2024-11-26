@@ -301,6 +301,9 @@ impl Window {
                 match (state, button) {
                     #[cfg(any(target_os = "macos", target_os = "windows"))]
                     (ElementState::Pressed, winit::event::MouseButton::Right) => {
+                        if self.prompt.is_some() {
+                            return;
+                        }
                         self.show_context_menu();
                         // FIXME: there's chance to lose the event since the channel is async.
                         if let Ok(event) = self.menu_event_receiver.try_recv() {
@@ -309,6 +312,9 @@ impl Window {
                     }
                     #[cfg(linux)]
                     (ElementState::Pressed, winit::event::MouseButton::Right) => {
+                        if self.prompt.is_some() {
+                            return;
+                        }
                         if self.context_menu.is_none() {
                             self.context_menu = Some(self.show_context_menu(sender));
                             return;
