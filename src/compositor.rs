@@ -1247,6 +1247,10 @@ impl IOCompositor {
             w.set_size(content_size);
             self.on_resize_webview_event(w.webview_id, w.rect);
         }
+        if let Some(prompt) = &mut window.prompt {
+            prompt.resize(content_size);
+            self.on_resize_webview_event(prompt.webview().webview_id, rect);
+        }
 
         self.send_root_pipeline_display_list(window);
     }

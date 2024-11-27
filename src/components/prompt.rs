@@ -66,24 +66,47 @@ pub struct PromptDialog {
 }
 
 impl PromptDialog {
-    /// new prompt dialog
+    /// New prompt dialog
     pub fn new() -> Self {
         PromptDialog {
             webview: WebView::new(WebViewId::new(), DeviceIntRect::zero()),
             prompt_sender: None,
         }
     }
-    /// get prompt webview
+    /// Get prompt webview
     pub fn webview(&self) -> &WebView {
         &self.webview
     }
 
-    /// get prompt sender
+    /// Get prompt sender. Send user interaction result back to caller.
     pub fn sender(&self) -> Option<PromptSender> {
         self.prompt_sender.clone()
     }
 
-    /// show alert prompt
+    /// Resize prompt webview size with new window context size
+    ///
+    /// ## Example:
+    /// ```rust
+    /// let rect = window.webview.as_ref().unwrap().rect;
+    /// let content_size = window.get_content_size(rect);
+    /// prompt.resize(content_size);
+    /// ```
+    pub fn resize(&mut self, rect: DeviceIntRect) {
+        self.webview.set_size(rect);
+    }
+
+    /// Show alert prompt.
+    ///
+    /// After you call `alert(..)`, you must call `sender()` to get prompt sender,
+    /// then send user interaction result back to caller.
+    ///
+    /// ## Example
+    ///
+    /// ```rust
+    /// if let Some(PromptSender::AlertSender(sender)) = prompt.sender() {
+    ///     let _ = sender.send(());
+    /// }
+    /// ```
     pub fn alert(
         &mut self,
         sender: &Sender<ConstellationMsg>,
@@ -95,7 +118,18 @@ impl PromptDialog {
         self.show(sender, rect, PromptType::Alert(message));
     }
 
-    /// show Ok/Cancel confirm prompt
+    /// Show Ok/Cancel confirm prompt
+    ///
+    /// After you call `ok_cancel(..)`, you must call `sender()` to get prompt sender,
+    /// then send user interaction result back to caller.
+    ///
+    /// ## Example
+    ///
+    /// ```rust
+    /// if let Some(PromptSender::ConfirmSender(sender)) = prompt.sender() {
+    ///     let _ = sender.send(PromptResult::Primary);
+    /// }
+    /// ```
     pub fn ok_cancel(
         &mut self,
         sender: &Sender<ConstellationMsg>,
@@ -107,7 +141,18 @@ impl PromptDialog {
         self.show(sender, rect, PromptType::OkCancel(message));
     }
 
-    /// show Yes/No confirm prompt
+    /// Show Yes/No confirm prompt
+    ///
+    /// After you call `yes_no(..)`, you must call `sender()` to get prompt sender,
+    /// then send user interaction result back to caller.
+    ///
+    /// ## Example
+    ///
+    /// ```rust
+    /// if let Some(PromptSender::ConfirmSender(sender)) = prompt.sender() {
+    ///     let _ = sender.send(PromptResult::Primary);
+    /// }
+    /// ```
     pub fn yes_no(
         &mut self,
         sender: &Sender<ConstellationMsg>,
@@ -119,7 +164,18 @@ impl PromptDialog {
         self.show(sender, rect, PromptType::YesNo(message));
     }
 
-    /// show input prompt
+    /// Show input prompt
+    ///
+    /// After you call `input(..)`, you must call `sender()` to get prompt sender,
+    /// then send user interaction result back to caller.
+    ///
+    /// ## Example
+    ///
+    /// ```rust
+    /// if let Some(PromptSender::InputSender(sender)) = prompt.sender() {
+    ///     let _ = sender.send(Some("user input value".to_string()));
+    /// }
+    /// ```
     pub fn input(
         &mut self,
         sender: &Sender<ConstellationMsg>,
