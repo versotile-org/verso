@@ -196,8 +196,8 @@ jobs:
         if: ${{ github.event_name == 'schedule' }}
         uses: actions/upload-artifact@v4
         with:
-          name: verso_${{ env.VERSO_VERSION }}_x64_nsis
-          path: target\release\verso_${{ env.VERSO_VERSION }}_x64-setup.exe
+          name: versoview_${{ env.VERSO_VERSION }}_x64_nsis
+          path: target\release\versoview_${{ env.VERSO_VERSION }}_x64-setup.exe
 
   build-macos:
     if: ${{ github.event_name != 'pull_request' }}
@@ -318,7 +318,7 @@ jobs:
       - name: Upload Windows NSIS installer
         uses: crabnebula-dev/cloud-release@v0.1.0
         with:
-          command: release upload --file "verso_${{ env.VERSO_VERSION }}_x64_nsis/verso_${{ env.VERSO_VERSION }}_x64-setup.exe" ${{ env.CN_APP_SLUG }} $VERSO_RELEASE_NAME
+          command: release upload --file "versoview_${{ env.VERSO_VERSION }}_x64_nsis/versoview_${{ env.VERSO_VERSION }}_x64-setup.exe" ${{ env.CN_APP_SLUG }} $VERSO_RELEASE_NAME
           api-key: ${{ secrets.CN_API_KEY }}
 
       - name: Upload Flatpak bundle

@@ -1,7 +1,6 @@
 // Prevent console window from appearing on Windows
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
-use versoview::config::Config;
 use versoview::verso::EventLoopProxyMessage;
 use versoview::{Result, Verso};
 use winit::application::ApplicationHandler;
@@ -15,8 +14,7 @@ struct App {
 
 impl ApplicationHandler<EventLoopProxyMessage> for App {
     fn resumed(&mut self, event_loop: &winit::event_loop::ActiveEventLoop) {
-        let config = Config::new(resources_dir_path().unwrap());
-        self.verso = Some(Verso::new(event_loop, self.proxy.clone(), config));
+        self.verso = Some(Verso::new(event_loop, self.proxy.clone()));
     }
 
     fn window_event(
@@ -56,21 +54,4 @@ fn main() -> Result<()> {
     event_loop.run_app(&mut app)?;
 
     Ok(())
-}
-
-fn resources_dir_path() -> Option<std::path::PathBuf> {
-    #[cfg(feature = "packager")]
-    let root_dir = {
-        use cargo_packager_resource_resolver::{current_format, resources_dir};
-        current_format().and_then(|format| resources_dir(format))
-    };
-    #[cfg(feature = "flatpak")]
-    let root_dir = {
-        use std::str::FromStr;
-        std::path::PathBuf::from_str("/app")
-    };
-    #[cfg(not(any(feature = "packager", feature = "flatpak")))]
-    let root_dir = std::env::current_dir();
-
-    root_dir.ok().map(|dir| dir.join("resources"))
 }

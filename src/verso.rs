@@ -13,7 +13,10 @@ use compositing_traits::{CompositorMsg, CompositorProxy, CompositorReceiver, Con
 use constellation::{Constellation, FromCompositorLogger, InitialConstellationState};
 use crossbeam_channel::{unbounded, Sender};
 use devtools;
-use embedder_traits::{EmbedderMsg, EmbedderProxy, EmbedderReceiver, EventLoopWaker};
+use embedder_traits::{
+    EmbedderMsg, EmbedderProxy, EmbedderReceiver, EventLoopWaker, PromptDefinition, PromptOrigin,
+    PromptResult,
+};
 use euclid::Scale;
 use fonts::SystemFontService;
 use ipc_channel::ipc::{self, IpcSender};
@@ -33,7 +36,6 @@ use webgpu;
 use webrender::{create_webrender_instance, ShaderPrecacheFlags, WebRenderOptions};
 use webrender_api::*;
 use webrender_traits::*;
-use webxr_api::{LayerGrandManager, LayerGrandManagerAPI, LayerManager, LayerManagerFactory};
 use winit::{
     event::WindowEvent,
     event_loop::{ActiveEventLoop, ControlFlow, EventLoopProxy},
@@ -77,11 +79,8 @@ impl Verso {
     /// - Canvas: Enabled
     /// - Constellation: Enabled
     /// - Image Cache: Enabled
-    pub fn new(
-        evl: &ActiveEventLoop,
-        proxy: EventLoopProxy<EventLoopProxyMessage>,
-        config: Config,
-    ) -> Self {
+    pub fn new(evl: &ActiveEventLoop, proxy: EventLoopProxy<EventLoopProxyMessage>) -> Self {
+        let config = Config::new();
         if let Some(ipc_channel) = &config.args.ipc_channel {
             let sender =
                 IpcSender::<IpcSender<ControllerMessage>>::connect(ipc_channel.to_string())
@@ -108,11 +107,19 @@ impl Verso {
         let protocols = config.create_protocols();
         let initial_url = config.args.url.clone();
         let with_panel = !config.args.no_panel;
+        let window_settings = config.args.window_attributes.clone();
+        let user_agent: Cow<'static, str> = config
+            .args
+            .user_agent
+            .clone()
+            .unwrap_or_else(|| default_user_agent_string().to_string())
+            .into();
+        let zoom_level = config.args.zoom_level;
 
         config.init();
         // Reserving a namespace to create TopLevelBrowsingContextId.
         PipelineNamespace::install(PipelineNamespaceId(0));
-        let (mut window, rendering_context) = Window::new(evl);
+        let (mut window, rendering_context) = Window::new(evl, window_settings);
 
         let event_loop_waker = Box::new(Waker(proxy));
         let opts = opts::get();
@@ -252,20 +259,6 @@ impl Verso {
         // Set webrender external image handler for WebGL textures
         // external_image_handlers.set_handler(image_handler, WebrenderImageHandlerType::WebGL);
 
-        // Create WebXR dummy
-        let webxr_layer_grand_manager = LayerGrandManager::new(DummyLayer);
-        let webxr_registry =
-            webxr_api::MainThreadRegistry::new(event_loop_waker, webxr_layer_grand_manager)
-                .expect("Failed to create WebXR device registry");
-        // if pref!(dom.webxr.enabled) {
-        // TODO if pref!(dom.webxr.test) {
-        //     webxr_main_thread.register_mock(webxr::headless::HeadlessMockDiscovery::new());
-        // }
-        // else if let Some(xr_discovery) = self.xr_discovery.take() {
-        //     webxr_main_thread.register(xr_discovery);
-        // }
-        // }
-
         // Set webrender external image handler for WebGPU textures
         let wgpu_image_handler = webgpu::WGPUExternalImages::default();
         let wgpu_image_map = wgpu_image_handler.images.clone();
@@ -289,7 +282,6 @@ impl Verso {
             BluetoothThreadFactory::new(embedder_sender.clone());
 
         // Create resource thread pool
-        let user_agent: Cow<'static, str> = default_user_agent_string().into();
         let (public_resource_threads, private_resource_threads) =
             resource_thread::new_resource_threads(
                 user_agent.clone(),
@@ -330,7 +322,7 @@ impl Verso {
             mem_profiler_chan: mem_profiler_sender.clone(),
             webrender_document,
             webrender_api_sender,
-            webxr_registry: webxr_registry.registry(),
+            webxr_registry: None,
             webgl_threads: None,
             glplayer_threads: None,
             player_context: glplayer_context,
@@ -369,7 +361,7 @@ impl Verso {
 
         // The compositor coordinates with the client window to create the final
         // rendered page and display it somewhere.
-        let compositor = IOCompositor::new(
+        let mut compositor = IOCompositor::new(
             window.id(),
             window.size(),
             Scale::new(window.scale_factor() as f32),
@@ -384,11 +376,14 @@ impl Verso {
                 webrender_api,
                 rendering_context,
                 webrender_gl,
-                webxr_main_thread: webxr_registry,
             },
             opts.exit_after_load,
             opts.debug.convert_mouse_to_touch,
         );
+
+        if let Some(zoom_level) = zoom_level {
+            compositor.on_zoom_window_event(zoom_level, &window);
+        }
 
         if with_panel {
             window.create_panel(&constellation_sender, initial_url);
@@ -513,6 +508,26 @@ impl Verso {
                                         }
                                     }
                                     EmbedderMsg::Shutdown | EmbedderMsg::ReadyToPresent(_) => {}
+                                    EmbedderMsg::Prompt(definition, origin) => match origin {
+                                        // TODO: actually prompt the user with a dialog
+                                        PromptOrigin::Trusted => match definition {
+                                            PromptDefinition::YesNo(question, ipc_sender) => {
+                                                if question
+                                                    == "Accept incoming devtools connection?"
+                                                {
+                                                    if let Err(err) =
+                                                        ipc_sender.send(PromptResult::Primary)
+                                                    {
+                                                        log::error!(
+                                                            "Failed to send prompt result back: {err}"
+                                                        );
+                                                    }
+                                                }
+                                            }
+                                            _ => {}
+                                        },
+                                        _ => {}
+                                    },
                                     e => {
                                         log::trace!("Verso Window isn't supporting handling this message yet: {e:?}")
                                     }
@@ -720,21 +735,5 @@ pub(crate) fn send_to_constellation(sender: &Sender<ConstellationMsg>, msg: Cons
     let variant_name = msg.variant_name();
     if let Err(e) = sender.send(msg) {
         log::warn!("Sending {variant_name} to constellation failed: {e:?}");
-    }
-}
-
-#[derive(Clone, Copy, Debug)]
-struct DummyLayer;
-
-impl LayerGrandManagerAPI<()> for DummyLayer {
-    fn create_layer_manager(
-        &self,
-        _: LayerManagerFactory<()>,
-    ) -> Result<LayerManager, webxr_api::Error> {
-        Err(webxr_api::Error::CommunicationError)
-    }
-
-    fn clone_layer_grand_manager(&self) -> LayerGrandManager<()> {
-        LayerGrandManager::new(DummyLayer)
     }
 }

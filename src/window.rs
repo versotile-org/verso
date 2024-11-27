@@ -10,6 +10,11 @@ use glutin::{
     surface::{Surface, WindowSurface},
 };
 use glutin_winit::DisplayBuilder;
+#[cfg(any(target_os = "macos", target_os = "windows"))]
+use muda::{Menu as MudaMenu, MenuEvent, MenuEventReceiver, MenuItem};
+#[cfg(any(target_os = "macos", target_os = "windows"))]
+use raw_window_handle::HasWindowHandle;
+use script_traits::TraversalDirection;
 use script_traits::{TouchEventType, WheelDelta, WheelMode};
 use servo_url::ServoUrl;
 use versoview_messages::OnNavigationStartingPayload;
@@ -24,11 +29,12 @@ use winit::{
     event::{ElementState, TouchPhase, WindowEvent},
     event_loop::ActiveEventLoop,
     keyboard::ModifiersState,
-    window::{CursorIcon, Window as WinitWindow, WindowId},
+    window::{CursorIcon, Window as WinitWindow, WindowAttributes, WindowId},
 };
 
 use crate::{
     compositor::{IOCompositor, MouseWindowEvent},
+    context_menu::{ContextMenu, Menu},
     keyboard::keyboard_event_from_winit,
     rendering::{gl_config_picker, RenderingContext},
     verso::send_to_constellation,
@@ -58,14 +64,28 @@ pub struct Window {
     mouse_position: Cell<Option<PhysicalPosition<f64>>>,
     /// Modifiers state of the keyboard.
     modifiers_state: Cell<ModifiersState>,
+    /// Browser history of the window.
+    history: Vec<ServoUrl>,
+    /// Current history index.
+    current_history_index: usize,
     /// State to indicate if the window is resizing.
     pub(crate) resizing: bool,
+    // TODO: These two fields should unified once we figure out servo's menu events.
+    /// Context menu webview. This is only used in wayland currently.
+    #[cfg(linux)]
+    pub(crate) context_menu: Option<ContextMenu>,
+    /// Global menu event receiver for muda crate
+    #[cfg(any(target_os = "macos", target_os = "windows"))]
+    menu_event_receiver: MenuEventReceiver,
 }
 
 impl Window {
     /// Create a Verso window from Winit window and return the rendering context.
-    pub fn new(evl: &ActiveEventLoop) -> (Self, RenderingContext) {
-        let window_attributes = WinitWindow::default_attributes()
+    pub fn new(
+        evl: &ActiveEventLoop,
+        window_attributes: WindowAttributes,
+    ) -> (Self, RenderingContext) {
+        let window_attributes = window_attributes
             .with_transparent(true)
             .with_decorations(false);
 
@@ -105,7 +125,13 @@ impl Window {
                 event_listeners: Default::default(),
                 mouse_position: Default::default(),
                 modifiers_state: Cell::new(ModifiersState::default()),
+                history: vec![],
+                current_history_index: 0,
                 resizing: false,
+                #[cfg(linux)]
+                context_menu: None,
+                #[cfg(any(target_os = "macos", target_os = "windows"))]
+                menu_event_receiver: MenuEvent::receiver().clone(),
             },
             rendering_context,
         )
@@ -143,7 +169,13 @@ impl Window {
             event_listeners: Default::default(),
             mouse_position: Default::default(),
             modifiers_state: Cell::new(ModifiersState::default()),
+            history: vec![],
+            current_history_index: 0,
             resizing: false,
+            #[cfg(linux)]
+            context_menu: None,
+            #[cfg(any(target_os = "macos", target_os = "windows"))]
+            menu_event_receiver: MenuEvent::receiver().clone(),
         };
         compositor.swap_current_window(&mut window);
         window
@@ -265,7 +297,36 @@ impl Window {
                     }
                 };
 
-                // handle Windows and Linux non-decoration window resize
+                /* handle context menu */
+                // TODO(context-menu): should create on ShowContextMenu event
+
+                match (state, button) {
+                    #[cfg(any(target_os = "macos", target_os = "windows"))]
+                    (ElementState::Pressed, winit::event::MouseButton::Right) => {
+                        self.show_context_menu();
+                        // FIXME: there's chance to lose the event since the channel is async.
+                        if let Ok(event) = self.menu_event_receiver.try_recv() {
+                            self.handle_context_menu_event(sender, event);
+                        }
+                    }
+                    #[cfg(linux)]
+                    (ElementState::Pressed, winit::event::MouseButton::Right) => {
+                        if self.context_menu.is_none() {
+                            self.context_menu = Some(self.show_context_menu(sender));
+                            return;
+                        }
+                    }
+                    #[cfg(linux)]
+                    // TODO(context-menu): ignore first release event after context menu open or close to prevent click on background element
+                    (ElementState::Released, winit::event::MouseButton::Right) => {
+                        if self.context_menu.is_some() {
+                            return;
+                        }
+                    }
+                    _ => {}
+                }
+
+                /* handle Windows and Linux non-decoration window resize */
                 #[cfg(any(linux, target_os = "windows"))]
                 {
                     if *state == ElementState::Pressed && *button == winit::event::MouseButton::Left
@@ -275,6 +336,8 @@ impl Window {
                         }
                     }
                 }
+
+                /* handle mouse events */
 
                 let button: script_traits::MouseButton = match button {
                     winit::event::MouseButton::Left => script_traits::MouseButton::Left,
@@ -383,6 +446,15 @@ impl Window {
                 );
             }
         }
+        #[cfg(linux)]
+        if let Some(context_menu) = &self.context_menu {
+            if context_menu.webview().webview_id == webview_id {
+                self.handle_servo_messages_with_context_menu(
+                    webview_id, message, sender, clipboard, compositor,
+                );
+                return false;
+            }
+        }
         // Handle message in Verso WebView
         self.handle_servo_messages_with_webview(webview_id, message, sender, clipboard, compositor);
         false
@@ -411,6 +483,15 @@ impl Window {
 
     /// Check if the window has such webview.
     pub fn has_webview(&self, id: WebViewId) -> bool {
+        #[cfg(linux)]
+        if self
+            .context_menu
+            .as_ref()
+            .map_or(false, |w| w.webview().webview_id == id)
+        {
+            return true;
+        }
+
         self.panel
             .as_ref()
             .map_or(false, |w| w.webview.webview_id == id)
@@ -424,6 +505,17 @@ impl Window {
         id: WebViewId,
         compositor: &mut IOCompositor,
     ) -> (Option<WebView>, bool) {
+        #[cfg(linux)]
+        if self
+            .context_menu
+            .as_ref()
+            .filter(|menu| menu.webview().webview_id == id)
+            .is_some()
+        {
+            let context_menu = self.context_menu.take().expect("Context menu should exist");
+            return (Some(context_menu.webview().clone()), false);
+        }
+
         if self
             .panel
             .as_ref()
@@ -458,6 +550,12 @@ impl Window {
         if let Some(webview) = &self.webview {
             order.push(webview);
         }
+
+        #[cfg(linux)]
+        if let Some(context_menu) = &self.context_menu {
+            order.push(context_menu.webview());
+        }
+
         order
     }
 
@@ -501,6 +599,141 @@ impl Window {
             _ => CursorIcon::Default,
         };
         self.window.set_cursor(winit_cursor);
+    }
+
+    /// Update the history of the window.
+    pub fn update_history(&mut self, history: &Vec<ServoUrl>, current_index: usize) {
+        self.history = history.to_vec();
+        self.current_history_index = current_index;
+    }
+}
+
+// Context Menu methods
+impl Window {
+    #[cfg(any(target_os = "macos", target_os = "windows"))]
+    pub(crate) fn show_context_menu(&self) {
+        let history_len = self.history.len();
+
+        // items
+        let back = MenuItem::with_id("back", "Back", self.current_history_index > 0, None);
+        let forward = MenuItem::with_id(
+            "forward",
+            "Forward",
+            self.current_history_index + 1 < history_len,
+            None,
+        );
+        let reload = MenuItem::with_id("reload", "Reload", true, None);
+
+        let menu = MudaMenu::new();
+        let _ = menu.append_items(&[&back, &forward, &reload]);
+
+        let context_menu = ContextMenu::new_with_menu(Menu(menu));
+        context_menu.show(self.window.window_handle().unwrap());
+    }
+
+    #[cfg(linux)]
+    pub(crate) fn show_context_menu(&mut self, sender: &Sender<ConstellationMsg>) -> ContextMenu {
+        use crate::context_menu::MenuItem;
+
+        let history_len = self.history.len();
+
+        // items
+        let back = MenuItem::new(Some("back"), "Back", self.current_history_index > 0);
+        let forward = MenuItem::new(
+            Some("forward"),
+            "Forward",
+            self.current_history_index + 1 < history_len,
+        );
+        let reload = MenuItem::new(Some("reload"), "Reload", true);
+
+        let mut context_menu = ContextMenu::new_with_menu(Menu(vec![back, forward, reload]));
+
+        let position = self.mouse_position.get().unwrap();
+        context_menu.show(sender, self, position);
+
+        context_menu
+    }
+
+    /// Close window's context menu
+    pub(crate) fn close_context_menu(&self, _sender: &Sender<ConstellationMsg>) {
+        #[cfg(linux)]
+        if let Some(context_menu) = &self.context_menu {
+            send_to_constellation(
+                _sender,
+                ConstellationMsg::CloseWebView(context_menu.webview().webview_id),
+            );
+        }
+    }
+
+    #[cfg(any(target_os = "macos", target_os = "windows"))]
+    fn handle_context_menu_event(&self, sender: &Sender<ConstellationMsg>, event: MenuEvent) {
+        // TODO: should be more flexible to handle different menu items
+        match event.id().0.as_str() {
+            "back" => {
+                send_to_constellation(
+                    sender,
+                    ConstellationMsg::TraverseHistory(
+                        self.webview.as_ref().unwrap().webview_id,
+                        TraversalDirection::Back(1),
+                    ),
+                );
+            }
+            "forward" => {
+                send_to_constellation(
+                    sender,
+                    ConstellationMsg::TraverseHistory(
+                        self.webview.as_ref().unwrap().webview_id,
+                        TraversalDirection::Forward(1),
+                    ),
+                );
+            }
+            "reload" => {
+                send_to_constellation(
+                    sender,
+                    ConstellationMsg::Reload(self.webview.as_ref().unwrap().webview_id),
+                );
+            }
+            _ => {}
+        }
+    }
+
+    /// Handle linux context menu event
+    // TODO(context-menu): should make the call in synchronous way after calling show_context_menu, otherwise
+    // we'll have to deal with constellation sender and other parameter's lifetime, also we lose the context that why this context menu popup
+    #[cfg(linux)]
+    pub(crate) fn handle_context_menu_event(
+        &mut self,
+        sender: &Sender<ConstellationMsg>,
+        event: crate::context_menu::ContextMenuResult,
+    ) {
+        self.close_context_menu(sender);
+        match event.id.as_str() {
+            "back" => {
+                send_to_constellation(
+                    sender,
+                    ConstellationMsg::TraverseHistory(
+                        self.webview.as_ref().unwrap().webview_id,
+                        TraversalDirection::Back(1),
+                    ),
+                );
+            }
+            "forward" => {
+                send_to_constellation(
+                    sender,
+                    ConstellationMsg::TraverseHistory(
+                        self.webview.as_ref().unwrap().webview_id,
+                        TraversalDirection::Forward(1),
+                    ),
+                );
+            }
+            "reload" => {
+                send_to_constellation(
+                    sender,
+                    ConstellationMsg::Reload(self.webview.as_ref().unwrap().webview_id),
+                );
+            }
+            _ => {}
+        }
     }
 }
 
@@ -597,7 +830,7 @@ impl Window {
 #[cfg(macos)]
 use objc2::runtime::AnyObject;
 #[cfg(macos)]
-use raw_window_handle::{AppKitWindowHandle, HasWindowHandle, RawWindowHandle};
+use raw_window_handle::{AppKitWindowHandle, RawWindowHandle};
 #[cfg(macos)]
 use winit::dpi::LogicalPosition;
 

@@ -2,7 +2,10 @@ target
 Cargo.lock
 .DS_Store
 .vscode/
-resources/
 .flatpak-builder/
 libmozjs*
 cargo-sources.json
+
+resources/
+!resources/panel.html
+!resources/context-menu.html

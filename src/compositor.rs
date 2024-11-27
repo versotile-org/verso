@@ -17,8 +17,8 @@ use euclid::{vec2, Point2D, Scale, Size2D, Transform3D, Vector2D};
 use gleam::gl;
 use ipc_channel::ipc::{self, IpcSharedMemory};
 use log::{debug, error, trace, warn};
-use profile_traits::time::{self as profile_time, profile, ProfilerCategory};
-use profile_traits::{mem, time};
+use profile_traits::time::{self as profile_time, ProfilerCategory};
+use profile_traits::{mem, time, time_profile};
 use script_traits::CompositorEvent::{MouseButtonEvent, MouseMoveEvent, TouchEvent, WheelEvent};
 use script_traits::{
     AnimationState, AnimationTickType, ConstellationControlMsg, MouseButton, MouseEventType,
@@ -71,8 +71,6 @@ pub struct InitialCompositorState {
     pub rendering_context: RenderingContext,
     /// Webrender GL handle
     pub webrender_gl: Rc<dyn gl::Gl>,
-    /// WebXR registry
-    pub webxr_main_thread: webxr_api::MainThreadRegistry<()>,
 }
 
 /// Various debug and profiling flags that WebRender supports.
@@ -184,15 +182,12 @@ pub struct IOCompositor {
     /// The GL bindings for webrender
     webrender_gl: Rc<dyn gl::Gl>,
 
-    /// Some XR devices want to run on the main thread.
-    pub webxr_main_thread: webxr_api::MainThreadRegistry<()>,
-
-    /// Map of the pending paint metrics per Layout.
-    /// The Layout for each specific pipeline expects the compositor to
-    /// paint frames with specific given IDs (epoch). Once the compositor paints
-    /// these frames, it records the paint time for each of them and sends the
-    /// metric to the corresponding Layout.
-    pending_paint_metrics: HashMap<PipelineId, Epoch>,
+    /// A per-pipeline queue of display lists that have not yet been rendered by WebRender. Layout
+    /// expects WebRender to paint each given epoch. Once the compositor paints a frame with that
+    /// epoch's display list, it will be removed from the queue and the paint time will be recorded
+    /// as a metric. In case new display lists come faster than painting a metric might never be
+    /// recorded.
+    pending_paint_metrics: HashMap<PipelineId, Vec<Epoch>>,
 
     /// Current mouse cursor.
     cursor: Cursor,
@@ -376,7 +371,6 @@ impl IOCompositor {
             webrender_api: state.webrender_api,
             rendering_context: state.rendering_context,
             webrender_gl: state.webrender_gl,
-            webxr_main_thread: state.webxr_main_thread,
             pending_paint_metrics: HashMap::new(),
             cursor: Cursor::None,
             cursor_pos: DevicePoint::new(0.0, 0.0),
@@ -571,7 +565,10 @@ impl IOCompositor {
             }
 
             CompositorMsg::PendingPaintMetric(pipeline_id, epoch) => {
-                self.pending_paint_metrics.insert(pipeline_id, epoch);
+                self.pending_paint_metrics
+                    .entry(pipeline_id)
+                    .or_default()
+                    .push(epoch);
             }
 
             CompositorMsg::CrossProcess(cross_process_message) => {
@@ -864,10 +861,6 @@ impl IOCompositor {
                 // Subtract from the number of pending frames, but do not do any compositing.
                 self.pending_frames -= 1;
             }
-            CompositorMsg::PendingPaintMetric(pipeline_id, epoch) => {
-                self.pending_paint_metrics.insert(pipeline_id, epoch);
-            }
-
             _ => {
                 debug!("Ignoring message ({:?} while shutting down", msg);
             }
@@ -1112,6 +1105,10 @@ impl IOCompositor {
 
                 if close_window {
                     window_id = Some(window.id());
+                } else {
+                    // if the window is not closed, we need to update the display list
+                    // to remove the webview from viewport
+                    self.send_root_pipeline_display_list(window);
                 }
 
                 self.frame_tree_id.next();
@@ -1714,7 +1711,7 @@ impl IOCompositor {
                 pipeline_ids.push(*pipeline_id);
             }
         }
-        self.is_animating = !pipeline_ids.is_empty() || self.webxr_main_thread.running();
+        self.is_animating = !pipeline_ids.is_empty();
         for pipeline_id in &pipeline_ids {
             self.tick_animations_for_pipeline(*pipeline_id)
         }
@@ -1942,7 +1939,7 @@ impl IOCompositor {
             }
         }
 
-        profile(
+        time_profile!(
             ProfilerCategory::Compositing,
             None,
             self.time_profiler_chan.clone(),
@@ -1957,49 +1954,7 @@ impl IOCompositor {
             },
         );
 
-        // If there are pending paint metrics, we check if any of the painted epochs is one of the
-        // ones that the paint metrics recorder is expecting. In that case, we get the current
-        // time, inform layout about it and remove the pending metric from the list.
-        if !self.pending_paint_metrics.is_empty() {
-            let mut to_remove = Vec::new();
-            // For each pending paint metrics pipeline id
-            for (id, pending_epoch) in &self.pending_paint_metrics {
-                // we get the last painted frame id from webrender
-                if let Some(WebRenderEpoch(epoch)) = self
-                    .webrender
-                    .current_epoch(self.webrender_document, id.into())
-                {
-                    // and check if it is the one layout is expecting,
-                    let epoch = Epoch(epoch);
-                    if *pending_epoch != epoch {
-                        warn!(
-                            "{}: paint metrics: pending {:?} should be {:?}",
-                            id, pending_epoch, epoch
-                        );
-                        continue;
-                    }
-                    // in which case, we remove it from the list of pending metrics,
-                    to_remove.push(*id);
-                    if let Some(pipeline) = self.pipeline(*id) {
-                        // and inform layout with the measured paint time.
-                        if let Err(e) =
-                            pipeline
-                                .script_chan
-                                .send(ConstellationControlMsg::SetEpochPaintTime(
-                                    *id,
-                                    epoch,
-                                    CrossProcessInstant::now(),
-                                ))
-                        {
-                            warn!("Sending RequestLayoutPaintMetric message to layout failed ({e:?}).");
-                        }
-                    }
-                }
-            }
-            for id in to_remove.iter() {
-                self.pending_paint_metrics.remove(id);
-            }
-        }
+        self.send_pending_paint_metrics_messages_after_composite();
 
         self.composition_request = CompositionRequest::NoCompositingNecessary;
         self.ready_to_present = true;
@@ -2090,14 +2045,6 @@ impl IOCompositor {
                 }
             }
 
-            // Run the WebXR main thread
-            self.webxr_main_thread.run_one_frame();
-
-            // The WebXR thread may make a different context current
-            let _ = self
-                .rendering_context
-                .make_gl_context_current(&window.surface);
-
             if !self.pending_scroll_zoom_events.is_empty() {
                 self.process_pending_scroll_events(window)
             }
@@ -2171,6 +2118,65 @@ impl IOCompositor {
         transaction.add_raw_font(font_key, (**data).into(), index);
         self.webrender_api
             .send_transaction(self.webrender_document, transaction);
+    }
+
+    /// Send all pending paint metrics messages after a composite operation, which may advance
+    /// the epoch for pipelines in the WebRender scene.
+    ///
+    /// If there are pending paint metrics, we check if any of the painted epochs is one
+    /// of the ones that the paint metrics recorder is expecting. In that case, we get the
+    /// current time, inform the constellation about it and remove the pending metric from
+    /// the list.
+    fn send_pending_paint_metrics_messages_after_composite(&mut self) {
+        if self.pending_paint_metrics.is_empty() {
+            return;
+        }
+        let paint_time = CrossProcessInstant::now();
+        let mut pipelines_to_remove = Vec::new();
+        let pending_paint_metrics = &mut self.pending_paint_metrics;
+        // For each pending paint metrics pipeline id, determine the current
+        // epoch and update paint timing if necessary.
+        for (pipeline_id, pending_epochs) in pending_paint_metrics.iter_mut() {
+            let Some(WebRenderEpoch(current_epoch)) = self
+                .webrender
+                .current_epoch(self.webrender_document, pipeline_id.into())
+            else {
+                continue;
+            };
+            // If the pipeline is unknown, stop trying to send paint metrics for it.
+            let Some(pipeline) = self
+                .pipeline_details
+                .get(pipeline_id)
+                .and_then(|pipeline_details| pipeline_details.pipeline.as_ref())
+            else {
+                pipelines_to_remove.push(*pipeline_id);
+                continue;
+            };
+            let current_epoch = Epoch(current_epoch);
+            let Some(index) = pending_epochs
+                .iter()
+                .position(|epoch| *epoch == current_epoch)
+            else {
+                continue;
+            };
+            // Remove all epochs that were pending before the current epochs. They were not and will not,
+            // be painted.
+            pending_epochs.drain(0..index);
+            if let Err(error) =
+                pipeline
+                    .script_chan
+                    .send(ConstellationControlMsg::SetEpochPaintTime(
+                        *pipeline_id,
+                        current_epoch,
+                        paint_time,
+                    ))
+            {
+                warn!("Sending RequestLayoutPaintMetric message to layout failed ({error:?}).");
+            }
+        }
+        for pipeline_id in pipelines_to_remove.iter() {
+            self.pending_paint_metrics.remove(pipeline_id);
+        }
     }
 }
 
