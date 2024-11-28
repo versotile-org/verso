@@ -126,6 +126,7 @@ impl Window {
                 }
             }
             EmbedderMsg::HistoryChanged(list, index) => {
+                self.close_prompt_dialog();
                 self.update_history(&list, index);
                 let url = list.get(index).unwrap();
                 if let Some(panel) = self.panel.as_ref() {

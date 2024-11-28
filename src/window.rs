@@ -3,7 +3,7 @@ use std::cell::Cell;
 use base::id::WebViewId;
 use compositing_traits::ConstellationMsg;
 use crossbeam_channel::Sender;
-use embedder_traits::{Cursor, EmbedderMsg};
+use embedder_traits::{Cursor, EmbedderMsg, PromptResult};
 use euclid::{Point2D, Size2D};
 use glutin::{
     config::{ConfigTemplateBuilder, GlConfig},
@@ -34,7 +34,7 @@ use winit::{
 use crate::{
     components::{
         context_menu::{ContextMenu, Menu},
-        prompt::PromptDialog,
+        prompt::{PromptDialog, PromptSender},
     },
     compositor::{IOCompositor, MouseWindowEvent},
     keyboard::keyboard_event_from_winit,
@@ -768,6 +768,26 @@ impl Window {
                 );
             }
             _ => {}
+        }
+    }
+}
+
+// Prompt methods
+impl Window {
+    /// Close window's prompt dialog
+    pub(crate) fn close_prompt_dialog(&mut self) {
+        if let Some(sender) = self.prompt.take().and_then(|prompt| prompt.sender()) {
+            match sender {
+                PromptSender::AlertSender(sender) => {
+                    let _ = sender.send(());
+                }
+                PromptSender::ConfirmSender(sender) => {
+                    let _ = sender.send(PromptResult::Dismissed);
+                }
+                PromptSender::InputSender(sender) => {
+                    let _ = sender.send(None);
+                }
+            }
         }
     }
 }
