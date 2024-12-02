@@ -668,7 +668,7 @@ impl Window {
 
     #[cfg(linux)]
     pub(crate) fn show_context_menu(&mut self, sender: &Sender<ConstellationMsg>) -> ContextMenu {
-        use crate::context_menu::MenuItem;
+        use crate::components::context_menu::MenuItem;
 
         let history_len = self.history.len();
 

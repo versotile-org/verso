@@ -916,19 +916,6 @@ impl IOCompositor {
             .expect("Insert then get failed!")
     }
 
-    fn pipeline(&self, pipeline_id: PipelineId) -> Option<&CompositionPipeline> {
-        match self.pipeline_details.get(&pipeline_id) {
-            Some(details) => details.pipeline.as_ref(),
-            None => {
-                warn!(
-                    "Compositor layer has an unknown pipeline ({:?}).",
-                    pipeline_id
-                );
-                None
-            }
-        }
-    }
-
     /// Set the root pipeline for our WebRender scene to a display list that consists of an iframe
     /// for each visible top-level browsing context, applying a transformation on the root for
     /// pinch zoom, page zoom, and HiDPI scaling.
