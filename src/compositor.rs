@@ -25,19 +25,13 @@ use script_traits::{
     ScrollState, TouchEventType, TouchId, WheelDelta, WindowSizeData, WindowSizeType,
 };
 use servo_geometry::{DeviceIndependentIntSize, DeviceIndependentPixel};
-use style_traits::{CSSPixel, DevicePixel, PinchZoomFactor};
+use style_traits::{CSSPixel, PinchZoomFactor};
 use webrender::{RenderApi, Transaction};
 use webrender_api::units::{
-    DeviceIntPoint, DeviceIntRect, DeviceIntSize, DevicePoint, LayoutPoint, LayoutRect, LayoutSize,
-    LayoutVector2D, WorldPoint,
+    DeviceIntPoint, DeviceIntRect, DeviceIntSize, DevicePixel, DevicePoint, LayoutPoint, LayoutRect, LayoutSize, LayoutVector2D, WorldPoint
 };
 use webrender_api::{
-    BorderRadius, BoxShadowClipMode, BuiltDisplayList, ClipMode, ColorF, CommonItemProperties,
-    ComplexClipRegion, DirtyRect, DisplayListPayload, DocumentId, Epoch as WebRenderEpoch,
-    ExternalScrollId, FontInstanceFlags, FontInstanceKey, FontInstanceOptions, FontKey,
-    HitTestFlags, PipelineId as WebRenderPipelineId, PropertyBinding, ReferenceFrameKind,
-    RenderReasons, SampledScrollOffset, ScrollLocation, SpaceAndClipInfo, SpatialId,
-    SpatialTreeItemKey, TransformStyle,
+    BorderRadius, BoxShadowClipMode, BuiltDisplayList, ClipMode, ColorF, CommonItemProperties, ComplexClipRegion, DirtyRect, DisplayListPayload, DocumentId, Epoch as WebRenderEpoch, ExternalScrollId, FontInstanceFlags, FontInstanceKey, FontInstanceOptions, FontKey, HitTestFlags, PipelineId as WebRenderPipelineId, PropertyBinding, ReferenceFrameKind, RenderReasons, SampledScrollOffset, ScrollLocation, SpaceAndClipInfo, SpatialId, SpatialTreeItemKey, TransformStyle
 };
 use webrender_traits::display_list::{HitTestInfo, ScrollTree};
 use webrender_traits::{
