@@ -204,7 +204,7 @@ impl Window {
             initial_url: if let Some(initial_url) = initial_url {
                 ServoUrl::from_url(initial_url)
             } else {
-                ServoUrl::parse("verso://resources/components/prompt/prompt_test.html").unwrap()
+                ServoUrl::parse("https://example.com").unwrap()
             },
         });
 
