@@ -1,0 +1,57 @@
+<html>
+  <head>
+    <style>
+      body {
+        font-family: Arial, Helvetica, sans-serif;
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        padding: 0;
+        margin: 0;
+        background-color: #7d818644;
+      }
+      .dialog {
+        display: flex;
+        background: #ffffff;
+        width: 400px;
+        min-height: 110px;
+        max-height: 300px;
+        flex-direction: column;
+        align-items: center;
+        border-radius: 10px;
+        box-shadow: 0 0 50px #ccc;
+        box-sizing: border-box;
+        padding: 8px;
+        gap: 8px;
+      }
+      .msg {
+        display: inline-block;
+        width: 100%;
+        min-height: 90px;
+        text-align: center;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="dialog">
+      <div id="msg" class="msg"></div>
+      <div class="btn-group">
+        <button onclick="sendToVersoAndClose('no')">No</button>
+        <button onclick="sendToVersoAndClose('yes')">Yes</button>
+      </div>
+    </div>
+  </body>
+  <script>
+    let url = URL.parse(window.location.href);
+    let msg = url.searchParams.get('msg');
+
+    // Set dialog message
+    const msgEl = document.getElementById('msg');
+    msgEl.textContent = msg ?? '';
+
+    function sendToVersoAndClose(action) {
+      window.alert(action); // Use as an IPC between Verso and WebView
+      window.close();
+    }
+  </script>
+</html>

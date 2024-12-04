@@ -6,6 +6,6 @@ Cargo.lock
 libmozjs*
 cargo-sources.json
 
-resources/
-!resources/panel.html
-!resources/context-menu.html
+resources/*
+!resources/components/
+!resources/prefs.json

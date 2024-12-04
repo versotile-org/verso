@@ -1,0 +1,72 @@
+<html>
+  <head>
+    <style>
+      body {
+        font-family: Arial, Helvetica, sans-serif;
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        padding: 0;
+        margin: 0;
+        background-color: #7d818644;
+      }
+      .dialog {
+        display: flex;
+        background: #ffffff;
+        width: 400px;
+        min-height: 110px;
+        max-height: 300px;
+        flex-direction: column;
+        align-items: center;
+        border-radius: 10px;
+        box-shadow: 0 0 50px #ccc;
+        box-sizing: border-box;
+        padding: 8px;
+        gap: 8px;
+      }
+      .msg {
+        display: inline-block;
+        width: 100%;
+        min-height: 90px;
+        text-align: center;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="dialog">
+      <div id="msg" class="msg"></div>
+      <input type="text" id="input" />
+      <div class="btn-group">
+        <button onclick="sendToVersoAndClose('cancel')">Cancel</button>
+        <button onclick="sendToVersoAndClose('ok')">Ok</button>
+      </div>
+    </div>
+  </body>
+  <script>
+    const inputEl = document.getElementById('input');
+    const msgEl = document.getElementById('msg');
+
+    const params = URL.parse(window.location.href).searchParams;
+
+    // Set input default value
+    const defaultValue = params.get('defaultValue');
+    if (typeof defaultValue === 'string' || defaultValue instanceof String) {
+      inputEl.defaultValue = defaultValue;
+    }
+
+    // Set dialog message
+    const msg = params.get('msg');
+    msgEl.textContent = msg ?? '';
+
+    function sendToVersoAndClose(action) {
+      // Use as an IPC between Verso and WebView
+      window.alert(
+        JSON.stringify({
+          action,
+          value: inputEl.value,
+        })
+      );
+      window.close();
+    }
+  </script>
+</html>
