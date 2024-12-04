@@ -32,15 +32,15 @@ use winit::{
 };
 
 use crate::{
-    components::{
-        context_menu::{ContextMenu, Menu},
-        prompt::{PromptDialog, PromptSender},
-    },
     compositor::{IOCompositor, MouseWindowEvent},
     keyboard::keyboard_event_from_winit,
     rendering::{gl_config_picker, RenderingContext},
     verso::send_to_constellation,
-    webview::{Panel, WebView},
+    webview::{
+        context_menu::{ContextMenu, Menu},
+        prompt::{PromptDialog, PromptSender},
+        Panel, WebView,
+    },
 };
 
 use arboard::Clipboard;
@@ -668,7 +668,7 @@ impl Window {
 
     #[cfg(linux)]
     pub(crate) fn show_context_menu(&mut self, sender: &Sender<ConstellationMsg>) -> ContextMenu {
-        use crate::components::context_menu::MenuItem;
+        use crate::webview::context_menu::MenuItem;
 
         let history_len = self.history.len();
 
@@ -739,7 +739,7 @@ impl Window {
     pub(crate) fn handle_context_menu_event(
         &mut self,
         sender: &Sender<ConstellationMsg>,
-        event: crate::components::context_menu::ContextMenuResult,
+        event: crate::webview::context_menu::ContextMenuResult,
     ) {
         self.close_context_menu(sender);
         match event.id.as_str() {

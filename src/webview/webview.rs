@@ -16,14 +16,14 @@ use url::Url;
 use webrender_api::units::DeviceIntRect;
 
 use crate::{
-    components::prompt::{PromptDialog, PromptInputResult, PromptSender},
     compositor::IOCompositor,
     verso::send_to_constellation,
+    webview::prompt::{PromptDialog, PromptInputResult, PromptSender},
     window::Window,
 };
 
 #[cfg(linux)]
-use crate::components::context_menu::ContextMenuResult;
+use crate::webview::context_menu::ContextMenuResult;
 
 /// A web view is an area to display web browsing context. It's what user will treat as a "web page".
 #[derive(Debug, Clone)]
