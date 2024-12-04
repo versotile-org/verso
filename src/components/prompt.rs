@@ -1,7 +1,7 @@
 use base::id::WebViewId;
 use compositing_traits::ConstellationMsg;
 use crossbeam_channel::Sender;
-use embedder_traits::PromptResult;
+use embedder_traits::{PermissionRequest, PromptResult};
 use ipc_channel::ipc::IpcSender;
 use serde::{Deserialize, Serialize};
 use servo_url::ServoUrl;
@@ -39,6 +39,8 @@ pub enum PromptSender {
     ConfirmSender(IpcSender<PromptResult>),
     /// Input sender
     InputSender(IpcSender<Option<String>>),
+    /// Yes/No Permission sender
+    PermissionSender(IpcSender<PermissionRequest>),
 }
 
 /// Prompt input result send from prompt dialog to backend
@@ -149,8 +151,10 @@ impl PromptDialog {
     /// ## Example
     ///
     /// ```rust
-    /// if let Some(PromptSender::ConfirmSender(sender)) = prompt.sender() {
-    ///     let _ = sender.send(PromptResult::Primary);
+    /// let mut prompt = PromptDialog::new();
+    /// prompt.yes_no(sender, rect, message, prompt_sender);
+    /// if let Some(PromptSender::PermissionSender(sender)) = prompt.sender() {
+    ///     let _ = sender.send(PermissionRequest::Granted);
     /// }
     /// ```
     pub fn yes_no(
@@ -158,9 +162,9 @@ impl PromptDialog {
         sender: &Sender<ConstellationMsg>,
         rect: DeviceIntRect,
         message: String,
-        prompt_sender: IpcSender<PromptResult>,
+        prompt_sender: PromptSender,
     ) {
-        self.prompt_sender = Some(PromptSender::ConfirmSender(prompt_sender));
+        self.prompt_sender = Some(prompt_sender);
         self.show(sender, rect, PromptType::YesNo(message));
     }
 

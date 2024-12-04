@@ -2,7 +2,10 @@ use arboard::Clipboard;
 use base::id::{BrowsingContextId, WebViewId};
 use compositing_traits::ConstellationMsg;
 use crossbeam_channel::Sender;
-use embedder_traits::{CompositorEventVariant, EmbedderMsg, PromptDefinition, PromptResult};
+use embedder_traits::{
+    CompositorEventVariant, EmbedderMsg, PermissionPrompt, PermissionRequest, PromptDefinition,
+    PromptResult,
+};
 use ipc_channel::ipc;
 use script_traits::{
     webdriver_msg::{WebDriverJSResult, WebDriverScriptCommand},
@@ -164,7 +167,12 @@ impl Window {
                         prompt.ok_cancel(sender, rect, message, prompt_sender);
                     }
                     PromptDefinition::YesNo(message, prompt_sender) => {
-                        prompt.yes_no(sender, rect, message, prompt_sender);
+                        prompt.yes_no(
+                            sender,
+                            rect,
+                            message,
+                            PromptSender::ConfirmSender(prompt_sender),
+                        );
                     }
                     PromptDefinition::Input(message, default_value, prompt_sender) => {
                         prompt.input(sender, rect, message, Some(default_value), prompt_sender);
@@ -173,6 +181,33 @@ impl Window {
 
                 // save prompt in window to keep prompt_sender alive
                 // so that we can send the result back to the prompt after user clicked the button
+                self.prompt = Some(prompt);
+            }
+            EmbedderMsg::PromptPermission(prompt, prompt_sender) => {
+                let message = match prompt {
+                    PermissionPrompt::Request(permission_name) => {
+                        format!(
+                            "This website would like to request permission for {:?}.",
+                            permission_name
+                        )
+                    }
+                    PermissionPrompt::Insecure(permission_name) => {
+                        format!(
+                            "This website would like to request permission for {:?}. However current connection is not secure. Do you want to proceed?",
+                            permission_name
+                        )
+                    }
+                };
+
+                let mut prompt = PromptDialog::new();
+                let rect = self.webview.as_ref().unwrap().rect;
+                prompt.yes_no(
+                    sender,
+                    rect,
+                    message,
+                    PromptSender::PermissionSender(prompt_sender),
+                );
+
                 self.prompt = Some(prompt);
             }
             e => {
@@ -408,6 +443,17 @@ impl Window {
                                 log::error!("prompt result message invalid: {msg}");
                                 let _ = sender.send(None);
                             }
+                        }
+                        PromptSender::PermissionSender(sender) => {
+                            let result: PermissionRequest = match msg.as_str() {
+                                "ok" | "yes" => PermissionRequest::Granted,
+                                "cancel" | "no" => PermissionRequest::Denied,
+                                _ => {
+                                    log::error!("prompt result message invalid: {msg}");
+                                    PermissionRequest::Denied
+                                }
+                            };
+                            let _ = sender.send(result);
                         }
                     }
 
