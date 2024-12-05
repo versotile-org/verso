@@ -1228,8 +1228,14 @@ impl IOCompositor {
         }
 
         let rect = DeviceIntRect::from_size(size);
-        let content_size = window.get_content_size(rect);
-        if let Some(w) = &mut window.webview {
+
+        let show_tab = window.tabs.count() > 1;
+        let content_size = window.get_content_size(rect, show_tab);
+        // if let Some(w) = &mut window.webview {
+        //     w.set_size(content_size);
+        //     self.on_resize_webview_event(w.webview_id, w.rect);
+        // }
+        if let Some(w) = window.tabs.active_webview_as_mut() {
             w.set_size(content_size);
             self.on_resize_webview_event(w.webview_id, w.rect);
         }

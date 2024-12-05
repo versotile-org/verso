@@ -35,6 +35,7 @@ use crate::{
     compositor::{IOCompositor, MouseWindowEvent},
     keyboard::keyboard_event_from_winit,
     rendering::{gl_config_picker, RenderingContext},
+    tab::TabManager,
     verso::send_to_constellation,
     webview::{
         context_menu::{ContextMenu, Menu},
@@ -45,6 +46,10 @@ use crate::{
 
 use arboard::Clipboard;
 
+const PANEL_HEIGHT: f64 = 50.0;
+const TAB_HEIGHT: f64 = 30.0;
+const PANEL_PADDING: f64 = 4.0;
+
 /// A Verso window is a Winit window containing several web views.
 pub struct Window {
     /// Access to Winit window
@@ -54,7 +59,7 @@ pub struct Window {
     /// The main panel of this window.
     pub(crate) panel: Option<Panel>,
     /// The WebView of this window.
-    pub(crate) webview: Option<WebView>,
+    // pub(crate) webview: Option<WebView>,
     /// The mouse physical position in the web view.
     mouse_position: Cell<Option<PhysicalPosition<f64>>>,
     /// Modifiers state of the keyboard.
@@ -72,9 +77,10 @@ pub struct Window {
     /// Global menu event receiver for muda crate
     #[cfg(any(target_os = "macos", target_os = "windows"))]
     menu_event_receiver: MenuEventReceiver,
-
     /// Current Prompt
     pub(crate) prompt: Option<PromptDialog>,
+    /// Window tabs manager
+    pub(crate) tabs: TabManager,
 }
 
 impl Window {
@@ -119,7 +125,7 @@ impl Window {
                 window,
                 surface,
                 panel: None,
-                webview: None,
+                // webview: None,
                 mouse_position: Default::default(),
                 modifiers_state: Cell::new(ModifiersState::default()),
                 history: vec![],
@@ -130,6 +136,7 @@ impl Window {
                 #[cfg(any(target_os = "macos", target_os = "windows"))]
                 menu_event_receiver: MenuEvent::receiver().clone(),
                 prompt: None,
+                tabs: TabManager::new(),
             },
             rendering_context,
         )
@@ -163,7 +170,7 @@ impl Window {
             window,
             surface,
             panel: None,
-            webview: None,
+            // webview: None,
             mouse_position: Default::default(),
             modifiers_state: Cell::new(ModifiersState::default()),
             history: vec![],
@@ -174,15 +181,21 @@ impl Window {
             #[cfg(any(target_os = "macos", target_os = "windows"))]
             menu_event_receiver: MenuEvent::receiver().clone(),
             prompt: None,
+            tabs: TabManager::new(),
         };
         compositor.swap_current_window(&mut window);
         window
     }
 
     /// Get the content area size for the webview to draw on
-    pub fn get_content_size(&self, mut size: DeviceIntRect) -> DeviceIntRect {
+    pub fn get_content_size(&self, mut size: DeviceIntRect, include_tab: bool) -> DeviceIntRect {
         if self.panel.is_some() {
-            size.min.y = size.max.y.min(100);
+            let height: f64 = if include_tab {
+                (PANEL_HEIGHT + TAB_HEIGHT + PANEL_PADDING) * self.scale_factor()
+            } else {
+                (PANEL_HEIGHT + PANEL_PADDING) * self.scale_factor()
+            };
+            size.min.y = size.max.y.min(height as i32);
             size.min.x += 10;
             size.max.y -= 10;
             size.max.x -= 10;
@@ -208,7 +221,8 @@ impl Window {
             },
         });
 
-        let url = ServoUrl::parse("verso://resources/components/panel.html").unwrap();
+        // let url = ServoUrl::parse("verso://resources/components/panel.html").unwrap();
+        let url = ServoUrl::parse("http://localhost:5173/").unwrap();
         send_to_constellation(
             constellation_sender,
             ConstellationMsg::NewWebView(url, panel_id),
@@ -224,9 +238,20 @@ impl Window {
         let webview_id = WebViewId::new();
         let size = self.size();
         let rect = DeviceIntRect::from_size(size);
+
+        let show_tab = self.tabs.count() >= 1;
+        let content_size = self.get_content_size(rect, show_tab);
+
         let mut webview = WebView::new(webview_id, rect);
-        webview.set_size(self.get_content_size(rect));
-        self.webview.replace(webview);
+        webview.set_size(content_size);
+        // self.webview.replace(webview.clone());
+
+        if let Some(first_webview) = self.tabs.active_webview_as_mut() {
+            first_webview.set_size(content_size);
+        }
+
+        self.tabs.append_webview(webview, true);
+
         send_to_constellation(
             constellation_sender,
             ConstellationMsg::NewWebView(initial_url, webview_id),
@@ -516,11 +541,11 @@ impl Window {
         self.panel
             .as_ref()
             .map_or(false, |w| w.webview.webview_id == id)
-            || self.webview.as_ref().map_or(false, |w| w.webview_id == id)
+            || self.tabs.webview_by_id(id).is_some()
     }
 
-    /// Remove the webview in this window by provided webview ID. If this is the panel, it will
-    /// shut down the compositor and then close whole application.
+    /// Remove the webview in this window by provided webview ID.
+    /// If provided ID is the panel, it will shut down the compositor and then close whole application.
     pub fn remove_webview(
         &mut self,
         id: WebViewId,
@@ -553,23 +578,43 @@ impl Window {
             .filter(|w| w.webview.webview_id == id)
             .is_some()
         {
-            if let Some(w) = self.webview.as_ref() {
+            // Removing panel, remove all webviews and shut down the compositor
+            let webviews = self.tabs.close_all();
+            for webview in webviews {
                 send_to_constellation(
                     &compositor.constellation_chan,
-                    ConstellationMsg::CloseWebView(w.webview_id),
-                )
+                    ConstellationMsg::CloseWebView(webview.webview_id),
+                );
             }
+            // if let Some(w) = self.webview.as_ref() {
+            //     send_to_constellation(
+            //         &compositor.constellation_chan,
+            //         ConstellationMsg::CloseWebView(w.webview_id),
+            //     )
+            // }
             (self.panel.take().map(|panel| panel.webview), false)
-        } else if self
-            .webview
-            .as_ref()
-            .filter(|w| w.webview_id == id)
-            .is_some()
-        {
-            (self.webview.take(), self.panel.is_none())
+        } else if let Ok(webview) = self.tabs.remove_webview_by_id(id) {
+            if self.tabs.count() <= 1 {
+                let size = self.size();
+                let rect = DeviceIntRect::from_size(size);
+                let content_size = self.get_content_size(rect, false);
+                if let Some(webview) = self.tabs.active_webview_as_mut() {
+                    webview.set_size(content_size);
+                }
+            }
+            (Some(webview), self.panel.is_none())
         } else {
             (None, false)
         }
+
+        // else if self
+        //     .webview
+        //     .as_ref()
+        //     .filter(|w| w.webview_id == id)
+        //     .is_some()
+        // {
+        //     (self.webview.take(), self.panel.is_none())
+        // }
     }
 
     /// Get the painting order of this window.
@@ -578,7 +623,8 @@ impl Window {
         if let Some(panel) = &self.panel {
             order.push(&panel.webview);
         }
-        if let Some(webview) = &self.webview {
+        if let Some(webview) = self.tabs.active_webview() {
+            // dbg!(webview);
             order.push(webview);
         }
 
@@ -703,12 +749,13 @@ impl Window {
     #[cfg(any(target_os = "macos", target_os = "windows"))]
     fn handle_context_menu_event(&self, sender: &Sender<ConstellationMsg>, event: MenuEvent) {
         // TODO: should be more flexible to handle different menu items
+        let active_webview = self.tabs.active_webview().unwrap();
         match event.id().0.as_str() {
             "back" => {
                 send_to_constellation(
                     sender,
                     ConstellationMsg::TraverseHistory(
-                        self.webview.as_ref().unwrap().webview_id,
+                        active_webview.webview_id,
                         TraversalDirection::Back(1),
                     ),
                 );
@@ -717,16 +764,13 @@ impl Window {
                 send_to_constellation(
                     sender,
                     ConstellationMsg::TraverseHistory(
-                        self.webview.as_ref().unwrap().webview_id,
+                        active_webview.webview_id,
                         TraversalDirection::Forward(1),
                     ),
                 );
             }
             "reload" => {
-                send_to_constellation(
-                    sender,
-                    ConstellationMsg::Reload(self.webview.as_ref().unwrap().webview_id),
-                );
+                send_to_constellation(sender, ConstellationMsg::Reload(active_webview.webview_id));
             }
             _ => {}
         }
@@ -742,32 +786,36 @@ impl Window {
         event: crate::webview::context_menu::ContextMenuResult,
     ) {
         self.close_context_menu(sender);
-        match event.id.as_str() {
-            "back" => {
-                send_to_constellation(
-                    sender,
-                    ConstellationMsg::TraverseHistory(
-                        self.webview.as_ref().unwrap().webview_id,
-                        TraversalDirection::Back(1),
-                    ),
-                );
+        if let Some(active_webview) = self.tabs.active_webview() {
+            match event.id.as_str() {
+                "back" => {
+                    send_to_constellation(
+                        sender,
+                        ConstellationMsg::TraverseHistory(
+                            active_webview.webview_id,
+                            TraversalDirection::Back(1),
+                        ),
+                    );
+                }
+                "forward" => {
+                    send_to_constellation(
+                        sender,
+                        ConstellationMsg::TraverseHistory(
+                            active_webview.webview_id,
+                            TraversalDirection::Forward(1),
+                        ),
+                    );
+                }
+                "reload" => {
+                    send_to_constellation(
+                        sender,
+                        ConstellationMsg::Reload(active_webview.webview_id),
+                    );
+                }
+                _ => {}
             }
-            "forward" => {
-                send_to_constellation(
-                    sender,
-                    ConstellationMsg::TraverseHistory(
-                        self.webview.as_ref().unwrap().webview_id,
-                        TraversalDirection::Forward(1),
-                    ),
-                );
-            }
-            "reload" => {
-                send_to_constellation(
-                    sender,
-                    ConstellationMsg::Reload(self.webview.as_ref().unwrap().webview_id),
-                );
-            }
-            _ => {}
+        } else {
+            log::error!("No active webview to handle context menu event");
         }
     }
 }

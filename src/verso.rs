@@ -587,8 +587,19 @@ impl Verso {
     pub fn handle_incoming_webview_message(&self, message: ControllerMessage) {
         match message {
             ControllerMessage::NavigateTo(to_url) => {
+                // if let Some(webview_id) = self.windows.values().next().and_then(|(window, _)| {
+                //     window.webview.as_ref().map(|webview| webview.webview_id)
+                // }) {
+                //     send_to_constellation(
+                //         &self.constellation_sender,
+                //         ConstellationMsg::LoadUrl(webview_id, ServoUrl::from_url(to_url)),
+                //     );
+                // }
                 if let Some(webview_id) = self.windows.values().next().and_then(|(window, _)| {
-                    window.webview.as_ref().map(|webview| webview.webview_id)
+                    window
+                        .tabs
+                        .active_webview()
+                        .map(|webview| webview.webview_id)
                 }) {
                     send_to_constellation(
                         &self.constellation_sender,
