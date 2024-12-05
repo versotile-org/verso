@@ -17,6 +17,7 @@ use webrender_api::units::DeviceIntRect;
 
 use crate::{
     compositor::IOCompositor,
+    tab::{TabActivateRequest, TabCloseRequest, TabCreateResponse},
     verso::send_to_constellation,
     webview::prompt::{PromptDialog, PromptInputResult, PromptSender},
     window::Window,
@@ -156,59 +157,65 @@ impl Window {
                 // TODO: Implement context menu
             }
             EmbedderMsg::Prompt(prompt_type, _origin) => {
-                let mut prompt = PromptDialog::new();
-                let rect = self.webview.as_ref().unwrap().rect;
+                if let Some(webview) = self.tabs.webview_by_id(webview_id) {
+                    let mut prompt = PromptDialog::new();
+                    let rect = webview.rect;
+                    match prompt_type {
+                        PromptDefinition::Alert(message, prompt_sender) => {
+                            prompt.alert(sender, rect, message, prompt_sender);
+                        }
+                        PromptDefinition::OkCancel(message, prompt_sender) => {
+                            prompt.ok_cancel(sender, rect, message, prompt_sender);
+                        }
+                        PromptDefinition::YesNo(message, prompt_sender) => {
+                            prompt.yes_no(
+                                sender,
+                                rect,
+                                message,
+                                PromptSender::ConfirmSender(prompt_sender),
+                            );
+                        }
+                        PromptDefinition::Input(message, default_value, prompt_sender) => {
+                            prompt.input(sender, rect, message, Some(default_value), prompt_sender);
+                        }
+                    }
 
-                match prompt_type {
-                    PromptDefinition::Alert(message, prompt_sender) => {
-                        prompt.alert(sender, rect, message, prompt_sender);
-                    }
-                    PromptDefinition::OkCancel(message, prompt_sender) => {
-                        prompt.ok_cancel(sender, rect, message, prompt_sender);
-                    }
-                    PromptDefinition::YesNo(message, prompt_sender) => {
-                        prompt.yes_no(
-                            sender,
-                            rect,
-                            message,
-                            PromptSender::ConfirmSender(prompt_sender),
-                        );
-                    }
-                    PromptDefinition::Input(message, default_value, prompt_sender) => {
-                        prompt.input(sender, rect, message, Some(default_value), prompt_sender);
-                    }
+                    // save prompt in window to keep prompt_sender alive
+                    // so that we can send the result back to the prompt after user clicked the button
+                    self.prompt = Some(prompt);
+                } else {
+                    log::error!("Failed to get WebView {webview_id:?} in this window.");
                 }
-
-                // save prompt in window to keep prompt_sender alive
-                // so that we can send the result back to the prompt after user clicked the button
-                self.prompt = Some(prompt);
             }
             EmbedderMsg::PromptPermission(prompt, prompt_sender) => {
-                let message = match prompt {
-                    PermissionPrompt::Request(permission_name) => {
-                        format!(
-                            "This website would like to request permission for {:?}.",
-                            permission_name
-                        )
-                    }
-                    PermissionPrompt::Insecure(permission_name) => {
-                        format!(
-                            "This website would like to request permission for {:?}. However current connection is not secure. Do you want to proceed?",
-                            permission_name
-                        )
-                    }
-                };
+                if let Some(webview) = self.tabs.webview_by_id(webview_id) {
+                    let message = match prompt {
+                        PermissionPrompt::Request(permission_name) => {
+                            format!(
+                                "This website would like to request permission for {:?}.",
+                                permission_name
+                            )
+                        }
+                        PermissionPrompt::Insecure(permission_name) => {
+                            format!(
+                                "This website would like to request permission for {:?}. However current connection is not secure. Do you want to proceed?",
+                                permission_name
+                            )
+                        }
+                    };
 
-                let mut prompt = PromptDialog::new();
-                let rect = self.webview.as_ref().unwrap().rect;
-                prompt.yes_no(
-                    sender,
-                    rect,
-                    message,
-                    PromptSender::PermissionSender(prompt_sender),
-                );
+                    let mut prompt = PromptDialog::new();
+                    prompt.yes_no(
+                        sender,
+                        webview.rect,
+                        message,
+                        PromptSender::PermissionSender(prompt_sender),
+                    );
 
-                self.prompt = Some(prompt);
+                    self.prompt = Some(prompt);
+                } else {
+                    log::error!("Failed to get WebView {webview_id:?} in this window.");
+                }
             }
             e => {
                 log::trace!("Verso WebView isn't supporting this message yet: {e:?}")
@@ -223,7 +230,7 @@ impl Window {
         message: EmbedderMsg,
         sender: &Sender<ConstellationMsg>,
         clipboard: Option<&mut Clipboard>,
-        _compositor: &mut IOCompositor,
+        compositor: &mut IOCompositor,
     ) -> bool {
         log::trace!("Verso Panel {panel_id:?} is handling Embedder message: {message:?}",);
         match message {
@@ -258,8 +265,7 @@ impl Window {
             EmbedderMsg::Prompt(definition, _origin) => {
                 match definition {
                     PromptDefinition::Input(msg, _, prompt_sender) => {
-                        let _ = prompt_sender.send(None);
-                        if let Some(webview) = &self.webview {
+                        if let Some(webview) = self.tabs.active_webview() {
                             let id = webview.webview_id;
 
                             if msg.starts_with("NAVIGATE_TO:") {
@@ -280,6 +286,40 @@ impl Window {
                                     sender,
                                     ConstellationMsg::LoadUrl(id, ServoUrl::from_url(url)),
                                 );
+                            } else if msg.starts_with("CLOSE_TAB:") {
+                                let request_str = msg.strip_prefix("CLOSE_TAB:").unwrap();
+                                let request: TabCloseRequest = serde_json::from_str(request_str)
+                                    .expect("Failed to parse TabCloseRequest");
+
+                                // close the tab
+                                if let Some(_) = self.tabs.webview_by_id(id) {
+                                    send_to_constellation(
+                                        sender,
+                                        ConstellationMsg::CloseWebView(request.id),
+                                    );
+                                }
+
+                                let _ = prompt_sender.send(None);
+                                return false;
+                            } else if msg.starts_with("ACTIVATE_TAB:") {
+                                let request_str = msg.strip_prefix("ACTIVATE_TAB:").unwrap();
+                                let request: TabActivateRequest = serde_json::from_str(request_str)
+                                    .expect("Failed to parse TabActivateRequest");
+
+                                let id = request.id;
+                                if let Some(_) = self.tabs.activate_webview_by_id(id) {
+                                    send_to_constellation(
+                                        sender,
+                                        ConstellationMsg::FocusWebView(id),
+                                    );
+
+                                    // update painting order immediately to draw the active tab
+                                    compositor.send_root_pipeline_display_list(self);
+                                }
+
+                                // TODO: return new active id
+                                let _ = prompt_sender.send(None);
+                                return false;
                             } else {
                                 match msg.as_str() {
                                     "PREV" => {
@@ -308,6 +348,37 @@ impl Window {
                                     "NEW_WINDOW" => {
                                         return true;
                                     }
+                                    "NEW_TAB" => {
+                                        let webview_id = WebViewId::new();
+                                        let size = self.size();
+                                        let rect = DeviceIntRect::from_size(size);
+                                        let content_size = self.get_content_size(rect, true);
+                                        let mut webview = WebView::new(webview_id, rect);
+                                        webview.set_size(content_size);
+
+                                        if let Some(first_webview) =
+                                            self.tabs.active_webview_as_mut()
+                                        {
+                                            first_webview.set_size(content_size);
+                                        }
+
+                                        self.tabs.append_webview(webview, true);
+
+                                        send_to_constellation(
+                                            sender,
+                                            ConstellationMsg::NewWebView(
+                                                ServoUrl::parse("https://example.com").unwrap(),
+                                                webview_id,
+                                            ),
+                                        );
+                                        // TODO: set tab title
+                                        let result = TabCreateResponse {
+                                            success: true,
+                                            id: webview_id,
+                                        };
+                                        let _ = prompt_sender.send(Some(result.to_json()));
+                                        return false;
+                                    }
                                     "MINIMIZE" => {
                                         self.window.set_minimized(true);
                                     }
@@ -324,6 +395,7 @@ impl Window {
                                 }
                             }
                         }
+                        let _ = prompt_sender.send(None);
                     }
                     _ => log::trace!("Verso Panel isn't supporting this prompt yet"),
                 }
