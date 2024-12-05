@@ -318,15 +318,26 @@ impl ProtocolHandler for ResourceReader {
         let path = current_url.path();
         let path = self.0.join(path.strip_prefix('/').unwrap_or(path));
 
-        let response = if let Ok(file) = fs::read(path) {
+        let response = if let Ok(file) = fs::read(path.clone()) {
             let mut response = Response::new(
                 request.current_url(),
                 ResourceFetchTiming::new(request.timing_type()),
             );
 
             // Set Content-Type header.
-            // TODO: We assume it's HTML for now. This should be updated once we have IPC interface.
-            response.headers.typed_insert(ContentType::html());
+            if let Some(ext) = path.extension() {
+                match ext.to_str() {
+                    Some("css") => response
+                        .headers
+                        .typed_insert(ContentType::from(mime::TEXT_CSS)),
+                    Some("js") => response
+                        .headers
+                        .typed_insert(ContentType::from(mime::TEXT_JAVASCRIPT)),
+                    Some("json") => response.headers.typed_insert(ContentType::json()),
+                    Some("html") => response.headers.typed_insert(ContentType::html()),
+                    _ => response.headers.typed_insert(ContentType::octet_stream()),
+                }
+            }
 
             *response.body.lock().unwrap() = ResponseBody::Done(file);
 
