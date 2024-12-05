@@ -1,2 +1,2 @@
-resources/* linguist-vendored
+resources/** linguist-vendored
 third_party/* linguist-vendored
