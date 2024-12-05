@@ -325,7 +325,6 @@ impl ProtocolHandler for ResourceReader {
             );
 
             // Set Content-Type header.
-            // TODO: We assume it's HTML for now. This should be updated once we have IPC interface.
             if let Some(ext) = path.extension() {
                 match ext.to_str() {
                     Some("css") => response
