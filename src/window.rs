@@ -1,6 +1,6 @@
 use std::cell::Cell;
 
-use base::id::WebViewId;
+use base::id::{BrowsingContextId, WebViewId};
 use compositing_traits::ConstellationMsg;
 use crossbeam_channel::Sender;
 use embedder_traits::{Cursor, EmbedderMsg, PermissionRequest, PromptResult};
@@ -10,11 +10,15 @@ use glutin::{
     surface::{Surface, WindowSurface},
 };
 use glutin_winit::DisplayBuilder;
+use ipc_channel::ipc;
 #[cfg(any(target_os = "macos", target_os = "windows"))]
 use muda::{Menu as MudaMenu, MenuEvent, MenuEventReceiver, MenuItem};
 #[cfg(any(target_os = "macos", target_os = "windows"))]
 use raw_window_handle::HasWindowHandle;
-use script_traits::TraversalDirection;
+use script_traits::{
+    webdriver_msg::{WebDriverJSResult, WebDriverScriptCommand},
+    TraversalDirection, WebDriverCommandMsg,
+};
 use script_traits::{TouchEventType, WheelDelta, WheelMode};
 use servo_url::ServoUrl;
 use webrender_api::{
@@ -230,7 +234,7 @@ impl Window {
     }
 
     /// Create a new webview and send the constellation message to load the initial URL
-    pub fn create_webview(
+    pub fn create_first_webview(
         &mut self,
         constellation_sender: &Sender<ConstellationMsg>,
         initial_url: ServoUrl,

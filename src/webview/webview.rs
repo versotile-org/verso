@@ -17,6 +17,7 @@ use webrender_api::units::DeviceIntRect;
 
 use crate::{
     compositor::IOCompositor,
+    tab::{TabActivateRequest, TabCreatedResponse},
     verso::send_to_constellation,
     webview::prompt::{PromptDialog, PromptInputResult, PromptSender},
     window::Window,
@@ -252,7 +253,7 @@ impl Window {
                 self.window.request_redraw();
                 send_to_constellation(sender, ConstellationMsg::FocusWebView(panel_id));
 
-                self.create_webview(sender, self.panel.as_ref().unwrap().initial_url.clone());
+                self.create_first_webview(sender, self.panel.as_ref().unwrap().initial_url.clone());
             }
             EmbedderMsg::AllowNavigationRequest(id, _url) => {
                 // The panel shouldn't navigate to other pages.
@@ -264,7 +265,6 @@ impl Window {
             EmbedderMsg::Prompt(definition, _origin) => {
                 match definition {
                     PromptDefinition::Input(msg, _, prompt_sender) => {
-                        let _ = prompt_sender.send(None);
                         if let Some(webview) = self.tabs.active_webview() {
                             let id = webview.webview_id;
 
@@ -287,26 +287,50 @@ impl Window {
                                     ConstellationMsg::LoadUrl(id, ServoUrl::from_url(url)),
                                 );
                             } else if msg.starts_with("CLOSE_TAB:") {
+                                // TODO: use webview id instead of index
                                 let idx = msg.strip_prefix("CLOSE_TAB:").unwrap().parse().unwrap();
-
                                 if let Some(webview) = self.tabs.webview_at(idx) {
                                     send_to_constellation(
                                         sender,
                                         ConstellationMsg::CloseWebView(webview.webview_id),
                                     );
-                                    // TODO: return new active tab index
                                 }
+                                let _ = prompt_sender.send(None);
+                                return false;
                             } else if msg.starts_with("ACTIVATE_TAB:") {
-                                let idx =
-                                    msg.strip_prefix("ACTIVATE_TAB:").unwrap().parse().unwrap();
-                                if let Some(webview) = self.tabs.activate_webview(idx) {
-                                    let id = webview.webview_id;
+                                // TODO: use webview id instead of index
+                                // let idx =
+                                //     msg.strip_prefix("ACTIVATE_TAB:").unwrap().parse().unwrap();
+                                // if let Some(webview) = self.tabs.activate_webview(idx) {
+                                //     let id = webview.webview_id;
+                                //     send_to_constellation(
+                                //         sender,
+                                //         ConstellationMsg::FocusWebView(id),
+                                //     );
+
+                                //     // update painting order immediately to draw the active tab
+                                //     compositor.send_root_pipeline_display_list(self);
+                                // }
+
+                                let request_str = msg.strip_prefix("ACTIVATE_TAB:").unwrap();
+                                let request: TabActivateRequest = serde_json::from_str(request_str)
+                                    .expect("Failed to parse TabActivateRequest");
+
+                                dbg!(&request);
+
+                                let id = request.id;
+                                if let Some(_) = self.tabs.activate_webview_by_id(id) {
+                                    // let id = webview.webview_id;
                                     send_to_constellation(
                                         sender,
                                         ConstellationMsg::FocusWebView(id),
                                     );
+
+                                    // update painting order immediately to draw the active tab
                                     compositor.send_root_pipeline_display_list(self);
                                 }
+                                let _ = prompt_sender.send(None);
+                                return false;
                             } else {
                                 match msg.as_str() {
                                     "PREV" => {
@@ -359,6 +383,12 @@ impl Window {
                                             ),
                                         );
                                         // TODO: set tab title
+                                        let result = TabCreatedResponse {
+                                            success: true,
+                                            id: webview_id,
+                                        };
+                                        let _ = prompt_sender.send(Some(result.to_json()));
+                                        return false;
                                     }
                                     "MINIMIZE" => {
                                         self.window.set_minimized(true);
@@ -376,6 +406,7 @@ impl Window {
                                 }
                             }
                         }
+                        let _ = prompt_sender.send(None);
                     }
                     _ => log::trace!("Verso Panel isn't supporting this prompt yet"),
                 }

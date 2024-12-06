@@ -1,5 +1,6 @@
 use crate::webview::WebView;
 use base::id::TopLevelBrowsingContextId;
+use serde::{Deserialize, Serialize};
 
 /// Tab manager to handle multiple WebViews in a window.
 pub struct TabManager {
@@ -44,6 +45,20 @@ impl TabManager {
     /// Activate the WebView at the specified index.
     pub fn activate_webview(&mut self, idx: usize) -> Option<&WebView> {
         if let Some(webview) = self.webviews.get(idx) {
+            self.active_idx = idx;
+            Some(webview)
+        } else {
+            None
+        }
+    }
+    /// Activate the WebView at the specified index.
+    pub fn activate_webview_by_id(&mut self, id: TopLevelBrowsingContextId) -> Option<&WebView> {
+        if let Some((idx, webview)) = self
+            .webviews
+            .iter()
+            .enumerate()
+            .find(|(_, webview)| webview.webview_id == id)
+        {
             self.active_idx = idx;
             Some(webview)
         } else {
@@ -136,4 +151,43 @@ pub enum TabManagerErr {
     WebViewIdNotFound,
     /// Remove last WebView.
     RemoveLastWebView,
+}
+
+/// Response to UI that the tab was created.
+#[derive(Debug, Clone, Serialize)]
+pub struct TabCreatedResponse {
+    /// Tab creation success
+    pub success: bool,
+    /// Tab WebView id
+    pub id: TopLevelBrowsingContextId,
+}
+
+impl TabCreatedResponse {
+    /// Create a new TabCreatedResult json string.
+    pub fn to_json(&self) -> String {
+        serde_json::to_string(self).unwrap()
+    }
+}
+
+/// Activate the tab request from UI.
+#[derive(Debug, Clone, Deserialize)]
+pub struct TabActivateRequest {
+    /// Tab WebView id
+    pub id: TopLevelBrowsingContextId,
+}
+
+/// Activate the tab request from UI.
+#[derive(Debug, Clone, Serialize)]
+pub struct TabActivateResponse {
+    /// Tab creation success
+    pub success: bool,
+    /// Tab WebView id
+    pub id: TopLevelBrowsingContextId,
+}
+
+impl TabActivateResponse {
+    /// Create a new TabCreatedResult json string.
+    pub fn to_json(&self) -> String {
+        serde_json::to_string(self).unwrap()
+    }
 }
