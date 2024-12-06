@@ -7,4 +7,5 @@ edition = "2021"
 ipc-channel = { workspace = true }
 serde = { workspace = true }
 url = { workspace = true }
+log = { workspace = true }
 versoview_messages = { path = "../versoview_messages" }

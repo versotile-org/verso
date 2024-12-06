@@ -1,4 +1,4 @@
-use std::cell::Cell;
+use std::{cell::Cell, sync::Mutex};
 
 use base::id::WebViewId;
 use compositing_traits::ConstellationMsg;
@@ -17,6 +17,7 @@ use raw_window_handle::HasWindowHandle;
 use script_traits::TraversalDirection;
 use script_traits::{TouchEventType, WheelDelta, WheelMode};
 use servo_url::ServoUrl;
+use versoview_messages::OnNavigationStartingPayload;
 use webrender_api::{
     units::{DeviceIntPoint, DeviceIntRect, DeviceIntSize, DevicePoint, LayoutVector2D},
     ScrollLocation,
@@ -45,6 +46,11 @@ use crate::{
 
 use arboard::Clipboard;
 
+#[derive(Default)]
+pub(crate) struct EventListeners {
+    pub(crate) on_navigation_starting: Mutex<Option<OnNavigationStartingPayload>>,
+}
+
 /// A Verso window is a Winit window containing several web views.
 pub struct Window {
     /// Access to Winit window
@@ -55,6 +61,8 @@ pub struct Window {
     pub(crate) panel: Option<Panel>,
     /// The WebView of this window.
     pub(crate) webview: Option<WebView>,
+    /// Event listeners registered from the webview controller
+    pub(crate) event_listeners: EventListeners,
     /// The mouse physical position in the web view.
     mouse_position: Cell<Option<PhysicalPosition<f64>>>,
     /// Modifiers state of the keyboard.
@@ -120,6 +128,7 @@ impl Window {
                 surface,
                 panel: None,
                 webview: None,
+                event_listeners: Default::default(),
                 mouse_position: Default::default(),
                 modifiers_state: Cell::new(ModifiersState::default()),
                 history: vec![],
@@ -164,6 +173,7 @@ impl Window {
             surface,
             panel: None,
             webview: None,
+            event_listeners: Default::default(),
             mouse_position: Default::default(),
             modifiers_state: Cell::new(ModifiersState::default()),
             history: vec![],
