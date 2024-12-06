@@ -2,7 +2,10 @@ use arboard::Clipboard;
 use base::id::{BrowsingContextId, WebViewId};
 use compositing_traits::ConstellationMsg;
 use crossbeam_channel::Sender;
-use embedder_traits::{CompositorEventVariant, EmbedderMsg, PromptDefinition};
+use embedder_traits::{
+    CompositorEventVariant, EmbedderMsg, PermissionPrompt, PermissionRequest, PromptDefinition,
+    PromptResult,
+};
 use ipc_channel::ipc;
 use script_traits::{
     webdriver_msg::{WebDriverJSResult, WebDriverScriptCommand},
@@ -12,10 +15,15 @@ use servo_url::ServoUrl;
 use url::Url;
 use webrender_api::units::DeviceIntRect;
 
-use crate::{compositor::IOCompositor, verso::send_to_constellation, window::Window};
+use crate::{
+    compositor::IOCompositor,
+    verso::send_to_constellation,
+    webview::prompt::{PromptDialog, PromptInputResult, PromptSender},
+    window::Window,
+};
 
 #[cfg(linux)]
-use crate::context_menu::ContextMenuResult;
+use crate::webview::context_menu::ContextMenuResult;
 
 /// A web view is an area to display web browsing context. It's what user will treat as a "web page".
 #[derive(Debug, Clone)]
@@ -127,6 +135,7 @@ impl Window {
                 }
             }
             EmbedderMsg::HistoryChanged(list, index) => {
+                self.close_prompt_dialog();
                 self.update_history(&list, index);
                 let url = list.get(index).unwrap();
                 if let Some(panel) = self.panel.as_ref() {
@@ -151,6 +160,61 @@ impl Window {
             }
             EmbedderMsg::ShowContextMenu(_sender, _title, _options) => {
                 // TODO: Implement context menu
+            }
+            EmbedderMsg::Prompt(prompt_type, _origin) => {
+                let mut prompt = PromptDialog::new();
+                let rect = self.webview.as_ref().unwrap().rect;
+
+                match prompt_type {
+                    PromptDefinition::Alert(message, prompt_sender) => {
+                        prompt.alert(sender, rect, message, prompt_sender);
+                    }
+                    PromptDefinition::OkCancel(message, prompt_sender) => {
+                        prompt.ok_cancel(sender, rect, message, prompt_sender);
+                    }
+                    PromptDefinition::YesNo(message, prompt_sender) => {
+                        prompt.yes_no(
+                            sender,
+                            rect,
+                            message,
+                            PromptSender::ConfirmSender(prompt_sender),
+                        );
+                    }
+                    PromptDefinition::Input(message, default_value, prompt_sender) => {
+                        prompt.input(sender, rect, message, Some(default_value), prompt_sender);
+                    }
+                }
+
+                // save prompt in window to keep prompt_sender alive
+                // so that we can send the result back to the prompt after user clicked the button
+                self.prompt = Some(prompt);
+            }
+            EmbedderMsg::PromptPermission(prompt, prompt_sender) => {
+                let message = match prompt {
+                    PermissionPrompt::Request(permission_name) => {
+                        format!(
+                            "This website would like to request permission for {:?}.",
+                            permission_name
+                        )
+                    }
+                    PermissionPrompt::Insecure(permission_name) => {
+                        format!(
+                            "This website would like to request permission for {:?}. However current connection is not secure. Do you want to proceed?",
+                            permission_name
+                        )
+                    }
+                };
+
+                let mut prompt = PromptDialog::new();
+                let rect = self.webview.as_ref().unwrap().rect;
+                prompt.yes_no(
+                    sender,
+                    rect,
+                    message,
+                    PromptSender::PermissionSender(prompt_sender),
+                );
+
+                self.prompt = Some(prompt);
             }
             e => {
                 log::trace!("Verso WebView isn't supporting this message yet: {e:?}")
@@ -329,6 +393,84 @@ impl Window {
             },
             e => {
                 log::trace!("Verso context menu isn't supporting this message yet: {e:?}")
+            }
+        }
+        false
+    }
+
+    /// Handle servo messages with prompt. Return true it requests a new window.
+    pub fn handle_servo_messages_with_prompt(
+        &mut self,
+        webview_id: WebViewId,
+        message: EmbedderMsg,
+        _sender: &Sender<ConstellationMsg>,
+        _clipboard: Option<&mut Clipboard>,
+        _compositor: &mut IOCompositor,
+    ) -> bool {
+        log::trace!("Verso Prompt {webview_id:?} is handling Embedder message: {message:?}",);
+        match message {
+            EmbedderMsg::Prompt(prompt, _origin) => match prompt {
+                PromptDefinition::Alert(msg, ignored_prompt_sender) => {
+                    let prompt = self.prompt.as_ref().unwrap();
+                    let prompt_sender = prompt.sender().unwrap();
+
+                    match prompt_sender {
+                        PromptSender::AlertSender(sender) => {
+                            let _ = sender.send(());
+                        }
+                        PromptSender::ConfirmSender(sender) => {
+                            let result: PromptResult = match msg.as_str() {
+                                "ok" | "yes" => PromptResult::Primary,
+                                "cancel" | "no" => PromptResult::Secondary,
+                                _ => {
+                                    log::error!("prompt result message invalid: {msg}");
+                                    PromptResult::Dismissed
+                                }
+                            };
+                            let _ = sender.send(result);
+                        }
+                        PromptSender::InputSender(sender) => {
+                            if let Ok(PromptInputResult { action, value }) =
+                                serde_json::from_str::<PromptInputResult>(&msg)
+                            {
+                                match action.as_str() {
+                                    "ok" => {
+                                        let _ = sender.send(Some(value));
+                                    }
+                                    "cancel" => {
+                                        let _ = sender.send(None);
+                                    }
+                                    _ => {
+                                        log::error!("prompt result message invalid: {msg}");
+                                        let _ = sender.send(None);
+                                    }
+                                }
+                            } else {
+                                log::error!("prompt result message invalid: {msg}");
+                                let _ = sender.send(None);
+                            }
+                        }
+                        PromptSender::PermissionSender(sender) => {
+                            let result: PermissionRequest = match msg.as_str() {
+                                "ok" | "yes" => PermissionRequest::Granted,
+                                "cancel" | "no" => PermissionRequest::Denied,
+                                _ => {
+                                    log::error!("prompt result message invalid: {msg}");
+                                    PermissionRequest::Denied
+                                }
+                            };
+                            let _ = sender.send(result);
+                        }
+                    }
+
+                    let _ = ignored_prompt_sender.send(());
+                }
+                _ => {
+                    log::trace!("Verso WebView isn't supporting this prompt yet")
+                }
+            },
+            e => {
+                log::trace!("Verso Dialog isn't supporting this message yet: {e:?}")
             }
         }
         false

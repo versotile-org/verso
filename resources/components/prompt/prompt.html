@@ -1,0 +1,46 @@
+<html>
+  <head>
+    <link
+      rel="stylesheet"
+      type="text/css"
+      href="verso://resources/components/prompt/prompt.css"
+    />
+  </head>
+  <body>
+    <div class="dialog">
+      <div id="msg" class="msg"></div>
+      <input type="text" id="input" />
+      <div class="btn-group">
+        <button onclick="sendToVersoAndClose('cancel')">Cancel</button>
+        <button onclick="sendToVersoAndClose('ok')">Ok</button>
+      </div>
+    </div>
+  </body>
+  <script>
+    const inputEl = document.getElementById('input');
+    const msgEl = document.getElementById('msg');
+
+    const params = URL.parse(window.location.href).searchParams;
+
+    // Set input default value
+    const defaultValue = params.get('defaultValue');
+    if (typeof defaultValue === 'string' || defaultValue instanceof String) {
+      inputEl.defaultValue = defaultValue;
+    }
+
+    // Set dialog message
+    const msg = params.get('msg');
+    msgEl.textContent = msg ?? '';
+
+    function sendToVersoAndClose(action) {
+      // Use as an IPC between Verso and WebView
+      window.alert(
+        JSON.stringify({
+          action,
+          value: inputEl.value,
+        })
+      );
+      window.close();
+    }
+  </script>
+</html>

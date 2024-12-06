@@ -25,11 +25,11 @@ use script_traits::{
     ScrollState, TouchEventType, TouchId, WheelDelta, WindowSizeData, WindowSizeType,
 };
 use servo_geometry::{DeviceIndependentIntSize, DeviceIndependentPixel};
-use style_traits::{CSSPixel, DevicePixel, PinchZoomFactor};
+use style_traits::{CSSPixel, PinchZoomFactor};
 use webrender::{RenderApi, Transaction};
 use webrender_api::units::{
-    DeviceIntPoint, DeviceIntRect, DeviceIntSize, DevicePoint, LayoutPoint, LayoutRect, LayoutSize,
-    LayoutVector2D, WorldPoint,
+    DeviceIntPoint, DeviceIntRect, DeviceIntSize, DevicePixel, DevicePoint, LayoutPoint,
+    LayoutRect, LayoutSize, LayoutVector2D, WorldPoint,
 };
 use webrender_api::{
     BorderRadius, BoxShadowClipMode, BuiltDisplayList, ClipMode, ColorF, CommonItemProperties,
@@ -916,19 +916,6 @@ impl IOCompositor {
             .expect("Insert then get failed!")
     }
 
-    fn pipeline(&self, pipeline_id: PipelineId) -> Option<&CompositionPipeline> {
-        match self.pipeline_details.get(&pipeline_id) {
-            Some(details) => details.pipeline.as_ref(),
-            None => {
-                warn!(
-                    "Compositor layer has an unknown pipeline ({:?}).",
-                    pipeline_id
-                );
-                None
-            }
-        }
-    }
-
     /// Set the root pipeline for our WebRender scene to a display list that consists of an iframe
     /// for each visible top-level browsing context, applying a transformation on the root for
     /// pinch zoom, page zoom, and HiDPI scaling.
@@ -1245,6 +1232,10 @@ impl IOCompositor {
         if let Some(w) = &mut window.webview {
             w.set_size(content_size);
             self.on_resize_webview_event(w.webview_id, w.rect);
+        }
+        if let Some(prompt) = &mut window.prompt {
+            prompt.resize(content_size);
+            self.on_resize_webview_event(prompt.webview().webview_id, rect);
         }
 
         self.send_root_pipeline_display_list(window);

@@ -3,7 +3,7 @@ use std::{cell::Cell, sync::Mutex};
 use base::id::WebViewId;
 use compositing_traits::ConstellationMsg;
 use crossbeam_channel::Sender;
-use embedder_traits::{Cursor, EmbedderMsg};
+use embedder_traits::{Cursor, EmbedderMsg, PermissionRequest, PromptResult};
 use euclid::{Point2D, Size2D};
 use glutin::{
     config::{ConfigTemplateBuilder, GlConfig},
@@ -34,11 +34,14 @@ use winit::{
 
 use crate::{
     compositor::{IOCompositor, MouseWindowEvent},
-    context_menu::{ContextMenu, Menu},
     keyboard::keyboard_event_from_winit,
     rendering::{gl_config_picker, RenderingContext},
     verso::send_to_constellation,
-    webview::{Panel, WebView},
+    webview::{
+        context_menu::{ContextMenu, Menu},
+        prompt::{PromptDialog, PromptSender},
+        Panel, WebView,
+    },
 };
 
 use arboard::Clipboard;
@@ -77,6 +80,9 @@ pub struct Window {
     /// Global menu event receiver for muda crate
     #[cfg(any(target_os = "macos", target_os = "windows"))]
     menu_event_receiver: MenuEventReceiver,
+
+    /// Current Prompt
+    pub(crate) prompt: Option<PromptDialog>,
 }
 
 impl Window {
@@ -132,6 +138,7 @@ impl Window {
                 context_menu: None,
                 #[cfg(any(target_os = "macos", target_os = "windows"))]
                 menu_event_receiver: MenuEvent::receiver().clone(),
+                prompt: None,
             },
             rendering_context,
         )
@@ -176,6 +183,7 @@ impl Window {
             context_menu: None,
             #[cfg(any(target_os = "macos", target_os = "windows"))]
             menu_event_receiver: MenuEvent::receiver().clone(),
+            prompt: None,
         };
         compositor.swap_current_window(&mut window);
         window
@@ -210,7 +218,7 @@ impl Window {
             },
         });
 
-        let url = ServoUrl::parse("verso://panel.html").unwrap();
+        let url = ServoUrl::parse("verso://resources/components/panel.html").unwrap();
         send_to_constellation(
             constellation_sender,
             ConstellationMsg::NewWebView(url, panel_id),
@@ -303,6 +311,9 @@ impl Window {
                 match (state, button) {
                     #[cfg(any(target_os = "macos", target_os = "windows"))]
                     (ElementState::Pressed, winit::event::MouseButton::Right) => {
+                        if self.prompt.is_some() {
+                            return;
+                        }
                         self.show_context_menu();
                         // FIXME: there's chance to lose the event since the channel is async.
                         if let Ok(event) = self.menu_event_receiver.try_recv() {
@@ -311,6 +322,9 @@ impl Window {
                     }
                     #[cfg(linux)]
                     (ElementState::Pressed, winit::event::MouseButton::Right) => {
+                        if self.prompt.is_some() {
+                            return;
+                        }
                         if self.context_menu.is_none() {
                             self.context_menu = Some(self.show_context_menu(sender));
                             return;
@@ -455,6 +469,15 @@ impl Window {
                 return false;
             }
         }
+        if let Some(prompt) = &self.prompt {
+            if prompt.webview().webview_id == webview_id {
+                self.handle_servo_messages_with_prompt(
+                    webview_id, message, sender, clipboard, compositor,
+                );
+                return false;
+            }
+        }
+
         // Handle message in Verso WebView
         self.handle_servo_messages_with_webview(webview_id, message, sender, clipboard, compositor);
         false
@@ -492,6 +515,14 @@ impl Window {
             return true;
         }
 
+        if self
+            .prompt
+            .as_ref()
+            .map_or(false, |w| w.webview().webview_id == id)
+        {
+            return true;
+        }
+
         self.panel
             .as_ref()
             .map_or(false, |w| w.webview.webview_id == id)
@@ -514,6 +545,16 @@ impl Window {
         {
             let context_menu = self.context_menu.take().expect("Context menu should exist");
             return (Some(context_menu.webview().clone()), false);
+        }
+
+        if self
+            .prompt
+            .as_ref()
+            .filter(|menu| menu.webview().webview_id == id)
+            .is_some()
+        {
+            let prompt = self.prompt.take().expect("Prompt should exist");
+            return (Some(prompt.webview().clone()), false);
         }
 
         if self
@@ -554,6 +595,10 @@ impl Window {
         #[cfg(linux)]
         if let Some(context_menu) = &self.context_menu {
             order.push(context_menu.webview());
+        }
+
+        if let Some(prompt) = &self.prompt {
+            order.push(prompt.webview());
         }
 
         order
@@ -633,7 +678,7 @@ impl Window {
 
     #[cfg(linux)]
     pub(crate) fn show_context_menu(&mut self, sender: &Sender<ConstellationMsg>) -> ContextMenu {
-        use crate::context_menu::MenuItem;
+        use crate::webview::context_menu::MenuItem;
 
         let history_len = self.history.len();
 
@@ -704,7 +749,7 @@ impl Window {
     pub(crate) fn handle_context_menu_event(
         &mut self,
         sender: &Sender<ConstellationMsg>,
-        event: crate::context_menu::ContextMenuResult,
+        event: crate::webview::context_menu::ContextMenuResult,
     ) {
         self.close_context_menu(sender);
         match event.id.as_str() {
@@ -733,6 +778,29 @@ impl Window {
                 );
             }
             _ => {}
+        }
+    }
+}
+
+// Prompt methods
+impl Window {
+    /// Close window's prompt dialog
+    pub(crate) fn close_prompt_dialog(&mut self) {
+        if let Some(sender) = self.prompt.take().and_then(|prompt| prompt.sender()) {
+            match sender {
+                PromptSender::AlertSender(sender) => {
+                    let _ = sender.send(());
+                }
+                PromptSender::ConfirmSender(sender) => {
+                    let _ = sender.send(PromptResult::Dismissed);
+                }
+                PromptSender::InputSender(sender) => {
+                    let _ = sender.send(None);
+                }
+                PromptSender::PermissionSender(sender) => {
+                    let _ = sender.send(PermissionRequest::Denied);
+                }
+            }
         }
     }
 }
