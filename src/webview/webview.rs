@@ -307,12 +307,18 @@ impl Window {
                                     .expect("Failed to parse TabActivateRequest");
 
                                 let id = request.id;
-                                if let Some(_) = self.tabs.activate_webview_by_id(id) {
-                                    send_to_constellation(
-                                        sender,
-                                        ConstellationMsg::FocusWebView(id),
-                                    );
 
+                                // FIXME: set dirty flag, and only resize when flag is set
+                                let include_tab = self.tabs.count() > 1;
+                                let size = self.size();
+                                let rect = DeviceIntRect::from_size(size);
+                                let content_size = self.get_content_size(rect, include_tab);
+                                if let Some(webview) = self.tabs.webviews_by_id_as_mut(id) {
+                                    webview.set_size(content_size);
+                                    compositor.on_resize_webview_event(id, content_size);
+                                }
+
+                                if let Some(_) = self.tabs.activate_webview_by_id(id) {
                                     // update painting order immediately to draw the active tab
                                     compositor.send_root_pipeline_display_list(self);
                                 }
@@ -355,12 +361,6 @@ impl Window {
                                         let content_size = self.get_content_size(rect, true);
                                         let mut webview = WebView::new(webview_id, rect);
                                         webview.set_size(content_size);
-
-                                        if let Some(first_webview) =
-                                            self.tabs.active_webview_as_mut()
-                                        {
-                                            first_webview.set_size(content_size);
-                                        }
 
                                         self.tabs.append_webview(webview, true);
 

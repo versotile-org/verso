@@ -1,6 +1,7 @@
-use crate::webview::WebView;
+use crate::{webview::WebView, window::Window};
 use base::id::TopLevelBrowsingContextId;
 use serde::{Deserialize, Serialize};
+use webrender_api::units::DeviceIntRect;
 
 /// Tab manager to handle multiple WebViews in a window.
 pub struct TabManager {
@@ -41,6 +42,12 @@ impl TabManager {
     /// Get webvies as mutable
     pub fn webviews_as_mut(&mut self) -> &mut Vec<WebView> {
         &mut self.webviews
+    }
+    /// Get webvies as mutable
+    pub fn webviews_by_id_as_mut(&mut self, id: TopLevelBrowsingContextId) -> Option<&mut WebView> {
+        self.webviews
+            .iter_mut()
+            .find(|webview| webview.webview_id == id)
     }
     /// Get active WebView index.
     pub fn active_idx(&self) -> usize {
