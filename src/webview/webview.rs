@@ -95,9 +95,15 @@ impl Window {
                 self.window.request_redraw();
                 send_to_constellation(sender, ConstellationMsg::FocusWebView(webview_id));
             }
-            EmbedderMsg::AllowNavigationRequest(id, _url) => {
-                // TODO should provide a API for users to check url
-                send_to_constellation(sender, ConstellationMsg::AllowNavigationResponse(id, true));
+            EmbedderMsg::AllowNavigationRequest(id, url) => {
+                let allow = match self.allow_navigation(url) {
+                    Ok(allow) => allow,
+                    Err(e) => {
+                        log::error!("Error when calling navigation handler: {e}");
+                        true
+                    }
+                };
+                send_to_constellation(sender, ConstellationMsg::AllowNavigationResponse(id, allow));
             }
             EmbedderMsg::GetClipboardContents(sender) => {
                 let contents = clipboard
@@ -468,5 +474,19 @@ impl Window {
             }
         }
         false
+    }
+
+    fn allow_navigation(&self, url: ServoUrl) -> crate::Result<bool> {
+        if let Some(ref sender) = *self.event_listeners.on_navigation_starting.lock().unwrap() {
+            let (result_sender, receiver) =
+                ipc::channel::<bool>().map_err(|e| ipc::IpcError::Io(e))?;
+            sender
+                .send((url.into_url(), result_sender))
+                .map_err(|e| ipc::IpcError::Bincode(e))?;
+            let result = receiver.recv()?;
+            Ok(result)
+        } else {
+            Ok(true)
+        }
     }
 }
