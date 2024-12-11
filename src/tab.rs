@@ -1,6 +1,9 @@
+use std::collections::HashMap;
+
 use crate::webview::WebView;
-use base::id::TopLevelBrowsingContextId;
+use base::id::{TopLevelBrowsingContextId, WebViewId};
 use serde::{Deserialize, Serialize};
+use servo_url::ServoUrl;
 
 /// Tab manager to handle multiple WebViews in a window.
 pub struct TabManager {
@@ -8,14 +11,16 @@ pub struct TabManager {
     webviews: Vec<WebView>,
     /// Index of the active WebView.
     active_idx: usize,
+    history: HashMap<WebViewId, TabHistory>,
 }
 
 impl TabManager {
     /// Create a new tab manager.
     pub fn new() -> Self {
         Self {
-            webviews: Vec::new(),
             active_idx: 0,
+            webviews: Vec::new(),
+            history: HashMap::new(),
         }
     }
     /// Get opened WebViews count.
@@ -110,6 +115,7 @@ impl TabManager {
         }
 
         let webview = self.webviews.remove(idx);
+        self.remove_history(webview.webview_id);
 
         if idx < self.active_idx {
             self.active_idx -= 1;
@@ -142,7 +148,20 @@ impl TabManager {
     /// Close all tabs.
     pub fn close_all(&mut self) -> Vec<WebView> {
         self.active_idx = 0;
+        self.history.clear();
         self.webviews.drain(..).collect()
+    }
+    /// Set webview history.
+    pub fn set_history(&mut self, id: WebViewId, list: Vec<ServoUrl>, current_idx: usize) {
+        self.history.insert(id, TabHistory { list, current_idx });
+    }
+    /// Set webview history.
+    pub fn history(&self, id: WebViewId) -> Option<&TabHistory> {
+        self.history.get(&id)
+    }
+    /// Remove webview history.
+    pub fn remove_history(&mut self, id: WebViewId) {
+        self.history.remove(&id);
     }
 }
 
@@ -184,4 +203,12 @@ pub struct TabActivateRequest {
 pub struct TabCloseRequest {
     /// Tab WebView id
     pub id: TopLevelBrowsingContextId,
+}
+
+/// Tab history
+pub struct TabHistory {
+    /// History list
+    pub list: Vec<ServoUrl>,
+    /// Current index
+    pub current_idx: usize,
 }

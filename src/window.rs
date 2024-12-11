@@ -68,10 +68,6 @@ pub struct Window {
     mouse_position: Cell<Option<PhysicalPosition<f64>>>,
     /// Modifiers state of the keyboard.
     modifiers_state: Cell<ModifiersState>,
-    /// Browser history of the window.
-    history: Vec<ServoUrl>,
-    /// Current history index.
-    current_history_index: usize,
     /// State to indicate if the window is resizing.
     pub(crate) resizing: bool,
     // TODO: These two fields should unified once we figure out servo's menu events.
@@ -132,8 +128,6 @@ impl Window {
                 // webview: None,
                 mouse_position: Default::default(),
                 modifiers_state: Cell::new(ModifiersState::default()),
-                history: vec![],
-                current_history_index: 0,
                 resizing: false,
                 #[cfg(linux)]
                 context_menu: None,
@@ -177,8 +171,6 @@ impl Window {
             // webview: None,
             mouse_position: Default::default(),
             modifiers_state: Cell::new(ModifiersState::default()),
-            history: vec![],
-            current_history_index: 0,
             resizing: false,
             #[cfg(linux)]
             context_menu: None,
@@ -703,26 +695,22 @@ impl Window {
         };
         self.window.set_cursor(winit_cursor);
     }
-
-    /// Update the history of the window.
-    pub fn update_history(&mut self, history: &Vec<ServoUrl>, current_index: usize) {
-        self.history = history.to_vec();
-        self.current_history_index = current_index;
-    }
 }
 
 // Context Menu methods
 impl Window {
     #[cfg(any(target_os = "macos", target_os = "windows"))]
     pub(crate) fn show_context_menu(&self) {
-        let history_len = self.history.len();
+        let tab = self.tabs.active_webview().unwrap();
+        let history = self.tabs.history(tab.webview_id).unwrap();
+        let history_len = history.list.len();
 
         // items
-        let back = MenuItem::with_id("back", "Back", self.current_history_index > 0, None);
+        let back = MenuItem::with_id("back", "Back", history.current_idx > 0, None);
         let forward = MenuItem::with_id(
             "forward",
             "Forward",
-            self.current_history_index + 1 < history_len,
+            history.current_idx + 1 < history_len,
             None,
         );
         let reload = MenuItem::with_id("reload", "Reload", true, None);

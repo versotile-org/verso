@@ -150,7 +150,7 @@ impl Window {
             }
             EmbedderMsg::HistoryChanged(list, index) => {
                 self.close_prompt_dialog();
-                self.update_history(&list, index);
+                self.tabs.set_history(webview_id, list.clone(), index);
                 let url = list.get(index).unwrap();
                 if let Some(panel) = self.panel.as_ref() {
                     let (tx, rx) = ipc::channel::<WebDriverJSResult>().unwrap();
