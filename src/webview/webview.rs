@@ -96,6 +96,25 @@ impl Window {
                 self.window.request_redraw();
                 send_to_constellation(sender, ConstellationMsg::FocusWebView(webview_id));
             }
+            EmbedderMsg::ChangePageTitle(title) => {
+                if let Some(panel) = self.panel.as_ref() {
+                    let title = title.unwrap_or("New Tab".to_string());
+                    let cmd = format!(
+                        "window.navbar.setTabTitle('{}', '{}')",
+                        serde_json::to_string(&webview_id).unwrap(),
+                        title.as_str()
+                    );
+                    let (tx, rx) = ipc::channel::<WebDriverJSResult>().unwrap();
+                    send_to_constellation(
+                        sender,
+                        ConstellationMsg::WebDriverCommand(WebDriverCommandMsg::ScriptCommand(
+                            BrowsingContextId::from(panel.webview.webview_id),
+                            WebDriverScriptCommand::ExecuteScript(cmd, tx),
+                        )),
+                    );
+                    let _ = rx.recv();
+                }
+            }
             EmbedderMsg::AllowNavigationRequest(id, _url) => {
                 // TODO should provide a API for users to check url
                 send_to_constellation(sender, ConstellationMsg::AllowNavigationResponse(id, true));

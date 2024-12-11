@@ -1,7 +1,6 @@
-use crate::{webview::WebView, window::Window};
+use crate::webview::WebView;
 use base::id::TopLevelBrowsingContextId;
 use serde::{Deserialize, Serialize};
-use webrender_api::units::DeviceIntRect;
 
 /// Tab manager to handle multiple WebViews in a window.
 pub struct TabManager {
