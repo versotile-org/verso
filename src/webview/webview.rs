@@ -371,6 +371,7 @@ impl Window {
                                         send_to_constellation(sender, ConstellationMsg::Reload(id));
                                     }
                                     "NEW_WINDOW" => {
+                                        let _ = prompt_sender.send(None);
                                         return true;
                                     }
                                     "NEW_TAB" => {
