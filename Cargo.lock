@@ -6718,6 +6718,7 @@ name = "verso"
 version = "0.0.1"
 dependencies = [
  "ipc-channel",
+ "log",
  "serde",
  "url",
  "versoview_messages",
