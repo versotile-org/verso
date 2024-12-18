@@ -588,7 +588,10 @@ impl Verso {
         match message {
             ControllerMessage::NavigateTo(to_url) => {
                 if let Some(webview_id) = self.windows.values().next().and_then(|(window, _)| {
-                    window.webview.as_ref().map(|webview| webview.webview_id)
+                    window
+                        .tab_manager
+                        .current_tab()
+                        .map(|webview| webview.webview_id)
                 }) {
                     send_to_constellation(
                         &self.constellation_sender,

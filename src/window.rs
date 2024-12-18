@@ -10,11 +10,15 @@ use glutin::{
     surface::{Surface, WindowSurface},
 };
 use glutin_winit::DisplayBuilder;
+use ipc_channel::ipc;
 #[cfg(any(target_os = "macos", target_os = "windows"))]
 use muda::{Menu as MudaMenu, MenuEvent, MenuEventReceiver, MenuItem};
 #[cfg(any(target_os = "macos", target_os = "windows"))]
 use raw_window_handle::HasWindowHandle;
-use script_traits::TraversalDirection;
+use script_traits::{
+    webdriver_msg::{WebDriverJSResult, WebDriverScriptCommand},
+    TraversalDirection, WebDriverCommandMsg,
+};
 use script_traits::{TouchEventType, WheelDelta, WheelMode};
 use servo_url::ServoUrl;
 use webrender_api::{
@@ -35,15 +39,20 @@ use crate::{
     compositor::{IOCompositor, MouseWindowEvent},
     keyboard::keyboard_event_from_winit,
     rendering::{gl_config_picker, RenderingContext},
+    tab::TabManager,
     verso::send_to_constellation,
     webview::{
         context_menu::{ContextMenu, Menu},
-        prompt::{PromptDialog, PromptSender},
+        prompt::PromptSender,
         Panel, WebView,
     },
 };
 
 use arboard::Clipboard;
+
+const PANEL_HEIGHT: f64 = 50.0;
+const TAB_HEIGHT: f64 = 30.0;
+const PANEL_PADDING: f64 = 4.0;
 
 /// A Verso window is a Winit window containing several web views.
 pub struct Window {
@@ -54,15 +63,11 @@ pub struct Window {
     /// The main panel of this window.
     pub(crate) panel: Option<Panel>,
     /// The WebView of this window.
-    pub(crate) webview: Option<WebView>,
+    // pub(crate) webview: Option<WebView>,
     /// The mouse physical position in the web view.
     mouse_position: Cell<Option<PhysicalPosition<f64>>>,
     /// Modifiers state of the keyboard.
     modifiers_state: Cell<ModifiersState>,
-    /// Browser history of the window.
-    history: Vec<ServoUrl>,
-    /// Current history index.
-    current_history_index: usize,
     /// State to indicate if the window is resizing.
     pub(crate) resizing: bool,
     // TODO: These two fields should unified once we figure out servo's menu events.
@@ -72,9 +77,8 @@ pub struct Window {
     /// Global menu event receiver for muda crate
     #[cfg(any(target_os = "macos", target_os = "windows"))]
     menu_event_receiver: MenuEventReceiver,
-
-    /// Current Prompt
-    pub(crate) prompt: Option<PromptDialog>,
+    /// Window tabs manager
+    pub(crate) tab_manager: TabManager,
 }
 
 impl Window {
@@ -119,17 +123,15 @@ impl Window {
                 window,
                 surface,
                 panel: None,
-                webview: None,
+                // webview: None,
                 mouse_position: Default::default(),
                 modifiers_state: Cell::new(ModifiersState::default()),
-                history: vec![],
-                current_history_index: 0,
                 resizing: false,
                 #[cfg(linux)]
                 context_menu: None,
                 #[cfg(any(target_os = "macos", target_os = "windows"))]
                 menu_event_receiver: MenuEvent::receiver().clone(),
-                prompt: None,
+                tab_manager: TabManager::new(),
             },
             rendering_context,
         )
@@ -163,26 +165,29 @@ impl Window {
             window,
             surface,
             panel: None,
-            webview: None,
+            // webview: None,
             mouse_position: Default::default(),
             modifiers_state: Cell::new(ModifiersState::default()),
-            history: vec![],
-            current_history_index: 0,
             resizing: false,
             #[cfg(linux)]
             context_menu: None,
             #[cfg(any(target_os = "macos", target_os = "windows"))]
             menu_event_receiver: MenuEvent::receiver().clone(),
-            prompt: None,
+            tab_manager: TabManager::new(),
         };
         compositor.swap_current_window(&mut window);
         window
     }
 
     /// Get the content area size for the webview to draw on
-    pub fn get_content_size(&self, mut size: DeviceIntRect) -> DeviceIntRect {
+    pub fn get_content_size(&self, mut size: DeviceIntRect, include_tab: bool) -> DeviceIntRect {
         if self.panel.is_some() {
-            size.min.y = size.max.y.min(100);
+            let height: f64 = if include_tab {
+                (PANEL_HEIGHT + TAB_HEIGHT + PANEL_PADDING) * self.scale_factor()
+            } else {
+                (PANEL_HEIGHT + PANEL_PADDING) * self.scale_factor()
+            };
+            size.min.y = size.max.y.min(height as i32);
             size.min.x += 10;
             size.max.y -= 10;
             size.max.x -= 10;
@@ -208,7 +213,8 @@ impl Window {
             },
         });
 
-        let url = ServoUrl::parse("verso://resources/components/panel.html").unwrap();
+        // let url = ServoUrl::parse("verso://resources/components/panel.html").unwrap();
+        let url = ServoUrl::parse("http://localhost:5173/").unwrap();
         send_to_constellation(
             constellation_sender,
             ConstellationMsg::NewWebView(url, panel_id),
@@ -224,9 +230,29 @@ impl Window {
         let webview_id = WebViewId::new();
         let size = self.size();
         let rect = DeviceIntRect::from_size(size);
+
+        let show_tab = self.tab_manager.count() >= 1;
+        let content_size = self.get_content_size(rect, show_tab);
+
         let mut webview = WebView::new(webview_id, rect);
-        webview.set_size(self.get_content_size(rect));
-        self.webview.replace(webview);
+        webview.set_size(content_size);
+
+        let (tx, rx) = ipc::channel::<WebDriverJSResult>().unwrap();
+        let cmd: String = format!(
+            "window.navbar.addTab('{}')",
+            serde_json::to_string(&webview.webview_id).unwrap()
+        );
+        send_to_constellation(
+            constellation_sender,
+            ConstellationMsg::WebDriverCommand(WebDriverCommandMsg::ScriptCommand(
+                self.panel.as_ref().unwrap().webview.webview_id.into(),
+                WebDriverScriptCommand::ExecuteScript(cmd, tx),
+            )),
+        );
+        let _ = rx.recv();
+
+        self.tab_manager.append_tab(webview, true);
+
         send_to_constellation(
             constellation_sender,
             ConstellationMsg::NewWebView(initial_url, webview_id),
@@ -297,11 +323,11 @@ impl Window {
 
                 /* handle context menu */
                 // TODO(context-menu): should create on ShowContextMenu event
-
+                let prompt = self.tab_manager.current_prompt();
                 match (state, button) {
                     #[cfg(any(target_os = "macos", target_os = "windows"))]
                     (ElementState::Pressed, winit::event::MouseButton::Right) => {
-                        if self.prompt.is_some() {
+                        if prompt.is_some() {
                             return;
                         }
                         self.show_context_menu();
@@ -312,7 +338,7 @@ impl Window {
                     }
                     #[cfg(linux)]
                     (ElementState::Pressed, winit::event::MouseButton::Right) => {
-                        if self.prompt.is_some() {
+                        if prompt.is_some() {
                             return;
                         }
                         if self.context_menu.is_none() {
@@ -459,13 +485,11 @@ impl Window {
                 return false;
             }
         }
-        if let Some(prompt) = &self.prompt {
-            if prompt.webview().webview_id == webview_id {
-                self.handle_servo_messages_with_prompt(
-                    webview_id, message, sender, clipboard, compositor,
-                );
-                return false;
-            }
+        if self.tab_manager.has_prompt(webview_id) {
+            self.handle_servo_messages_with_prompt(
+                webview_id, message, sender, clipboard, compositor,
+            );
+            return false;
         }
 
         // Handle message in Verso WebView
@@ -505,22 +529,18 @@ impl Window {
             return true;
         }
 
-        if self
-            .prompt
-            .as_ref()
-            .map_or(false, |w| w.webview().webview_id == id)
-        {
+        if self.tab_manager.has_prompt(id) {
             return true;
         }
 
         self.panel
             .as_ref()
             .map_or(false, |w| w.webview.webview_id == id)
-            || self.webview.as_ref().map_or(false, |w| w.webview_id == id)
+            || self.tab_manager.tab(id).is_some()
     }
 
-    /// Remove the webview in this window by provided webview ID. If this is the panel, it will
-    /// shut down the compositor and then close whole application.
+    /// Remove the webview in this window by provided webview ID.
+    /// If provided ID is the panel, it will shut down the compositor and then close whole application.
     pub fn remove_webview(
         &mut self,
         id: WebViewId,
@@ -537,13 +557,7 @@ impl Window {
             return (Some(context_menu.webview().clone()), false);
         }
 
-        if self
-            .prompt
-            .as_ref()
-            .filter(|menu| menu.webview().webview_id == id)
-            .is_some()
-        {
-            let prompt = self.prompt.take().expect("Prompt should exist");
+        if let Some(prompt) = self.tab_manager.remove_prompt_by_prompt_id(id) {
             return (Some(prompt.webview().clone()), false);
         }
 
@@ -553,20 +567,17 @@ impl Window {
             .filter(|w| w.webview.webview_id == id)
             .is_some()
         {
-            if let Some(w) = self.webview.as_ref() {
+            // Removing panel, remove all webviews and shut down the compositor
+            let webviews = self.tab_manager.close_all();
+            for webview in webviews {
                 send_to_constellation(
                     &compositor.constellation_chan,
-                    ConstellationMsg::CloseWebView(w.webview_id),
-                )
+                    ConstellationMsg::CloseWebView(webview.0),
+                );
             }
             (self.panel.take().map(|panel| panel.webview), false)
-        } else if self
-            .webview
-            .as_ref()
-            .filter(|w| w.webview_id == id)
-            .is_some()
-        {
-            (self.webview.take(), self.panel.is_none())
+        } else if let Ok(webview) = self.tab_manager.close_tab(id) {
+            (Some(webview), self.panel.is_none())
         } else {
             (None, false)
         }
@@ -578,7 +589,8 @@ impl Window {
         if let Some(panel) = &self.panel {
             order.push(&panel.webview);
         }
-        if let Some(webview) = &self.webview {
+
+        if let Some(webview) = self.tab_manager.current_tab() {
             order.push(webview);
         }
 
@@ -587,7 +599,7 @@ impl Window {
             order.push(context_menu.webview());
         }
 
-        if let Some(prompt) = &self.prompt {
+        if let Some(prompt) = self.tab_manager.current_prompt() {
             order.push(prompt.webview());
         }
 
@@ -635,26 +647,22 @@ impl Window {
         };
         self.window.set_cursor(winit_cursor);
     }
-
-    /// Update the history of the window.
-    pub fn update_history(&mut self, history: &Vec<ServoUrl>, current_index: usize) {
-        self.history = history.to_vec();
-        self.current_history_index = current_index;
-    }
 }
 
 // Context Menu methods
 impl Window {
     #[cfg(any(target_os = "macos", target_os = "windows"))]
     pub(crate) fn show_context_menu(&self) {
-        let history_len = self.history.len();
+        let tab = self.tab_manager.current_tab().unwrap();
+        let history = self.tab_manager.history(tab.webview_id).unwrap();
+        let history_len = history.list.len();
 
         // items
-        let back = MenuItem::with_id("back", "Back", self.current_history_index > 0, None);
+        let back = MenuItem::with_id("back", "Back", history.current_idx > 0, None);
         let forward = MenuItem::with_id(
             "forward",
             "Forward",
-            self.current_history_index + 1 < history_len,
+            history.current_idx + 1 < history_len,
             None,
         );
         let reload = MenuItem::with_id("reload", "Reload", true, None);
@@ -670,14 +678,16 @@ impl Window {
     pub(crate) fn show_context_menu(&mut self, sender: &Sender<ConstellationMsg>) -> ContextMenu {
         use crate::webview::context_menu::MenuItem;
 
-        let history_len = self.history.len();
+        let tab = self.tab_manager.current_tab().unwrap();
+        let history = self.tab_manager.history(tab.webview_id).unwrap();
+        let history_len = history.list.len();
 
         // items
-        let back = MenuItem::new(Some("back"), "Back", self.current_history_index > 0);
+        let back = MenuItem::new(Some("back"), "Back", history.current_idx > 0);
         let forward = MenuItem::new(
             Some("forward"),
             "Forward",
-            self.current_history_index + 1 < history_len,
+            history.current_idx + 1 < history_len,
         );
         let reload = MenuItem::new(Some("reload"), "Reload", true);
 
@@ -703,12 +713,13 @@ impl Window {
     #[cfg(any(target_os = "macos", target_os = "windows"))]
     fn handle_context_menu_event(&self, sender: &Sender<ConstellationMsg>, event: MenuEvent) {
         // TODO: should be more flexible to handle different menu items
+        let active_webview = self.tab_manager.current_tab().unwrap();
         match event.id().0.as_str() {
             "back" => {
                 send_to_constellation(
                     sender,
                     ConstellationMsg::TraverseHistory(
-                        self.webview.as_ref().unwrap().webview_id,
+                        active_webview.webview_id,
                         TraversalDirection::Back(1),
                     ),
                 );
@@ -717,16 +728,13 @@ impl Window {
                 send_to_constellation(
                     sender,
                     ConstellationMsg::TraverseHistory(
-                        self.webview.as_ref().unwrap().webview_id,
+                        active_webview.webview_id,
                         TraversalDirection::Forward(1),
                     ),
                 );
             }
             "reload" => {
-                send_to_constellation(
-                    sender,
-                    ConstellationMsg::Reload(self.webview.as_ref().unwrap().webview_id),
-                );
+                send_to_constellation(sender, ConstellationMsg::Reload(active_webview.webview_id));
             }
             _ => {}
         }
@@ -742,32 +750,27 @@ impl Window {
         event: crate::webview::context_menu::ContextMenuResult,
     ) {
         self.close_context_menu(sender);
-        match event.id.as_str() {
-            "back" => {
-                send_to_constellation(
-                    sender,
-                    ConstellationMsg::TraverseHistory(
-                        self.webview.as_ref().unwrap().webview_id,
-                        TraversalDirection::Back(1),
-                    ),
-                );
+        if let Some(tab_id) = self.tab_manager.current_tab_id() {
+            match event.id.as_str() {
+                "back" => {
+                    send_to_constellation(
+                        sender,
+                        ConstellationMsg::TraverseHistory(tab_id, TraversalDirection::Back(1)),
+                    );
+                }
+                "forward" => {
+                    send_to_constellation(
+                        sender,
+                        ConstellationMsg::TraverseHistory(tab_id, TraversalDirection::Forward(1)),
+                    );
+                }
+                "reload" => {
+                    send_to_constellation(sender, ConstellationMsg::Reload(tab_id));
+                }
+                _ => {}
             }
-            "forward" => {
-                send_to_constellation(
-                    sender,
-                    ConstellationMsg::TraverseHistory(
-                        self.webview.as_ref().unwrap().webview_id,
-                        TraversalDirection::Forward(1),
-                    ),
-                );
-            }
-            "reload" => {
-                send_to_constellation(
-                    sender,
-                    ConstellationMsg::Reload(self.webview.as_ref().unwrap().webview_id),
-                );
-            }
-            _ => {}
+        } else {
+            log::error!("No active webview to handle context menu event");
         }
     }
 }
@@ -775,8 +778,12 @@ impl Window {
 // Prompt methods
 impl Window {
     /// Close window's prompt dialog
-    pub(crate) fn close_prompt_dialog(&mut self) {
-        if let Some(sender) = self.prompt.take().and_then(|prompt| prompt.sender()) {
+    pub(crate) fn close_prompt_dialog(&mut self, tab_id: WebViewId) {
+        if let Some(sender) = self
+            .tab_manager
+            .remove_prompt_by_tab_id(tab_id)
+            .and_then(|prompt| prompt.sender())
+        {
             match sender {
                 PromptSender::AlertSender(sender) => {
                     let _ = sender.send(());
