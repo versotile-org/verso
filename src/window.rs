@@ -568,11 +568,11 @@ impl Window {
             .is_some()
         {
             // Removing panel, remove all webviews and shut down the compositor
-            let webviews = self.tab_manager.close_all();
-            for webview in webviews {
+            let tab_ids = self.tab_manager.tab_ids();
+            for tab_id in tab_ids {
                 send_to_constellation(
                     &compositor.constellation_chan,
-                    ConstellationMsg::CloseWebView(webview.0),
+                    ConstellationMsg::CloseWebView(tab_id),
                 );
             }
             (self.panel.take().map(|panel| panel.webview), false)

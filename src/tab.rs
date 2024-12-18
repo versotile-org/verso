@@ -50,6 +50,10 @@ impl TabManager {
             None
         }
     }
+    /// Get all tab id.
+    pub fn tab_ids(&self) -> Vec<WebViewId> {
+        self.tab_id_order.clone()
+    }
     /// Activate the tab at the specified index.
     pub fn activate_tab(&mut self, tab_id: WebViewId) -> Option<&WebView> {
         if let Some(webview) = self.tab.get(&tab_id) {
@@ -90,14 +94,6 @@ impl TabManager {
             Some(webview) => Ok(webview),
             None => Err(TabManagerErr::WebViewIdNotFound),
         }
-    }
-    /// Close all tabs.
-    pub fn close_all(&mut self) -> HashMap<WebViewId, WebView> {
-        self.active_tab_id = None;
-        self.history.clear();
-        self.prompt.clear();
-        self.tab_id_order.clear();
-        self.tab.drain().collect()
     }
     /// Set tab size. Will also set prompt dialog size if it exists.
     /// - Returns the tab and prompt WebViewId if they exist.
