@@ -6,11 +6,9 @@ use serde::{Deserialize, Serialize};
 use servo_url::ServoUrl;
 use webrender_api::units::DeviceIntRect;
 
-/// Tab manager to handle multiple WebViews in a window.
+/// Tab manager to handle multiple tab in a window.
 pub struct TabManager {
-    /// WebViews in the tab.
-    tab_id_order: Vec<WebViewId>,
-    /// Index of the active WebView.
+    /// Current active tab id
     active_tab_id: Option<WebViewId>,
     /// Tab webview id -> Tab webview
     tab: HashMap<WebViewId, WebView>,
@@ -26,7 +24,6 @@ impl TabManager {
     /// Create a new tab manager.
     pub fn new() -> Self {
         Self {
-            tab_id_order: Vec::new(),
             active_tab_id: None,
             tab: HashMap::new(),
             history: HashMap::new(),
@@ -36,13 +33,13 @@ impl TabManager {
     }
     /// Get tab count.
     pub fn count(&self) -> usize {
-        self.tab_id_order.len()
+        self.tab.len()
     }
     /// Get current actvie tab id.
     pub fn current_tab_id(&self) -> Option<WebViewId> {
         self.active_tab_id
     }
-    /// Get the active tab.
+    /// Get current active tab.
     pub fn current_tab(&self) -> Option<&WebView> {
         if let Some(tab_id) = self.active_tab_id {
             self.tab.get(&tab_id)
@@ -52,9 +49,9 @@ impl TabManager {
     }
     /// Get all tab id.
     pub fn tab_ids(&self) -> Vec<WebViewId> {
-        self.tab_id_order.clone()
+        self.tab.keys().cloned().collect()
     }
-    /// Activate the tab at the specified index.
+    /// Activate the tab by tab id.
     pub fn activate_tab(&mut self, tab_id: WebViewId) -> Option<&WebView> {
         if let Some(webview) = self.tab.get(&tab_id) {
             self.active_tab_id = Some(tab_id);
@@ -72,17 +69,12 @@ impl TabManager {
     pub fn append_tab(&mut self, webview: WebView, active: bool) {
         let id = webview.webview_id;
         self.tab.insert(id, webview);
-        self.tab_id_order.push(id);
         if active {
             self.active_tab_id = Some(id);
         }
     }
     /// Close a tab.
     pub fn close_tab(&mut self, id: WebViewId) -> Result<WebView, TabManagerErr> {
-        if let Some(idx) = self.tab_id_order.iter().position(|tab_id| *tab_id == id) {
-            self.tab_id_order.remove(idx);
-        }
-
         self.prompt.remove(&id);
         self.history.remove(&id);
         match self.tab.remove(&id) {
