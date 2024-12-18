@@ -79,11 +79,6 @@ impl TabManager {
     }
     /// Close a tab.
     pub fn close_tab(&mut self, id: WebViewId) -> Result<WebView, TabManagerErr> {
-        // Skip if there's only one webview
-        if self.tab.len() == 1 {
-            return Err(TabManagerErr::RemoveLastWebView);
-        }
-
         if let Some(idx) = self.tab_id_order.iter().position(|tab_id| *tab_id == id) {
             self.tab_id_order.remove(idx);
         }

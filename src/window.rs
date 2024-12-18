@@ -577,7 +577,8 @@ impl Window {
             }
             (self.panel.take().map(|panel| panel.webview), false)
         } else if let Ok(webview) = self.tab_manager.close_tab(id) {
-            (Some(webview), self.panel.is_none())
+            let close_window = self.tab_manager.count() == 0 || self.panel.is_none();
+            (Some(webview), close_window)
         } else {
             (None, false)
         }
