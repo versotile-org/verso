@@ -79,6 +79,10 @@ impl PromptDialog {
     pub fn webview(&self) -> &WebView {
         &self.webview
     }
+    /// Get prompt webview ID
+    pub fn id(&self) -> WebViewId {
+        self.webview.webview_id
+    }
 
     /// Get prompt sender. Send user interaction result back to caller.
     pub fn sender(&self) -> Option<PromptSender> {
@@ -91,9 +95,9 @@ impl PromptDialog {
     /// ```rust
     /// let rect = window.webview.as_ref().unwrap().rect;
     /// let content_size = window.get_content_size(rect);
-    /// prompt.resize(content_size);
+    /// prompt.set_size(content_size);
     /// ```
-    pub fn resize(&mut self, rect: DeviceIntRect) {
+    pub fn set_size(&mut self, rect: DeviceIntRect) {
         self.webview.set_size(rect);
     }
 

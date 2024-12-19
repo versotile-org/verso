@@ -1228,14 +1228,16 @@ impl IOCompositor {
         }
 
         let rect = DeviceIntRect::from_size(size);
-        let content_size = window.get_content_size(rect);
-        if let Some(w) = &mut window.webview {
-            w.set_size(content_size);
-            self.on_resize_webview_event(w.webview_id, w.rect);
-        }
-        if let Some(prompt) = &mut window.prompt {
-            prompt.resize(content_size);
-            self.on_resize_webview_event(prompt.webview().webview_id, rect);
+        let show_tab_bar = window.tab_manager.count() > 1;
+        let content_size = window.get_content_size(rect, show_tab_bar);
+        if let Some(tab_id) = window.tab_manager.current_tab_id() {
+            let (tab_id, prompt_id) = window.tab_manager.set_size(tab_id, content_size);
+            if let Some(tab_id) = tab_id {
+                self.on_resize_webview_event(tab_id, content_size);
+            }
+            if let Some(prompt_id) = prompt_id {
+                self.on_resize_webview_event(prompt_id, content_size);
+            }
         }
 
         self.send_root_pipeline_display_list(window);
