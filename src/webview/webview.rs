@@ -208,7 +208,6 @@ impl Window {
 
                     // save prompt in window to keep prompt_sender alive
                     // so that we can send the result back to the prompt after user clicked the button
-                    // self.prompt = Some(prompt);
                     self.tab_manager.set_prompt(webview_id, prompt);
                 } else {
                     log::error!("Failed to get WebView {webview_id:?} in this window.");
@@ -239,7 +238,6 @@ impl Window {
                         PromptSender::PermissionSender(prompt_sender),
                     );
                     self.tab_manager.set_prompt(webview_id, prompt);
-                    // self.prompt = Some(prompt);
                 } else {
                     log::error!("Failed to get WebView {webview_id:?} in this window.");
                 }
@@ -333,7 +331,6 @@ impl Window {
                                 compositor.send_root_pipeline_display_list(self);
                             }
 
-                            // TODO: return new active id
                             let _ = prompt_sender.send(None);
                             return false;
                         } else if msg == "NEW_TAB" {
@@ -524,7 +521,6 @@ impl Window {
                         return false;
                     }
                     let prompt = prompt.unwrap();
-                    // let prompt = self.prompt.as_ref().unwrap();
                     let prompt_sender = prompt.sender().unwrap();
 
                     match prompt_sender {

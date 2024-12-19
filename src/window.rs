@@ -124,7 +124,6 @@ impl Window {
                 window,
                 surface,
                 panel: None,
-                // webview: None,
                 mouse_position: Default::default(),
                 modifiers_state: Cell::new(ModifiersState::default()),
                 resizing: false,
@@ -214,8 +213,7 @@ impl Window {
             },
         });
 
-        // let url = ServoUrl::parse("verso://resources/components/panel.html").unwrap();
-        let url = ServoUrl::parse("http://localhost:5173/").unwrap();
+        let url = ServoUrl::parse("verso://resources/components/panel.html").unwrap();
         send_to_constellation(
             constellation_sender,
             ConstellationMsg::NewWebView(url, panel_id),
