@@ -11,12 +11,13 @@ use glutin::{
 };
 use glutin_winit::DisplayBuilder;
 use ipc_channel::ipc;
+use keyboard_types::{Code, KeyState, Modifiers};
 #[cfg(any(target_os = "macos", target_os = "windows"))]
 use muda::{Menu as MudaMenu, MenuEvent, MenuEventReceiver, MenuItem};
 #[cfg(any(target_os = "macos", target_os = "windows"))]
 use raw_window_handle::HasWindowHandle;
 use script_traits::{
-    webdriver_msg::{WebDriverJSResult, WebDriverScriptCommand},
+    webdriver_msg::{WebDriverJSResult, WebDriverJSValue, WebDriverScriptCommand},
     TraversalDirection, WebDriverCommandMsg,
 };
 use script_traits::{TouchEventType, WheelDelta, WheelMode};
@@ -222,7 +223,7 @@ impl Window {
     }
 
     /// Create a new webview and send the constellation message to load the initial URL
-    pub fn create_webview(
+    pub fn create_tab(
         &mut self,
         constellation_sender: &Sender<ConstellationMsg>,
         initial_url: ServoUrl,
@@ -239,8 +240,9 @@ impl Window {
 
         let (tx, rx) = ipc::channel::<WebDriverJSResult>().unwrap();
         let cmd: String = format!(
-            "window.navbar.addTab('{}')",
-            serde_json::to_string(&webview.webview_id).unwrap()
+            "window.navbar.addTab('{}', {})",
+            serde_json::to_string(&webview.webview_id).unwrap(),
+            true,
         );
         send_to_constellation(
             constellation_sender,
@@ -258,6 +260,38 @@ impl Window {
             ConstellationMsg::NewWebView(initial_url, webview_id),
         );
         log::debug!("Verso Window {:?} adds webview {}", self.id(), webview_id);
+    }
+
+    /// Close a tab
+    pub fn close_tab(
+        &mut self,
+        constellation_sender: &Sender<ConstellationMsg>,
+        tab_id: WebViewId,
+    ) {
+        // if only one tab exists, we can just close the window
+        if self.tab_manager.count() > 1 {
+            let (tx, rx) = ipc::channel::<WebDriverJSResult>().unwrap();
+            let cmd: String = format!(
+                "window.navbar.closeTab('{}')",
+                serde_json::to_string(&tab_id).unwrap()
+            );
+            send_to_constellation(
+                constellation_sender,
+                ConstellationMsg::WebDriverCommand(WebDriverCommandMsg::ScriptCommand(
+                    self.panel.as_ref().unwrap().webview.webview_id.into(),
+                    WebDriverScriptCommand::ExecuteScript(cmd, tx),
+                )),
+            );
+            let active_tab_id = rx.recv().unwrap().unwrap();
+            match active_tab_id {
+                WebDriverJSValue::String(resp) => {
+                    let active_id: WebViewId = serde_json::from_str(&resp).unwrap();
+                    self.tab_manager.activate_tab(active_id);
+                }
+                _ => {}
+            }
+        }
+        send_to_constellation(constellation_sender, ConstellationMsg::CloseWebView(tab_id));
     }
 
     /// Handle Winit window event and return a boolean to indicate if the compositor should repaint immediately.
@@ -452,6 +486,35 @@ impl Window {
             WindowEvent::KeyboardInput { event, .. } => {
                 let event = keyboard_event_from_winit(event, self.modifiers_state.get());
                 log::trace!("Verso is handling {:?}", event);
+
+                /* Window operation keyboard shortcut */
+                let is_macos = cfg!(target_os = "macos");
+                let control_or_meta = if is_macos {
+                    Modifiers::META
+                } else {
+                    Modifiers::CONTROL
+                };
+
+                if event.state == KeyState::Down {
+                    // TODO: New Window, Close Browser
+                    match (event.modifiers, event.code) {
+                        (modifiers, Code::KeyT) if modifiers == control_or_meta => {
+                            self.create_tab(
+                                sender,
+                                ServoUrl::parse("https://example.com").unwrap(),
+                            );
+                            return;
+                        }
+                        (modifiers, Code::KeyW) if modifiers == control_or_meta => {
+                            if let Some(tab_id) = self.tab_manager.current_tab_id() {
+                                self.close_tab(sender, tab_id);
+                            }
+                            return;
+                        }
+                        _ => (),
+                    }
+                }
+
                 let msg = ConstellationMsg::Keyboard(event);
                 send_to_constellation(sender, msg);
             }

@@ -280,7 +280,7 @@ impl Window {
                 self.window.request_redraw();
                 send_to_constellation(sender, ConstellationMsg::FocusWebView(panel_id));
 
-                self.create_webview(sender, self.panel.as_ref().unwrap().initial_url.clone());
+                self.create_tab(sender, self.panel.as_ref().unwrap().initial_url.clone());
             }
             EmbedderMsg::AllowNavigationRequest(id, _url) => {
                 // The panel shouldn't navigate to other pages.
