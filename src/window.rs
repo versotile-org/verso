@@ -261,12 +261,9 @@ impl Window {
     }
 
     /// Close a tab
-    pub fn close_tab(
-        &mut self,
-        constellation_sender: &Sender<ConstellationMsg>,
-        tab_id: WebViewId,
-    ) {
-        // if only one tab exists, we can just close the window
+    pub fn close_tab(&mut self, compositor: &mut IOCompositor, tab_id: WebViewId) {
+        let sender = compositor.constellation_chan.clone();
+        // if there are more than 2 tabs, we need to ask for the new active tab after tab is closed
         if self.tab_manager.count() > 1 {
             let (tx, rx) = ipc::channel::<WebDriverJSResult>().unwrap();
             let cmd: String = format!(
@@ -274,22 +271,47 @@ impl Window {
                 serde_json::to_string(&tab_id).unwrap()
             );
             send_to_constellation(
-                constellation_sender,
+                &sender,
                 ConstellationMsg::WebDriverCommand(WebDriverCommandMsg::ScriptCommand(
                     self.panel.as_ref().unwrap().webview.webview_id.into(),
                     WebDriverScriptCommand::ExecuteScript(cmd, tx),
                 )),
             );
+
             let active_tab_id = rx.recv().unwrap().unwrap();
             match active_tab_id {
                 WebDriverJSValue::String(resp) => {
                     let active_id: WebViewId = serde_json::from_str(&resp).unwrap();
-                    self.tab_manager.activate_tab(active_id);
+                    self.activate_tab(compositor, active_id, self.tab_manager.count() > 2);
                 }
                 _ => {}
             }
         }
-        send_to_constellation(constellation_sender, ConstellationMsg::CloseWebView(tab_id));
+        send_to_constellation(&sender, ConstellationMsg::CloseWebView(tab_id));
+    }
+
+    /// Activate a tab
+    pub fn activate_tab(
+        &mut self,
+        compositor: &mut IOCompositor,
+        tab_id: WebViewId,
+        show_tab: bool,
+    ) {
+        let size = self.size();
+        let rect = DeviceIntRect::from_size(size);
+        let content_size = self.get_content_size(rect, show_tab);
+        let (tab_id, prompt_id) = self.tab_manager.set_size(tab_id, content_size);
+
+        if let Some(prompt_id) = prompt_id {
+            compositor.on_resize_webview_event(prompt_id, content_size);
+        }
+        if let Some(tab_id) = tab_id {
+            compositor.on_resize_webview_event(tab_id, content_size);
+            if let Some(_) = self.tab_manager.activate_tab(tab_id) {
+                // update painting order immediately to draw the active tab
+                compositor.send_root_pipeline_display_list(self);
+            }
+        }
     }
 
     /// Handle Winit window event and return a boolean to indicate if the compositor should repaint immediately.
@@ -505,7 +527,7 @@ impl Window {
                         }
                         (modifiers, Code::KeyW) if modifiers == control_or_meta => {
                             if let Some(tab_id) = self.tab_manager.current_tab_id() {
-                                self.close_tab(sender, tab_id);
+                                self.close_tab(compositor, tab_id);
                             }
                             return;
                         }

@@ -311,25 +311,10 @@ impl Window {
                             let request: TabActivateRequest = serde_json::from_str(request_str)
                                 .expect("Failed to parse TabActivateRequest");
 
-                            let id = request.id;
+                            let tab_id = request.id;
 
                             // FIXME: set dirty flag, and only resize when flag is set
-                            let size = self.size();
-                            let rect = DeviceIntRect::from_size(size);
-                            let show_tab_bar = self.tab_manager.count() > 1;
-                            let content_size = self.get_content_size(rect, show_tab_bar);
-                            let (tab_id, prompt_id) = self.tab_manager.set_size(id, content_size);
-                            if let Some(tab_id) = tab_id {
-                                compositor.on_resize_webview_event(tab_id, content_size);
-                            }
-                            if let Some(prompt_id) = prompt_id {
-                                compositor.on_resize_webview_event(prompt_id, content_size);
-                            }
-
-                            if let Some(_) = self.tab_manager.activate_tab(id) {
-                                // update painting order immediately to draw the active tab
-                                compositor.send_root_pipeline_display_list(self);
-                            }
+                            self.activate_tab(compositor, tab_id, self.tab_manager.count() > 1);
 
                             let _ = prompt_sender.send(None);
                             return false;
