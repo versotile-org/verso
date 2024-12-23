@@ -789,7 +789,7 @@ impl Window {
         use crate::webview::context_menu::MenuItem;
 
         let tab = self.tab_manager.current_tab().unwrap();
-        let history = self.tab_manager.history(tab.webview_id).unwrap();
+        let history = tab.history();
         let history_len = history.list.len();
 
         // items
