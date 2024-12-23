@@ -11,7 +11,7 @@ use glutin::{
 };
 use glutin_winit::DisplayBuilder;
 use ipc_channel::ipc;
-use keyboard_types::{Code, KeyState, Modifiers};
+use keyboard_types::{Code, KeyState, KeyboardEvent, Modifiers};
 #[cfg(any(target_os = "macos", target_os = "windows"))]
 use muda::{Menu as MudaMenu, MenuEvent, MenuEventReceiver, MenuItem};
 #[cfg(any(target_os = "macos", target_os = "windows"))]
@@ -519,31 +519,8 @@ impl Window {
                 log::trace!("Verso is handling {:?}", event);
 
                 /* Window operation keyboard shortcut */
-                let is_macos = cfg!(target_os = "macos");
-                let control_or_meta = if is_macos {
-                    Modifiers::META
-                } else {
-                    Modifiers::CONTROL
-                };
-
-                if event.state == KeyState::Down {
-                    // TODO: New Window, Close Browser
-                    match (event.modifiers, event.code) {
-                        (modifiers, Code::KeyT) if modifiers == control_or_meta => {
-                            self.create_tab(
-                                sender,
-                                ServoUrl::parse("https://example.com").unwrap(),
-                            );
-                            return;
-                        }
-                        (modifiers, Code::KeyW) if modifiers == control_or_meta => {
-                            if let Some(tab_id) = self.tab_manager.current_tab_id() {
-                                self.close_tab(compositor, tab_id);
-                            }
-                            return;
-                        }
-                        _ => (),
-                    }
+                if self.handle_keyboard_shortcut(compositor, &event) {
+                    return;
                 }
 
                 let msg = ConstellationMsg::Keyboard(event);
@@ -551,6 +528,44 @@ impl Window {
             }
             e => log::trace!("Verso Window isn't supporting this window event yet: {e:?}"),
         }
+    }
+
+    /// Handle Window keyboard shortcut
+    ///
+    /// - Returns `true` if the event is handled, then we should skip sending it to constellation
+    fn handle_keyboard_shortcut(
+        &mut self,
+        compositor: &mut IOCompositor,
+        event: &KeyboardEvent,
+    ) -> bool {
+        let is_macos = cfg!(target_os = "macos");
+        let control_or_meta = if is_macos {
+            Modifiers::META
+        } else {
+            Modifiers::CONTROL
+        };
+
+        if event.state == KeyState::Down {
+            // TODO: New Window, Close Browser
+            match (event.modifiers, event.code) {
+                (modifiers, Code::KeyT) if modifiers == control_or_meta => {
+                    (*self).create_tab(
+                        &compositor.constellation_chan,
+                        ServoUrl::parse("https://example.com").unwrap(),
+                    );
+                    return true;
+                }
+                (modifiers, Code::KeyW) if modifiers == control_or_meta => {
+                    if let Some(tab_id) = self.tab_manager.current_tab_id() {
+                        (*self).close_tab(compositor, tab_id);
+                    }
+                    return true;
+                }
+                _ => (),
+            }
+        }
+
+        false
     }
 
     /// Handle servo messages. Return true if it requests a new window
