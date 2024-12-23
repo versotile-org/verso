@@ -670,9 +670,9 @@ impl Window {
                 );
             }
             (self.panel.take().map(|panel| panel.webview), false)
-        } else if let Ok(webview) = self.tab_manager.close_tab(id) {
+        } else if let Ok(tab) = self.tab_manager.close_tab(id) {
             let close_window = self.tab_manager.count() == 0 || self.panel.is_none();
-            (Some(webview), close_window)
+            (Some(tab.webview().clone()), close_window)
         } else {
             (None, false)
         }
@@ -685,8 +685,8 @@ impl Window {
             order.push(&panel.webview);
         }
 
-        if let Some(webview) = self.tab_manager.current_tab() {
-            order.push(webview);
+        if let Some(tab) = self.tab_manager.current_tab() {
+            order.push(tab.webview());
         }
 
         #[cfg(linux)]
@@ -749,7 +749,7 @@ impl Window {
     #[cfg(any(target_os = "macos", target_os = "windows"))]
     pub(crate) fn show_context_menu(&self) {
         let tab = self.tab_manager.current_tab().unwrap();
-        let history = self.tab_manager.history(tab.webview_id).unwrap();
+        let history = tab.history();
         let history_len = history.list.len();
 
         // items
@@ -808,28 +808,25 @@ impl Window {
     #[cfg(any(target_os = "macos", target_os = "windows"))]
     fn handle_context_menu_event(&self, sender: &Sender<ConstellationMsg>, event: MenuEvent) {
         // TODO: should be more flexible to handle different menu items
-        let active_webview = self.tab_manager.current_tab().unwrap();
+        let active_tab = self.tab_manager.current_tab().unwrap();
         match event.id().0.as_str() {
             "back" => {
                 send_to_constellation(
                     sender,
-                    ConstellationMsg::TraverseHistory(
-                        active_webview.webview_id,
-                        TraversalDirection::Back(1),
-                    ),
+                    ConstellationMsg::TraverseHistory(active_tab.id(), TraversalDirection::Back(1)),
                 );
             }
             "forward" => {
                 send_to_constellation(
                     sender,
                     ConstellationMsg::TraverseHistory(
-                        active_webview.webview_id,
+                        active_tab.id(),
                         TraversalDirection::Forward(1),
                     ),
                 );
             }
             "reload" => {
-                send_to_constellation(sender, ConstellationMsg::Reload(active_webview.webview_id));
+                send_to_constellation(sender, ConstellationMsg::Reload(active_tab.id()));
             }
             _ => {}
         }

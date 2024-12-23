@@ -183,9 +183,9 @@ impl Window {
                 // TODO: Implement context menu
             }
             EmbedderMsg::Prompt(prompt_type, _origin) => {
-                if let Some(webview) = self.tab_manager.tab(webview_id) {
+                if let Some(tab) = self.tab_manager.tab(webview_id) {
                     let mut prompt = PromptDialog::new();
-                    let rect = webview.rect;
+                    let rect = tab.webview().rect;
                     match prompt_type {
                         PromptDefinition::Alert(message, prompt_sender) => {
                             prompt.alert(sender, rect, message, prompt_sender);
@@ -214,7 +214,7 @@ impl Window {
                 }
             }
             EmbedderMsg::PromptPermission(prompt, prompt_sender) => {
-                if let Some(webview) = self.tab_manager.tab(webview_id) {
+                if let Some(tab) = self.tab_manager.tab(webview_id) {
                     let message = match prompt {
                         PermissionPrompt::Request(permission_name) => {
                             format!(
@@ -233,7 +233,7 @@ impl Window {
                     let mut prompt = PromptDialog::new();
                     prompt.yes_no(
                         sender,
-                        webview.rect,
+                        tab.webview().rect,
                         message,
                         PromptSender::PermissionSender(prompt_sender),
                     );
@@ -368,8 +368,8 @@ impl Window {
                         }
 
                         /* Main WebView */
-                        if let Some(webview) = self.tab_manager.current_tab() {
-                            let id = webview.webview_id;
+                        if let Some(tab) = self.tab_manager.current_tab() {
+                            let id = tab.id();
                             if msg.starts_with("NAVIGATE_TO:") {
                                 let unparsed_url = msg.strip_prefix("NAVIGATE_TO:").unwrap();
                                 let url = match Url::parse(unparsed_url) {
