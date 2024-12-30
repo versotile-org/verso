@@ -3,7 +3,9 @@ use std::cell::Cell;
 use base::id::WebViewId;
 use compositing_traits::ConstellationMsg;
 use crossbeam_channel::Sender;
-use embedder_traits::{Cursor, EmbedderMsg, PermissionRequest, PromptResult};
+use embedder_traits::{
+    Cursor, EmbedderMsg, PermissionRequest, PromptCredentialsInput, PromptResult,
+};
 use euclid::{Point2D, Size2D};
 use glutin::{
     config::{ConfigTemplateBuilder, GlConfig},
@@ -903,6 +905,12 @@ impl Window {
                 }
                 PromptSender::PermissionSender(sender) => {
                     let _ = sender.send(PermissionRequest::Denied);
+                }
+                PromptSender::HttpBasicAuthSender(sender) => {
+                    let _ = sender.send(PromptCredentialsInput {
+                        username: None,
+                        password: None,
+                    });
                 }
             }
         }
