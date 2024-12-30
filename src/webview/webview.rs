@@ -204,6 +204,9 @@ impl Window {
                         PromptDefinition::Input(message, default_value, prompt_sender) => {
                             prompt.input(sender, rect, message, Some(default_value), prompt_sender);
                         }
+                        PromptDefinition::Credentials(_) => {
+                            todo!();
+                        }
                     }
 
                     // save prompt in window to keep prompt_sender alive
