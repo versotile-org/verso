@@ -204,7 +204,7 @@ impl Window {
                         PromptDefinition::Input(message, default_value, prompt_sender) => {
                             prompt.input(sender, rect, message, Some(default_value), prompt_sender);
                         }
-                        PromptDefinition::Credentials(sender) => {
+                        PromptDefinition::Credentials(_) => {
                             todo!();
                         }
                     }
