@@ -73,7 +73,7 @@ impl Window {
         message: EmbedderMsg,
         sender: &Sender<ConstellationMsg>,
         clipboard: Option<&mut Clipboard>,
-        _compositor: &mut IOCompositor,
+        compositor: &mut IOCompositor,
     ) {
         log::trace!("Verso WebView {webview_id:?} is handling Embedder message: {message:?}",);
         match message {
@@ -156,6 +156,8 @@ impl Window {
             }
             EmbedderMsg::HistoryChanged(list, index) => {
                 self.close_prompt_dialog(webview_id);
+                compositor.send_root_pipeline_display_list(self);
+
                 self.tab_manager
                     .set_history(webview_id, list.clone(), index);
                 let url = list.get(index).unwrap();
