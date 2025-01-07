@@ -3,8 +3,8 @@ use base::id::{BrowsingContextId, WebViewId};
 use compositing_traits::ConstellationMsg;
 use crossbeam_channel::Sender;
 use embedder_traits::{
-    CompositorEventVariant, EmbedderMsg, PermissionPrompt, PermissionRequest, PromptDefinition,
-    PromptResult,
+    CompositorEventVariant, EmbedderMsg, PermissionPrompt, PermissionRequest,
+    PromptCredentialsInput, PromptDefinition, PromptResult,
 };
 use ipc_channel::ipc;
 use script_traits::{
@@ -19,7 +19,7 @@ use crate::{
     compositor::IOCompositor,
     tab::{TabActivateRequest, TabCloseRequest, TabCreateResponse},
     verso::send_to_constellation,
-    webview::prompt::{PromptDialog, PromptInputResult, PromptSender},
+    webview::prompt::{HttpBasicAuthInputResult, PromptDialog, PromptInputResult, PromptSender},
     window::Window,
 };
 
@@ -73,7 +73,7 @@ impl Window {
         message: EmbedderMsg,
         sender: &Sender<ConstellationMsg>,
         clipboard: Option<&mut Clipboard>,
-        _compositor: &mut IOCompositor,
+        compositor: &mut IOCompositor,
     ) {
         log::trace!("Verso WebView {webview_id:?} is handling Embedder message: {message:?}",);
         match message {
@@ -156,6 +156,8 @@ impl Window {
             }
             EmbedderMsg::HistoryChanged(list, index) => {
                 self.close_prompt_dialog(webview_id);
+                compositor.send_root_pipeline_display_list(self);
+
                 self.tab_manager
                     .set_history(webview_id, list.clone(), index);
                 let url = list.get(index).unwrap();
@@ -204,8 +206,8 @@ impl Window {
                         PromptDefinition::Input(message, default_value, prompt_sender) => {
                             prompt.input(sender, rect, message, Some(default_value), prompt_sender);
                         }
-                        PromptDefinition::Credentials(_) => {
-                            todo!();
+                        PromptDefinition::Credentials(prompt_sender) => {
+                            prompt.http_basic_auth(sender, rect, prompt_sender);
                         }
                     }
 
@@ -557,6 +559,31 @@ impl Window {
                                 }
                             };
                             let _ = sender.send(result);
+                        }
+                        PromptSender::HttpBasicAuthSender(sender) => {
+                            let canceled_auth = PromptCredentialsInput {
+                                username: None,
+                                password: None,
+                            };
+
+                            if let Ok(HttpBasicAuthInputResult { action, auth }) =
+                                serde_json::from_str::<HttpBasicAuthInputResult>(&msg)
+                            {
+                                match action.as_str() {
+                                    "signin" => {
+                                        let _ = sender.send(auth);
+                                    }
+                                    "cancel" => {
+                                        let _ = sender.send(canceled_auth);
+                                    }
+                                    _ => {
+                                        let _ = sender.send(canceled_auth);
+                                    }
+                                };
+                            } else {
+                                log::error!("prompt result message invalid: {msg}");
+                                let _ = sender.send(canceled_auth);
+                            }
                         }
                     }
 
