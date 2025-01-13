@@ -339,20 +339,18 @@ impl Verso {
         };
 
         // Create constellation thread
-        let constellation_sender = Constellation::<
-            script::script_thread::ScriptThread,
-            script::serviceworker_manager::ServiceWorkerManager,
-        >::start(
-            initial_state,
-            layout_factory,
-            window_size,
-            opts.random_pipeline_closure_probability,
-            opts.random_pipeline_closure_seed,
-            opts.hard_fail,
-            !opts.debug.disable_canvas_antialiasing,
-            canvas_create_sender,
-            canvas_ipc_sender,
-        );
+        let constellation_sender =
+            Constellation::<script::ScriptThread, script::ServiceWorkerManager>::start(
+                initial_state,
+                layout_factory,
+                window_size,
+                opts.random_pipeline_closure_probability,
+                opts.random_pipeline_closure_seed,
+                opts.hard_fail,
+                !opts.debug.disable_canvas_antialiasing,
+                canvas_create_sender,
+                canvas_ipc_sender,
+            );
 
         // Create webdriver thread
         if let Some(port) = opts.webdriver_port {
