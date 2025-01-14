@@ -52,7 +52,8 @@ jobs:
   build-linux:
     if: ${{ github.event_name != 'pull_request' }}
     name: Build [Linux]
-    runs-on: ubuntu-latest
+    # ubuntu-lastest now runs on ubuntu-24.04, which will break the build
+    runs-on: ubuntu-22.04
     env:
       RUSTC_WRAPPER: sccache
       CCACHE: sccache
