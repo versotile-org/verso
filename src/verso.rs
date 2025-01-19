@@ -339,20 +339,18 @@ impl Verso {
         };
 
         // Create constellation thread
-        let constellation_sender = Constellation::<
-            script::script_thread::ScriptThread,
-            script::serviceworker_manager::ServiceWorkerManager,
-        >::start(
-            initial_state,
-            layout_factory,
-            window_size,
-            opts.random_pipeline_closure_probability,
-            opts.random_pipeline_closure_seed,
-            opts.hard_fail,
-            !opts.debug.disable_canvas_antialiasing,
-            canvas_create_sender,
-            canvas_ipc_sender,
-        );
+        let constellation_sender =
+            Constellation::<script::ScriptThread, script::ServiceWorkerManager>::start(
+                initial_state,
+                layout_factory,
+                window_size,
+                opts.random_pipeline_closure_probability,
+                opts.random_pipeline_closure_seed,
+                opts.hard_fail,
+                !opts.debug.disable_canvas_antialiasing,
+                canvas_create_sender,
+                canvas_ipc_sender,
+            );
 
         // Create webdriver thread
         if let Some(port) = opts.webdriver_port {
@@ -388,7 +386,7 @@ impl Verso {
         if with_panel {
             window.create_panel(&constellation_sender, initial_url);
         } else if let Some(initial_url) = initial_url {
-            window.create_webview(&constellation_sender, initial_url.into());
+            window.create_tab(&constellation_sender, initial_url.into());
         }
 
         let mut windows = HashMap::new();
@@ -587,9 +585,11 @@ impl Verso {
     pub fn handle_incoming_webview_message(&self, message: ControllerMessage) {
         match message {
             ControllerMessage::NavigateTo(to_url) => {
-                if let Some(webview_id) = self.windows.values().next().and_then(|(window, _)| {
-                    window.webview.as_ref().map(|webview| webview.webview_id)
-                }) {
+                if let Some(webview_id) =
+                    self.windows.values().next().and_then(|(window, _)| {
+                        window.tab_manager.current_tab().map(|tab| tab.id())
+                    })
+                {
                     send_to_constellation(
                         &self.constellation_sender,
                         ConstellationMsg::LoadUrl(webview_id, ServoUrl::from_url(to_url)),

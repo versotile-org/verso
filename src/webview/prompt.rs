@@ -1,7 +1,7 @@
 use base::id::WebViewId;
 use compositing_traits::ConstellationMsg;
 use crossbeam_channel::Sender;
-use embedder_traits::{PermissionRequest, PromptResult};
+use embedder_traits::{PermissionRequest, PromptCredentialsInput, PromptResult};
 use ipc_channel::ipc::IpcSender;
 use serde::{Deserialize, Serialize};
 use servo_url::ServoUrl;
@@ -28,6 +28,10 @@ enum PromptType {
     ///
     /// <https://developer.mozilla.org/en-US/docs/Web/API/Window/prompt>
     Input(String, Option<String>),
+    /// HTTP basic authentication dialog (username / password)
+    ///
+    /// <https://developer.mozilla.org/en-US/docs/Web/HTTP/Authentication#basic>
+    HttpBasicAuth,
 }
 
 /// Prompt Sender, used to send prompt result back to the caller
@@ -41,6 +45,8 @@ pub enum PromptSender {
     InputSender(IpcSender<Option<String>>),
     /// Yes/No Permission sender
     PermissionSender(IpcSender<PermissionRequest>),
+    /// HTTP basic authentication sender
+    HttpBasicAuthSender(IpcSender<PromptCredentialsInput>),
 }
 
 /// Prompt input result send from prompt dialog to backend
@@ -58,6 +64,21 @@ pub struct PromptInputResult {
     pub action: String,
     /// User input value
     pub value: String,
+}
+
+/// Prompt input result send from prompt dialog to backend
+/// - action: "signin" / "cancel"
+/// - auth: { username: string, password: string }
+///
+/// Behavior:
+/// - **signin**: return { username: string, password: string }
+/// - **cancel**: return { username: null, password: null }
+#[derive(Debug, Serialize, Deserialize)]
+pub struct HttpBasicAuthInputResult {
+    /// User action: "signin" / "cancel"
+    pub action: String,
+    /// User input value
+    pub auth: PromptCredentialsInput,
 }
 
 /// Prompt Dialog
@@ -79,6 +100,10 @@ impl PromptDialog {
     pub fn webview(&self) -> &WebView {
         &self.webview
     }
+    /// Get prompt webview ID
+    pub fn id(&self) -> WebViewId {
+        self.webview.webview_id
+    }
 
     /// Get prompt sender. Send user interaction result back to caller.
     pub fn sender(&self) -> Option<PromptSender> {
@@ -91,9 +116,9 @@ impl PromptDialog {
     /// ```rust
     /// let rect = window.webview.as_ref().unwrap().rect;
     /// let content_size = window.get_content_size(rect);
-    /// prompt.resize(content_size);
+    /// prompt.set_size(content_size);
     /// ```
-    pub fn resize(&mut self, rect: DeviceIntRect) {
+    pub fn set_size(&mut self, rect: DeviceIntRect) {
         self.webview.set_size(rect);
     }
 
@@ -192,6 +217,31 @@ impl PromptDialog {
         self.show(sender, rect, PromptType::Input(message, default_value));
     }
 
+    /// Show input prompt
+    ///
+    /// After you call `input(..)`, you must call `sender()` to get prompt sender,
+    /// then send user interaction result back to caller.
+    ///
+    /// ## Example
+    ///
+    /// ```rust
+    /// if let Some(PromptSender::HttpBasicAuthSender(sender)) = prompt.sender() {
+    ///     let _ = sender.send(PromptCredentialsInput {
+    ///         username: "user".to_string(),
+    ///         password: "password".to_string(),
+    ///     });
+    /// }
+    /// ```
+    pub fn http_basic_auth(
+        &mut self,
+        sender: &Sender<ConstellationMsg>,
+        rect: DeviceIntRect,
+        prompt_sender: IpcSender<PromptCredentialsInput>,
+    ) {
+        self.prompt_sender = Some(PromptSender::HttpBasicAuthSender(prompt_sender));
+        self.show(sender, rect, PromptType::HttpBasicAuth);
+    }
+
     fn show(
         &mut self,
         sender: &Sender<ConstellationMsg>,
@@ -222,6 +272,9 @@ impl PromptDialog {
                     url.push_str(&format!("&defaultValue={}", default_value));
                 }
                 url
+            }
+            PromptType::HttpBasicAuth => {
+                format!("verso://resources/components/prompt/http_basic_auth.html")
             }
         };
         ServoUrl::parse(&url).unwrap()

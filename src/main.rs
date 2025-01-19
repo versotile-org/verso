@@ -47,6 +47,8 @@ impl ApplicationHandler<EventLoopProxyMessage> for App {
 }
 
 fn main() -> Result<()> {
+    init_crypto();
+
     let event_loop = EventLoop::<EventLoopProxyMessage>::with_user_event().build()?;
     event_loop.listen_device_events(DeviceEvents::Never);
     let proxy = event_loop.create_proxy();
@@ -54,4 +56,10 @@ fn main() -> Result<()> {
     event_loop.run_app(&mut app)?;
 
     Ok(())
+}
+
+fn init_crypto() {
+    rustls::crypto::ring::default_provider()
+        .install_default()
+        .expect("Error initializing crypto provider");
 }

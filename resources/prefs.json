@@ -1,6 +1,7 @@
 {
   "devtools.server.enabled": false,
   "devtools.server.port": 0,
+  "dom.abort_controller.enabled": false,
   "dom.allow_scripts_to_close_windows": false,
   "dom.bluetooth.enabled": false,
   "dom.bluetooth.testing.enabled": false,
@@ -57,6 +58,7 @@
   "dom.webxr.test": false,
   "dom.webxr.unsafe-assume-user-intent": false,
   "dom.worklet.timeout_ms": 10,
+  "dom.xpath.enabled": false,
   "gfx.subpixel-text-antialiasing.enabled": true,
   "gfx.texture-swizzling.enabled": true,
   "js.asmjs.enabled": true,
@@ -130,6 +132,11 @@
   "shell.native-orientation": "both",
   "shell.native-titlebar.enabled": true,
   "shell.searchpage": "https://duckduckgo.com/html/?q=%s",
+  "threadpools.async_runtime_workers.max": 6,
+  "threadpools.fallback_worker_num": 3,
+  "threadpools.image_cache_workers.max": 4,
+  "threadpools.resource_workers.max": 4,
+  "threadpools.webrender_workers.max": 4,
   "webgl.testing.context_creation_error": false
 }
 
