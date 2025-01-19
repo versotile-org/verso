@@ -607,7 +607,7 @@ impl Window {
     }
 
     fn allow_navigation(&self, url: ServoUrl) -> crate::Result<bool> {
-        if let Some(ref sender) = *self.event_listeners.on_navigation_starting.lock().unwrap() {
+        if let Some(ref sender) = self.event_listeners.on_navigation_starting {
             let (result_sender, receiver) =
                 ipc::channel::<bool>().map_err(|e| ipc::IpcError::Io(e))?;
             sender

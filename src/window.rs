@@ -1,4 +1,4 @@
-use std::{cell::Cell, sync::Mutex};
+use std::cell::Cell;
 
 use base::id::WebViewId;
 use compositing_traits::ConstellationMsg;
@@ -60,7 +60,7 @@ const PANEL_PADDING: f64 = 4.0;
 
 #[derive(Default)]
 pub(crate) struct EventListeners {
-    pub(crate) on_navigation_starting: Mutex<Option<OnNavigationStartingPayload>>,
+    pub(crate) on_navigation_starting: Option<OnNavigationStartingPayload>,
 }
 
 /// A Verso window is a Winit window containing several web views.
