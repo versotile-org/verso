@@ -8,7 +8,7 @@ use net_traits::{
     response::{Response, ResponseBody},
     ResourceFetchTiming,
 };
-use servo_config::{opts::{default_opts, set_options, Opts, OutputOptions}, pref};
+use servo_config::opts::{default_opts, set_options, Opts, OutputOptions};
 use winit::{dpi, window::WindowAttributes};
 
 /// Servo time profile settings
