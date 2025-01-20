@@ -2,7 +2,7 @@ use std::{env::current_exe, thread::sleep, time::Duration};
 
 fn main() {
     let versoview_path = current_exe().unwrap().parent().unwrap().join("versoview");
-    let controller = verso::VersoviewController::new(
+    let controller = verso::VersoviewController::new_with_panel(
         versoview_path,
         url::Url::parse("https://example.com").unwrap(),
     );
