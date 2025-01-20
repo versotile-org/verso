@@ -28,7 +28,7 @@ use net::resource_thread;
 use profile;
 use script::{self, JSEngineSetup};
 use script_traits::WindowSizeData;
-use servo_config::{opts, pref};
+use servo_config::{opts, pref, prefs::Preferences};
 use servo_url::ServoUrl;
 use style;
 use versoview_messages::ControllerMessage;
@@ -68,7 +68,7 @@ impl Verso {
     /// Following threads will be created while initializing Verso based on configurations:
     /// - Time Profiler: Enabled
     /// - Memory Profiler: Enabled
-    /// - DevTools: `Opts::devtools_server_enabled`
+    /// - DevTools: `pref!(devtools_server_enabled)`
     /// - Webrender: Enabled
     /// - WebGL: Disabled
     /// - WebXR: Disabled
@@ -81,6 +81,8 @@ impl Verso {
     /// - Image Cache: Enabled
     pub fn new(evl: &ActiveEventLoop, proxy: EventLoopProxy<EventLoopProxyMessage>) -> Self {
         let config = Config::new();
+        let preferences = Preferences::default();
+        servo_config::prefs::set(preferences);
         if let Some(ipc_channel) = &config.args.ipc_channel {
             let sender =
                 IpcSender::<IpcSender<ControllerMessage>>::connect(ipc_channel.to_string())
