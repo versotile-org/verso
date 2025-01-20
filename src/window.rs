@@ -238,20 +238,22 @@ impl Window {
         let mut webview = WebView::new(webview_id, rect);
         webview.set_size(content_size);
 
-        let (tx, rx) = ipc::channel::<WebDriverJSResult>().unwrap();
-        let cmd: String = format!(
-            "window.navbar.addTab('{}', {})",
-            serde_json::to_string(&webview.webview_id).unwrap(),
-            true,
-        );
-        send_to_constellation(
-            constellation_sender,
-            ConstellationMsg::WebDriverCommand(WebDriverCommandMsg::ScriptCommand(
-                self.panel.as_ref().unwrap().webview.webview_id.into(),
-                WebDriverScriptCommand::ExecuteScript(cmd, tx),
-            )),
-        );
-        let _ = rx.recv();
+        if let Some(panel) = &self.panel {
+            let (tx, rx) = ipc::channel::<WebDriverJSResult>().unwrap();
+            let cmd: String = format!(
+                "window.navbar.addTab('{}', {})",
+                serde_json::to_string(&webview.webview_id).unwrap(),
+                true,
+            );
+            send_to_constellation(
+                constellation_sender,
+                ConstellationMsg::WebDriverCommand(WebDriverCommandMsg::ScriptCommand(
+                    panel.webview.webview_id.into(),
+                    WebDriverScriptCommand::ExecuteScript(cmd, tx),
+                )),
+            );
+            let _ = rx.recv();
+        }
 
         self.tab_manager.append_tab(webview, true);
 
@@ -267,26 +269,28 @@ impl Window {
         let sender = compositor.constellation_chan.clone();
         // if there are more than 2 tabs, we need to ask for the new active tab after tab is closed
         if self.tab_manager.count() > 1 {
-            let (tx, rx) = ipc::channel::<WebDriverJSResult>().unwrap();
-            let cmd: String = format!(
-                "window.navbar.closeTab('{}')",
-                serde_json::to_string(&tab_id).unwrap()
-            );
-            send_to_constellation(
-                &sender,
-                ConstellationMsg::WebDriverCommand(WebDriverCommandMsg::ScriptCommand(
-                    self.panel.as_ref().unwrap().webview.webview_id.into(),
-                    WebDriverScriptCommand::ExecuteScript(cmd, tx),
-                )),
-            );
+            if let Some(panel) = &self.panel {
+                let (tx, rx) = ipc::channel::<WebDriverJSResult>().unwrap();
+                let cmd: String = format!(
+                    "window.navbar.closeTab('{}')",
+                    serde_json::to_string(&tab_id).unwrap()
+                );
+                send_to_constellation(
+                    &sender,
+                    ConstellationMsg::WebDriverCommand(WebDriverCommandMsg::ScriptCommand(
+                        panel.webview.webview_id.into(),
+                        WebDriverScriptCommand::ExecuteScript(cmd, tx),
+                    )),
+                );
 
-            let active_tab_id = rx.recv().unwrap().unwrap();
-            match active_tab_id {
-                WebDriverJSValue::String(resp) => {
-                    let active_id: WebViewId = serde_json::from_str(&resp).unwrap();
-                    self.activate_tab(compositor, active_id, self.tab_manager.count() > 2);
+                let active_tab_id = rx.recv().unwrap().unwrap();
+                match active_tab_id {
+                    WebDriverJSValue::String(resp) => {
+                        let active_id: WebViewId = serde_json::from_str(&resp).unwrap();
+                        self.activate_tab(compositor, active_id, self.tab_manager.count() > 2);
+                    }
+                    _ => {}
                 }
-                _ => {}
             }
         }
         send_to_constellation(&sender, ConstellationMsg::CloseWebView(tab_id));
