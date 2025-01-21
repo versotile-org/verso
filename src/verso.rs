@@ -81,8 +81,6 @@ impl Verso {
     /// - Image Cache: Enabled
     pub fn new(evl: &ActiveEventLoop, proxy: EventLoopProxy<EventLoopProxyMessage>) -> Self {
         let config = Config::new();
-        let preferences = Preferences::default();
-        servo_config::prefs::set(preferences);
         if let Some(ipc_channel) = &config.args.ipc_channel {
             let sender =
                 IpcSender::<IpcSender<ControllerMessage>>::connect(ipc_channel.to_string())

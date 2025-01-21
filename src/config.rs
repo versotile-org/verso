@@ -8,7 +8,10 @@ use net_traits::{
     response::{Response, ResponseBody},
     ResourceFetchTiming,
 };
-use servo_config::opts::{default_opts, set_options, Opts, OutputOptions};
+use servo_config::{
+    opts::{default_opts, set_options, Opts, OutputOptions},
+    prefs::Preferences,
+};
 use winit::{dpi, window::WindowAttributes};
 
 /// Servo time profile settings
@@ -236,6 +239,7 @@ fn parse_cli_args() -> Result<CliArgs, getopts::Fail> {
 impl Config {
     /// Create a new configuration for creating Verso instance.
     pub fn new() -> Self {
+        servo_config::prefs::set(Preferences::default());
         let mut opts = default_opts();
         let args = parse_cli_args().unwrap_or_default();
 
