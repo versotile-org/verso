@@ -28,7 +28,7 @@ use net::resource_thread;
 use profile;
 use script::{self, JSEngineSetup};
 use script_traits::WindowSizeData;
-use servo_config::{opts, pref, prefs::Preferences};
+use servo_config::{opts, pref};
 use servo_url::ServoUrl;
 use style;
 use versoview_messages::ControllerMessage;
