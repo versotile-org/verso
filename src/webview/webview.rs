@@ -605,13 +605,12 @@ impl Window {
     }
 }
 
-
 /// Blocking execute a script on this webview
 pub fn execute_script(
     constellation_sender: &Sender<ConstellationMsg>,
     webview: &WebViewId,
     js: impl ToString,
-) -> Result<WebDriverJSValue, WebDriverJSError> {
+) -> WebDriverJSResult {
     let (result_sender, result_receiver) = ipc::channel::<WebDriverJSResult>().unwrap();
     send_to_constellation(
         constellation_sender,
@@ -637,7 +636,7 @@ pub fn execute_script_async_with_callback(
     constellation_sender: &Sender<ConstellationMsg>,
     webview: &WebViewId,
     js: impl ToString,
-    callback: impl FnOnce(Result<WebDriverJSValue, WebDriverJSError>) + Send + 'static,
+    callback: impl FnOnce(WebDriverJSResult) + Send + 'static,
 ) {
     let (result_sender, result_receiver) = ipc::channel::<WebDriverJSResult>().unwrap();
     send_to_constellation(
