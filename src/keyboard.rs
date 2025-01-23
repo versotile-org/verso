@@ -33,15 +33,15 @@ pub const CMD_OR_ALT: Modifiers = Modifiers::ALT;
 /// matches [`NamedKey::Escape`] => [`Key::Escape`], [`NamedKey::F1`] => [`Key::F2`], [`NamedKey::F3`] => [`Key::F3`],...
 macro_rules! logical_to_winit_key {
     // Matches an optional token
-    (@opt $_: ident, $optional: ident) => {
-        Key::$optional
+    (@opt $_: ident, $optional: expr) => {
+        $optional
     };
 
     (@opt $variant: ident) => {
         Key::$variant
     };
 
-    ($key: ident $(,$variant: ident $(=> $matchto: ident)?)+) => {
+    ($key: ident $(,$variant: ident $(=> $matchto: expr)?)+) => {
         match $key {
             LogicalKey::Character(c) => Key::Character(c.to_string()),
             $(LogicalKey::Named(NamedKey::$variant) => logical_to_winit_key!(@opt $variant $(, $matchto)?),)+
@@ -64,7 +64,6 @@ fn get_servo_key_from_winit_key(key: &LogicalKey) -> Key {
         Pause, Insert, Home, Delete, End, PageDown, PageUp,
         ArrowLeft, ArrowUp, ArrowRight, ArrowDown,
         Backspace, Enter,
-        // printable: Space
         Compose,
         // Caret not mapped
         NumLock,
@@ -104,7 +103,8 @@ fn get_servo_key_from_winit_key(key: &LogicalKey) -> Key {
         // printable Yen,
         Copy,
         Paste,
-        Cut
+        Cut,
+        Space => Key::Character(" ".to_string())
     }
 }
 

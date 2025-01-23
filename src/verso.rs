@@ -68,7 +68,7 @@ impl Verso {
     /// Following threads will be created while initializing Verso based on configurations:
     /// - Time Profiler: Enabled
     /// - Memory Profiler: Enabled
-    /// - DevTools: `Opts::devtools_server_enabled`
+    /// - DevTools: `pref!(devtools_server_enabled)`
     /// - Webrender: Enabled
     /// - WebGL: Disabled
     /// - WebXR: Disabled
@@ -184,9 +184,9 @@ impl Verso {
         };
 
         // Create dev tools thread
-        let devtools_sender = if opts.devtools_server_enabled {
+        let devtools_sender = if pref!(devtools_server_enabled) {
             Some(devtools::start_server(
-                opts.devtools_port,
+                pref!(devtools_server_port) as u16,
                 embedder_sender.clone(),
             ))
         } else {
@@ -210,16 +210,15 @@ impl Verso {
                     // See: https://github.com/servo/servo/issues/31726
                     use_optimized_shaders: true,
                     resource_override_path: opts.shaders_dir.clone(),
-                    enable_aa: !opts.debug.disable_text_antialiasing,
                     debug_flags,
-                    precache_flags: if opts.debug.precache_shaders {
+                    precache_flags: if pref!(gfx_precache_shaders) {
                         ShaderPrecacheFlags::FULL_COMPILE
                     } else {
                         ShaderPrecacheFlags::empty()
                     },
-                    enable_subpixel_aa: pref!(gfx.subpixel_text_antialiasing.enabled)
-                        && !opts.debug.disable_subpixel_text_antialiasing,
-                    allow_texture_swizzling: pref!(gfx.texture_swizzling.enabled),
+                    enable_aa: pref!(gfx_text_antialiasing_enabled),
+                    enable_subpixel_aa: pref!(gfx_subpixel_text_antialiasing_enabled),
+                    allow_texture_swizzling: pref!(gfx_texture_swizzling_enabled),
                     clear_color,
                     ..Default::default()
                 },
@@ -340,20 +339,17 @@ impl Verso {
         };
 
         // Create constellation thread
-        let constellation_sender = Constellation::<
-            script::script_thread::ScriptThread,
-            script::serviceworker_manager::ServiceWorkerManager,
-        >::start(
-            initial_state,
-            layout_factory,
-            window_size,
-            opts.random_pipeline_closure_probability,
-            opts.random_pipeline_closure_seed,
-            opts.hard_fail,
-            !opts.debug.disable_canvas_antialiasing,
-            canvas_create_sender,
-            canvas_ipc_sender,
-        );
+        let constellation_sender =
+            Constellation::<script::ScriptThread, script::ServiceWorkerManager>::start(
+                initial_state,
+                layout_factory,
+                window_size,
+                opts.random_pipeline_closure_probability,
+                opts.random_pipeline_closure_seed,
+                opts.hard_fail,
+                canvas_create_sender,
+                canvas_ipc_sender,
+            );
 
         // Create webdriver thread
         if let Some(port) = opts.webdriver_port {
@@ -389,7 +385,7 @@ impl Verso {
         if with_panel {
             window.create_panel(&constellation_sender, initial_url);
         } else if let Some(initial_url) = initial_url {
-            window.create_webview(&constellation_sender, initial_url.into());
+            window.create_tab(&constellation_sender, initial_url.into());
         }
 
         window.set_init_script(init_script);
@@ -590,9 +586,11 @@ impl Verso {
     pub fn handle_incoming_webview_message(&self, message: ControllerMessage) {
         match message {
             ControllerMessage::NavigateTo(to_url) => {
-                if let Some(webview_id) = self.windows.values().next().and_then(|(window, _)| {
-                    window.webview.as_ref().map(|webview| webview.webview_id)
-                }) {
+                if let Some(webview_id) =
+                    self.windows.values().next().and_then(|(window, _)| {
+                        window.tab_manager.current_tab().map(|tab| tab.id())
+                    })
+                {
                     send_to_constellation(
                         &self.constellation_sender,
                         ConstellationMsg::LoadUrl(webview_id, ServoUrl::from_url(to_url)),

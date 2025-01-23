@@ -8,7 +8,10 @@ use net_traits::{
     response::{Response, ResponseBody},
     ResourceFetchTiming,
 };
-use servo_config::opts::{default_opts, set_options, Opts, OutputOptions};
+use servo_config::{
+    opts::{default_opts, set_options, Opts, OutputOptions},
+    prefs::Preferences,
+};
 use winit::{dpi, window::WindowAttributes};
 
 /// Servo time profile settings
@@ -32,8 +35,6 @@ pub struct CliArgs {
     pub no_panel: bool,
     /// Window settings for the initial winit window
     pub window_attributes: WindowAttributes,
-    /// Port number to start a server to listen to remote Firefox devtools connections. 0 for random port.
-    pub devtools_port: Option<u16>,
     /// Servo time profile settings
     pub profiler_settings: Option<ProfilerSettings>,
     /// Path to resource directory. If None, Verso will try to get default directory. And if that
@@ -74,12 +75,6 @@ fn parse_cli_args() -> Result<CliArgs, getopts::Fail> {
         "",
     );
     opts.optflag("", "no-panel", "Launch Verso without control panel");
-    opts.optopt(
-        "",
-        "devtools-port",
-        "Launch Verso with devtools server enabled and listen to port",
-        "1234",
-    );
     opts.optopt(
         "p",
         "profiler",
@@ -168,10 +163,6 @@ fn parse_cli_args() -> Result<CliArgs, getopts::Fail> {
     let resource_dir = matches.opt_str("resources").map(|r| PathBuf::from(r));
     let ipc_channel = matches.opt_str("ipc-channel");
     let no_panel = matches.opt_present("no-panel");
-    let devtools_port = matches.opt_get::<u16>("devtools-port").unwrap_or_else(|e| {
-        log::error!("Failed to parse devtools-port command line argument: {e}");
-        None
-    });
 
     let profiler_settings = if let Ok(Some(profiler_interval)) = matches.opt_get("profiler") {
         let profile_output = matches.opt_str("profiler-output-file");
@@ -193,6 +184,11 @@ fn parse_cli_args() -> Result<CliArgs, getopts::Fail> {
     let userscripts_directory = matches.opt_str("userscripts-directory");
 
     let mut window_attributes = winit::window::Window::default_attributes();
+
+    // set min inner size
+    // should be at least able to show the whole control panel
+    // FIXME: url input has weird behavior that will expand lager when having long text
+    window_attributes = window_attributes.with_min_inner_size(dpi::LogicalSize::new(480, 72));
 
     let width = matches.opt_get::<u32>("width").unwrap_or_else(|e| {
         log::error!("Failed to parse width command line argument: {e}");
@@ -252,7 +248,6 @@ fn parse_cli_args() -> Result<CliArgs, getopts::Fail> {
         ipc_channel,
         no_panel,
         window_attributes,
-        devtools_port,
         profiler_settings,
         user_agent,
         init_script,
@@ -264,13 +259,9 @@ fn parse_cli_args() -> Result<CliArgs, getopts::Fail> {
 impl Config {
     /// Create a new configuration for creating Verso instance.
     pub fn new() -> Self {
+        servo_config::prefs::set(Preferences::default());
         let mut opts = default_opts();
         let args = parse_cli_args().unwrap_or_default();
-
-        if let Some(devtools_port) = args.devtools_port {
-            opts.devtools_server_enabled = true;
-            opts.devtools_port = devtools_port;
-        }
 
         if let Some(ref profiler_settings) = args.profiler_settings {
             opts.time_profiling = Some(profiler_settings.output_options.clone());
@@ -338,17 +329,30 @@ impl ProtocolHandler for ResourceReader {
         _done_chan: &mut net::fetch::methods::DoneChannel,
         _context: &net::fetch::methods::FetchContext,
     ) -> std::pin::Pin<Box<dyn std::future::Future<Output = Response> + Send>> {
-        let path = self.0.join(request.current_url().domain().unwrap());
+        let current_url = request.current_url();
+        let path = current_url.path();
+        let path = self.0.join(path.strip_prefix('/').unwrap_or(path));
 
-        let response = if let Ok(file) = fs::read(path) {
+        let response = if let Ok(file) = fs::read(path.clone()) {
             let mut response = Response::new(
                 request.current_url(),
                 ResourceFetchTiming::new(request.timing_type()),
             );
 
             // Set Content-Type header.
-            // TODO: We assume it's HTML for now. This should be updated once we have IPC interface.
-            response.headers.typed_insert(ContentType::html());
+            if let Some(ext) = path.extension() {
+                match ext.to_str() {
+                    Some("css") => response
+                        .headers
+                        .typed_insert(ContentType::from(mime::TEXT_CSS)),
+                    Some("js") => response
+                        .headers
+                        .typed_insert(ContentType::from(mime::TEXT_JAVASCRIPT)),
+                    Some("json") => response.headers.typed_insert(ContentType::json()),
+                    Some("html") => response.headers.typed_insert(ContentType::html()),
+                    _ => response.headers.typed_insert(ContentType::octet_stream()),
+                }
+            }
 
             *response.body.lock().unwrap() = ResponseBody::Done(file);
 

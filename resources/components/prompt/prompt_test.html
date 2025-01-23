@@ -1,0 +1,30 @@
+<html>
+  <body>
+    <div style="display: block">
+      <button onclick="window.alert('<a> HREF </a>');">alert</button>
+      <button onclick="sendConfirm();">confirm</button>
+      <button onclick="sendPrompt('');">prompt</button>
+      <button onclick="sendPrompt(null, '>> default value >>');">
+        prompt with default value
+      </button>
+    </div>
+
+    <div style="display: inline-block" id="result"></div>
+
+    <script>
+      const resultEl = document.getElementById('result');
+
+      function sendConfirm(text) {
+        let result = window.confirm(text);
+        resultEl.textContent = JSON.stringify(result);
+        console.log(result);
+      }
+
+      function sendPrompt(text, defaultValue) {
+        let result = window.prompt(text, defaultValue);
+        resultEl.textContent = JSON.stringify(result);
+        console.log(result);
+      }
+    </script>
+  </body>
+</html>
