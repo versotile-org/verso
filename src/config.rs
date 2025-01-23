@@ -35,6 +35,8 @@ pub struct CliArgs {
     pub no_panel: bool,
     /// Window settings for the initial winit window
     pub window_attributes: WindowAttributes,
+    /// Port number to start a server to listen to remote Firefox devtools connections. 0 for random port.
+    pub devtools_port: Option<u16>,
     /// Servo time profile settings
     pub profiler_settings: Option<ProfilerSettings>,
     /// Path to resource directory. If None, Verso will try to get default directory. And if that
@@ -71,6 +73,12 @@ fn parse_cli_args() -> Result<CliArgs, getopts::Fail> {
         "",
     );
     opts.optflag("", "no-panel", "Launch Verso without control panel");
+    opts.optopt(
+        "",
+        "devtools-port",
+        "Launch Verso with devtools server enabled and listen to port",
+        "1234",
+    );
     opts.optopt(
         "p",
         "profiler",
@@ -147,6 +155,10 @@ fn parse_cli_args() -> Result<CliArgs, getopts::Fail> {
     let resource_dir = matches.opt_str("resources").map(|r| PathBuf::from(r));
     let ipc_channel = matches.opt_str("ipc-channel");
     let no_panel = matches.opt_present("no-panel");
+    let devtools_port = matches.opt_get::<u16>("devtools-port").unwrap_or_else(|e| {
+        log::error!("Failed to parse devtools-port command line argument: {e}");
+        None
+    });
 
     let profiler_settings = if let Ok(Some(profiler_interval)) = matches.opt_get("profiler") {
         let profile_output = matches.opt_str("profiler-output-file");
@@ -230,6 +242,7 @@ fn parse_cli_args() -> Result<CliArgs, getopts::Fail> {
         ipc_channel,
         no_panel,
         window_attributes,
+        devtools_port,
         profiler_settings,
         user_agent,
         zoom_level,
@@ -239,9 +252,21 @@ fn parse_cli_args() -> Result<CliArgs, getopts::Fail> {
 impl Config {
     /// Create a new configuration for creating Verso instance.
     pub fn new() -> Self {
-        servo_config::prefs::set(Preferences::default());
         let mut opts = default_opts();
         let args = parse_cli_args().unwrap_or_default();
+
+        let (devtools_server_enabled, devtools_port) =
+            if let Some(devtools_port) = args.devtools_port {
+                (true, devtools_port)
+            } else {
+                (false, 0)
+            };
+
+        servo_config::prefs::set(Preferences {
+            devtools_server_enabled,
+            devtools_server_port: devtools_port as i64,
+            ..Default::default()
+        });
 
         if let Some(ref profiler_settings) = args.profiler_settings {
             opts.time_profiling = Some(profiler_settings.output_options.clone());
