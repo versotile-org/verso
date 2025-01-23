@@ -1,5 +1,5 @@
 use arboard::Clipboard;
-use base::id::{BrowsingContextId, WebViewId};
+use base::id::WebViewId;
 use compositing_traits::ConstellationMsg;
 use crossbeam_channel::Sender;
 use embedder_traits::{
@@ -9,7 +9,7 @@ use embedder_traits::{
 use ipc_channel::ipc;
 use script_traits::{
     webdriver_msg::{WebDriverJSResult, WebDriverScriptCommand},
-    TraversalDirection, WebDriverCommandMsg,
+    TraversalDirection,
 };
 use servo_url::ServoUrl;
 use url::Url;
@@ -113,16 +113,7 @@ impl Window {
                         serde_json::to_string(&webview_id).unwrap(),
                         title.as_str()
                     );
-
-                    let (tx, rx) = ipc::channel::<WebDriverJSResult>().unwrap();
-                    send_to_constellation(
-                        sender,
-                        ConstellationMsg::WebDriverCommand(WebDriverCommandMsg::ScriptCommand(
-                            BrowsingContextId::from(panel.webview.webview_id),
-                            WebDriverScriptCommand::ExecuteScript(script, tx),
-                        )),
-                    );
-                    let _ = rx.recv();
+                    let _ = execute_script(sender, &panel.webview.webview_id, script);
                 }
             }
             EmbedderMsg::AllowNavigationRequest(id, _url) => {
@@ -166,18 +157,11 @@ impl Window {
                     .set_history(webview_id, list.clone(), index);
                 let url = list.get(index).unwrap();
                 if let Some(panel) = self.panel.as_ref() {
-                    let (tx, rx) = ipc::channel::<WebDriverJSResult>().unwrap();
-                    send_to_constellation(
+                    let _ = execute_script(
                         sender,
-                        ConstellationMsg::WebDriverCommand(WebDriverCommandMsg::ScriptCommand(
-                            BrowsingContextId::from(panel.webview.webview_id),
-                            WebDriverScriptCommand::ExecuteScript(
-                                format!("window.navbar.setNavbarUrl('{}')", url.as_str()),
-                                tx,
-                            ),
-                        )),
+                        &panel.webview.webview_id,
+                        format!("window.navbar.setNavbarUrl('{}')", url.as_str()),
                     );
-                    let _ = rx.recv();
                 }
             }
             EmbedderMsg::EventDelivered(event) => {
