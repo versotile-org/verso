@@ -70,29 +70,29 @@ sparkle = "0.1.26"
 thiserror = "1.0"
 winit = { version = "0.30", features = ["rwh_06"] }
 # Servo repo crates
-base = { git = "https://github.com/servo/servo.git", rev = "c070372" }
-bluetooth = { git = "https://github.com/servo/servo.git", rev = "c070372" }
-bluetooth_traits = { git = "https://github.com/servo/servo.git", rev = "c070372" }
-canvas = { git = "https://github.com/servo/servo.git", rev = "c070372" }
-compositing_traits = { git = "https://github.com/servo/servo.git", rev = "c070372" }
-constellation = { git = "https://github.com/servo/servo.git", rev = "c070372", features = ["webgpu"] }
-devtools = { git = "https://github.com/servo/servo.git", rev = "c070372" }
-embedder_traits = { git = "https://github.com/servo/servo.git", rev = "c070372" }
-fonts = { git = "https://github.com/servo/servo.git", rev = "c070372" }
-layout_thread_2020 = { git = "https://github.com/servo/servo.git", rev = "c070372" }
-media = { git = "https://github.com/servo/servo.git", rev = "c070372" }
-net = { git = "https://github.com/servo/servo.git", rev = "c070372" }
-net_traits = { git = "https://github.com/servo/servo.git", rev = "c070372" }
-profile = { git = "https://github.com/servo/servo.git", rev = "c070372" }
-profile_traits = { git = "https://github.com/servo/servo.git", rev = "c070372" }
-script = { git = "https://github.com/servo/servo.git", rev = "c070372", features = ["webgpu"] }
-script_traits = { git = "https://github.com/servo/servo.git", rev = "c070372" }
-servo_config = { git = "https://github.com/servo/servo.git", rev = "c070372" }
-servo_geometry = { git = "https://github.com/servo/servo.git", rev = "c070372" }
-servo_url = { git = "https://github.com/servo/servo.git", rev = "c070372" }
-webdriver_server = { git = "https://github.com/servo/servo.git", rev = "c070372" }
-webrender_traits = { git = "https://github.com/servo/servo.git", rev = "c070372" }
-webgpu = { git = "https://github.com/servo/servo.git", rev = "c070372" }
+base = { git = "https://github.com/servo/servo.git", rev = "7045630" }
+bluetooth = { git = "https://github.com/servo/servo.git", rev = "7045630" }
+bluetooth_traits = { git = "https://github.com/servo/servo.git", rev = "7045630" }
+canvas = { git = "https://github.com/servo/servo.git", rev = "7045630" }
+compositing_traits = { git = "https://github.com/servo/servo.git", rev = "7045630" }
+constellation = { git = "https://github.com/servo/servo.git", rev = "7045630", features = ["webgpu"] }
+devtools = { git = "https://github.com/servo/servo.git", rev = "7045630" }
+embedder_traits = { git = "https://github.com/servo/servo.git", rev = "7045630" }
+fonts = { git = "https://github.com/servo/servo.git", rev = "7045630" }
+layout_thread_2020 = { git = "https://github.com/servo/servo.git", rev = "7045630" }
+media = { git = "https://github.com/servo/servo.git", rev = "7045630" }
+net = { git = "https://github.com/servo/servo.git", rev = "7045630" }
+net_traits = { git = "https://github.com/servo/servo.git", rev = "7045630" }
+profile = { git = "https://github.com/servo/servo.git", rev = "7045630" }
+profile_traits = { git = "https://github.com/servo/servo.git", rev = "7045630" }
+script = { git = "https://github.com/servo/servo.git", rev = "7045630", features = ["webgpu"] }
+script_traits = { git = "https://github.com/servo/servo.git", rev = "7045630" }
+servo_config = { git = "https://github.com/servo/servo.git", rev = "7045630" }
+servo_geometry = { git = "https://github.com/servo/servo.git", rev = "7045630" }
+servo_url = { git = "https://github.com/servo/servo.git", rev = "7045630" }
+webdriver_server = { git = "https://github.com/servo/servo.git", rev = "7045630" }
+webrender_traits = { git = "https://github.com/servo/servo.git", rev = "7045630" }
+webgpu = { git = "https://github.com/servo/servo.git", rev = "7045630" }
 # Servo org crates
 servo-media = { git = "https://github.com/servo/media" }
 servo-media-dummy = { git = "https://github.com/servo/media" }

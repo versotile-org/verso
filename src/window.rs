@@ -239,17 +239,19 @@ impl Window {
         let mut webview = WebView::new(webview_id, rect);
         webview.set_size(content_size);
 
-        let cmd: String = format!(
-            "window.navbar.addTab('{}', {})",
-            serde_json::to_string(&webview.webview_id).unwrap(),
-            true,
-        );
+        if let Some(panel) = &self.panel {
+            let cmd: String = format!(
+                "window.navbar.addTab('{}', {})",
+                serde_json::to_string(&webview.webview_id).unwrap(),
+                true,
+            );
 
-        let _ = execute_script(
-            constellation_sender,
-            &self.panel.as_ref().unwrap().webview.webview_id,
-            cmd,
-        );
+            let _ = execute_script(
+                constellation_sender,
+                panel.webview.webview_id,
+                cmd,
+            );
+        }
 
         self.tab_manager.append_tab(webview, true);
 
@@ -264,22 +266,25 @@ impl Window {
     pub fn close_tab(&mut self, compositor: &mut IOCompositor, tab_id: WebViewId) {
         // if there are more than 2 tabs, we need to ask for the new active tab after tab is closed
         if self.tab_manager.count() > 1 {
-            let cmd: String = format!(
-                "window.navbar.closeTab('{}')",
-                serde_json::to_string(&tab_id).unwrap()
-            );
-            let active_tab_id = execute_script(
-                &compositor.constellation_chan,
-                &self.panel.as_ref().unwrap().webview.webview_id,
-                cmd,
-            )
-            .unwrap();
-            match active_tab_id {
-                WebDriverJSValue::String(resp) => {
-                    let active_id: WebViewId = serde_json::from_str(&resp).unwrap();
-                    self.activate_tab(compositor, active_id, self.tab_manager.count() > 2);
+            if let Some(panel) = &self.panel {
+                let cmd: String = format!(
+                    "window.navbar.closeTab('{}')",
+                    serde_json::to_string(&tab_id).unwrap()
+                );
+                let active_tab_id = execute_script(
+                    &compositor.constellation_chan,
+                    panel.webview.webview_id,
+                    cmd,
+                )
+                .unwrap();
+
+                match active_tab_id {
+                    WebDriverJSValue::String(resp) => {
+                        let active_id: WebViewId = serde_json::from_str(&resp).unwrap();
+                        self.activate_tab(compositor, active_id, self.tab_manager.count() > 2);
+                    }
+                    _ => {}
                 }
-                _ => {}
             }
         }
         send_to_constellation(
