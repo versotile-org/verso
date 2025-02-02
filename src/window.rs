@@ -246,11 +246,7 @@ impl Window {
                 true,
             );
 
-            let _ = execute_script(
-                constellation_sender,
-                panel.webview.webview_id,
-                cmd,
-            );
+            let _ = execute_script(constellation_sender, panel.webview.webview_id, cmd);
         }
 
         self.tab_manager.append_tab(webview, true);

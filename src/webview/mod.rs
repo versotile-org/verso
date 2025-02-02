@@ -1,6 +1,6 @@
 mod webview;
 /// WebView
-pub use webview::{Panel, WebView, execute_script};
+pub use webview::{execute_script, Panel, WebView};
 /// Context Menu
 pub mod context_menu;
 /// Prompt Dialog
