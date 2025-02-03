@@ -125,7 +125,7 @@ impl Window {
                     let _ = rx.recv();
                 }
             }
-            EmbedderMsg::AllowNavigationRequest(_webview_id, url) => {
+            EmbedderMsg::AllowNavigationRequest(_webview_id, id, url) => {
                 let allow = match self.allow_navigation(url) {
                     Ok(allow) => allow,
                     Err(e) => {
