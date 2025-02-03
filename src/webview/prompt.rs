@@ -274,7 +274,7 @@ impl PromptDialog {
                 url
             }
             PromptType::HttpBasicAuth => {
-                format!("verso://resources/components/prompt/http_basic_auth.html")
+                "verso://resources/components/prompt/http_basic_auth.html".to_string()
             }
         };
         ServoUrl::parse(&url).unwrap()
