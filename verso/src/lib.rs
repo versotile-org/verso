@@ -4,7 +4,7 @@ use std::{
     process::Command,
     sync::{Arc, Mutex},
 };
-use versoview_messages::{ControllerMessage, VersoMessage};
+use versoview_messages::{ToControllerMessage, ToVersoMessage};
 
 use ipc_channel::{
     ipc::{IpcOneShotServer, IpcSender},
@@ -17,7 +17,7 @@ struct EventListeners {
 }
 
 pub struct VersoviewController {
-    sender: IpcSender<ControllerMessage>,
+    sender: IpcSender<ToVersoMessage>,
     event_listeners: EventListeners,
 }
 
@@ -34,7 +34,7 @@ impl VersoviewController {
         settings: VersoviewSettings,
     ) -> Self {
         let path = verso_path.as_ref();
-        let (server, server_name) = IpcOneShotServer::<VersoMessage>::new().unwrap();
+        let (server, server_name) = IpcOneShotServer::<ToControllerMessage>::new().unwrap();
         let mut command = Command::new(path);
         command
             .arg(format!("--ipc-channel={server_name}"))
@@ -44,7 +44,7 @@ impl VersoviewController {
         }
         command.spawn().unwrap();
         let (receiver, message) = server.accept().unwrap();
-        let VersoMessage::IpcSender(sender) = message else {
+        let ToControllerMessage::IpcSender(sender) = message else {
             panic!("The initial message sent from versoview is not a `VersoMessage::IpcSender`")
         };
         let event_listeners = EventListeners::default();
@@ -54,10 +54,10 @@ impl VersoviewController {
             receiver,
             Box::new(move |message| match message {
                 Ok(message) => match message {
-                    VersoMessage::OnNavigationStarting(id, url) => {
+                    ToControllerMessage::OnNavigationStarting(id, url) => {
                         if let Some(ref callback) = *on_navigation_starting.lock().unwrap() {
                             if let Err(error) = send_clone.send(
-                                ControllerMessage::OnNavigationStartingResponse(id, callback(url)),
+                                ToVersoMessage::OnNavigationStartingResponse(id, callback(url)),
                             ) {
                                 error!(
                                     "Error while sending back OnNavigationStarting result: {error}"
@@ -92,7 +92,7 @@ impl VersoviewController {
 
     /// Navigate to url
     pub fn navigate(&self, url: url::Url) -> Result<(), Box<ipc_channel::ErrorKind>> {
-        self.sender.send(ControllerMessage::NavigateTo(url))
+        self.sender.send(ToVersoMessage::NavigateTo(url))
     }
 
     /// Listen on navigation starting triggered by user click on a link,
@@ -112,7 +112,7 @@ impl VersoviewController {
             return Ok(());
         }
         self.sender
-            .send(ControllerMessage::ListenToOnNavigationStarting)?;
+            .send(ToVersoMessage::ListenToOnNavigationStarting)?;
         Ok(())
     }
 }

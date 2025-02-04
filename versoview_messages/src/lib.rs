@@ -7,7 +7,7 @@ type SerializedPipelineId = Vec<u8>;
 /// Message sent from the controller to versoview
 #[derive(Debug, Serialize, Deserialize)]
 #[non_exhaustive]
-pub enum ControllerMessage {
+pub enum ToVersoMessage {
     /// Navigate to this URL
     NavigateTo(url::Url),
     /// Register a listener on versoview for getting notified on navigation starting
@@ -19,9 +19,9 @@ pub enum ControllerMessage {
 /// Message sent from versoview to the controller
 #[derive(Debug, Serialize, Deserialize)]
 #[non_exhaustive]
-pub enum VersoMessage {
+pub enum ToControllerMessage {
     /// IPC sender for the controller to send commands to versoview
-    IpcSender(ipc::IpcSender<ControllerMessage>),
+    IpcSender(ipc::IpcSender<ToVersoMessage>),
     /// Sent on a new navigation starting, need a response with [`ControllerMessage::OnNavigationStartingResponse`]
     OnNavigationStarting(SerializedPipelineId, url::Url),
 }

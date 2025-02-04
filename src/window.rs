@@ -24,7 +24,7 @@ use script_traits::{
     WebDriverCommandMsg,
 };
 use servo_url::ServoUrl;
-use versoview_messages::VersoMessage;
+use versoview_messages::ToControllerMessage;
 use webrender_api::{
     units::{DeviceIntPoint, DeviceIntRect, DeviceIntSize, DevicePoint, LayoutVector2D},
     ScrollLocation,
@@ -604,7 +604,7 @@ impl Window {
         webview_id: WebViewId,
         message: EmbedderMsg,
         sender: &Sender<ConstellationMsg>,
-        ipc_sender: &Option<ipc::IpcSender<VersoMessage>>,
+        to_controller_sender: &Option<ipc::IpcSender<ToControllerMessage>>,
         clipboard: Option<&mut Clipboard>,
         compositor: &mut IOCompositor,
     ) -> bool {
@@ -634,7 +634,12 @@ impl Window {
 
         // Handle message in Verso WebView
         self.handle_servo_messages_with_webview(
-            webview_id, message, sender, ipc_sender, clipboard, compositor,
+            webview_id,
+            message,
+            sender,
+            to_controller_sender,
+            clipboard,
+            compositor,
         );
         false
     }

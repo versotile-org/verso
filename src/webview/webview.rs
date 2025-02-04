@@ -13,7 +13,7 @@ use script_traits::{
 };
 use servo_url::ServoUrl;
 use url::Url;
-use versoview_messages::VersoMessage;
+use versoview_messages::ToControllerMessage;
 use webrender_api::units::DeviceIntRect;
 
 use crate::{
@@ -73,7 +73,7 @@ impl Window {
         webview_id: WebViewId,
         message: EmbedderMsg,
         sender: &Sender<ConstellationMsg>,
-        ipc_sender: &Option<ipc::IpcSender<VersoMessage>>,
+        to_controller_sender: &Option<ipc::IpcSender<ToControllerMessage>>,
         clipboard: Option<&mut Clipboard>,
         compositor: &mut IOCompositor,
     ) {
@@ -128,12 +128,14 @@ impl Window {
                 }
             }
             EmbedderMsg::AllowNavigationRequest(_webview_id, id, url) => {
-                if let Some(ipc_sender) = ipc_sender {
+                if let Some(to_controller_sender) = to_controller_sender {
                     if self.event_listeners.on_navigation_starting {
-                        if let Err(error) = ipc_sender.send(VersoMessage::OnNavigationStarting(
-                            bincode::serialize(&id).unwrap(),
-                            url.into_url(),
-                        )) {
+                        if let Err(error) =
+                            to_controller_sender.send(ToControllerMessage::OnNavigationStarting(
+                                bincode::serialize(&id).unwrap(),
+                                url.into_url(),
+                            ))
+                        {
                             log::error!("Verso failed to send AllowNavigationRequest to controller: {error}")
                         } else {
                             // We will handle a ControllerMessage::OnNavigationStartingResponse
