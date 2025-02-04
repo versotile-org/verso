@@ -21,7 +21,7 @@ pub enum ToVersoMessage {
 #[non_exhaustive]
 pub enum ToControllerMessage {
     /// IPC sender for the controller to send commands to versoview
-    IpcSender(ipc::IpcSender<ToVersoMessage>),
+    SetToVersoSender(ipc::IpcSender<ToVersoMessage>),
     /// Sent on a new navigation starting, need a response with [`ControllerMessage::OnNavigationStartingResponse`]
     OnNavigationStarting(SerializedPipelineId, url::Url),
 }

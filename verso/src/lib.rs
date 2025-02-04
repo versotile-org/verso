@@ -44,7 +44,7 @@ impl VersoviewController {
         }
         command.spawn().unwrap();
         let (receiver, message) = server.accept().unwrap();
-        let ToControllerMessage::IpcSender(sender) = message else {
+        let ToControllerMessage::SetToVersoSender(sender) = message else {
             panic!("The initial message sent from versoview is not a `VersoMessage::IpcSender`")
         };
         let event_listeners = EventListeners::default();

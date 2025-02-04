@@ -84,7 +84,7 @@ impl Verso {
                 IpcSender::<ToControllerMessage>::connect(ipc_channel.to_string()).unwrap();
             let (to_verso_sender, receiver) = ipc::channel::<ToVersoMessage>().unwrap();
             sender
-                .send(ToControllerMessage::IpcSender(to_verso_sender))
+                .send(ToControllerMessage::SetToVersoSender(to_verso_sender))
                 .unwrap();
             let proxy_clone = proxy.clone();
             ROUTER.add_typed_route(
