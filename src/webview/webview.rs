@@ -7,10 +7,7 @@ use embedder_traits::{
     PromptCredentialsInput, PromptDefinition, PromptResult, TraversalDirection,
 };
 use ipc_channel::ipc;
-use script_traits::{
-    webdriver_msg::{WebDriverJSResult, WebDriverScriptCommand},
-
-};
+use script_traits::webdriver_msg::{WebDriverJSResult, WebDriverScriptCommand};
 use servo_url::ServoUrl;
 use url::Url;
 use webrender_api::units::DeviceIntRect;
@@ -77,7 +74,7 @@ impl Window {
     ) {
         log::trace!("Verso WebView {webview_id:?} is handling Embedder message: {message:?}",);
         match message {
-            EmbedderMsg::HeadParsed
+            EmbedderMsg::HeadParsed(_)
             | EmbedderMsg::WebViewOpened(_)
             | EmbedderMsg::WebViewClosed(_) => {
                 // Most WebView messages are ignored because it's done by compositor.

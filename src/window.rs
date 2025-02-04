@@ -18,10 +18,7 @@ use keyboard_types::{Code, KeyState, KeyboardEvent, Modifiers};
 use muda::{Menu as MudaMenu, MenuEvent, MenuEventReceiver, MenuItem};
 #[cfg(any(target_os = "macos", target_os = "windows"))]
 use raw_window_handle::HasWindowHandle;
-use script_traits::{
-    webdriver_msg::{WebDriverJSResult, WebDriverJSValue, WebDriverScriptCommand},
-    WebDriverCommandMsg,
-};
+use script_traits::webdriver_msg::WebDriverJSValue;
 use servo_url::ServoUrl;
 use webrender_api::{
     units::{DeviceIntPoint, DeviceIntRect, DeviceIntSize, DevicePoint, LayoutVector2D},
