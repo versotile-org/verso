@@ -12,7 +12,7 @@ use compositing_traits::{
     SendableFrameTree,
 };
 use crossbeam_channel::Sender;
-use embedder_traits::Cursor;
+use embedder_traits::{Cursor, MouseButton, MouseEventType, TouchEventType, TouchId, WheelDelta};
 use euclid::{vec2, Point2D, Scale, Size2D, Transform3D, Vector2D};
 use gleam::gl;
 use ipc_channel::ipc::{self, IpcSharedMemory};
@@ -21,8 +21,8 @@ use profile_traits::time::{self as profile_time, ProfilerCategory};
 use profile_traits::{mem, time, time_profile};
 use script_traits::CompositorEvent::{MouseButtonEvent, MouseMoveEvent, TouchEvent, WheelEvent};
 use script_traits::{
-    AnimationState, AnimationTickType, ConstellationControlMsg, MouseButton, MouseEventType,
-    ScrollState, TouchEventType, TouchId, WheelDelta, WindowSizeData, WindowSizeType,
+    AnimationState, AnimationTickType, ScriptThreadMessage, ScrollState, WindowSizeData,
+    WindowSizeType,
 };
 use servo_geometry::{DeviceIndependentIntSize, DeviceIndependentPixel};
 use style_traits::{CSSPixel, PinchZoomFactor};
@@ -171,7 +171,7 @@ pub struct IOCompositor {
     ready_to_save_state: ReadyState,
 
     /// The webrender renderer.
-    webrender: webrender::Renderer,
+    webrender: Option<webrender::Renderer>,
 
     /// The webrender interface, if enabled.
     pub webrender_api: RenderApi,
@@ -366,7 +366,7 @@ impl IOCompositor {
             constellation_chan: state.constellation_chan,
             time_profiler_chan: state.time_profiler_chan,
             ready_to_save_state: ReadyState::Unknown,
-            webrender: state.webrender,
+            webrender: Some(state.webrender),
             webrender_document: state.webrender_document,
             webrender_api: state.webrender_api,
             rendering_context: state.rendering_context,
@@ -388,8 +388,10 @@ impl IOCompositor {
     }
 
     /// Consume compositor itself and deinit webrender.
-    pub fn deinit(self) {
-        self.webrender.deinit();
+    pub fn deinit(&mut self) {
+        if let Some(webrender) = self.webrender.take() {
+            webrender.deinit();
+        }
     }
 
     fn update_cursor(&mut self, result: CompositorHitTestResult) {
@@ -398,8 +400,20 @@ impl IOCompositor {
             _ => return,
         };
 
+        let Some(webview_id) = self
+            .pipeline_details(result.pipeline_id)
+            .pipeline
+            .as_ref()
+            .map(|composition_pipeline| composition_pipeline.top_level_browsing_context_id)
+        else {
+            warn!(
+                "Updating cursor for not-yet-rendered pipeline: {}",
+                result.pipeline_id
+            );
+            return;
+        };
         self.cursor = cursor;
-        let msg = ConstellationMsg::SetCursor(cursor);
+        let msg = ConstellationMsg::SetCursor(webview_id, cursor);
         if let Err(e) = self.constellation_chan.send(msg) {
             warn!("Sending event to constellation failed ({:?}).", e);
         }
@@ -473,23 +487,6 @@ impl IOCompositor {
 
             CompositorMsg::RemoveWebView(top_level_browsing_context_id) => {
                 self.remove_webview(top_level_browsing_context_id, windows);
-            }
-
-            CompositorMsg::MoveResizeWebView(_webview_id, _rect) => {
-                // TODO Remove this variant since it's no longer used.
-                // self.move_resize_webview(webview_id, rect);
-            }
-
-            CompositorMsg::ShowWebView(_webview_id, _hide_others) => {
-                // TODO Remove this variant since it's no longer used.
-            }
-
-            CompositorMsg::HideWebView(_webview_id) => {
-                // TODO Remove this variant since it's no longer used.
-            }
-
-            CompositorMsg::RaiseWebViewToTop(_webview_id, _hide_others) => {
-                // TODO Remove this variant since it's no longer used.
             }
 
             CompositorMsg::TouchEventProcessed(result) => {
@@ -781,13 +778,13 @@ impl IOCompositor {
             }
 
             CrossProcessCompositorMessage::GetScreenSize(req) => {
-                if let Err(e) = req.send(self.device_independent_int_size_viewport().into()) {
+                if let Err(e) = req.send(self.device_independent_int_size_viewport()) {
                     warn!("Sending response to get screen size failed ({:?}).", e);
                 }
             }
 
             CrossProcessCompositorMessage::GetAvailableScreenSize(req) => {
-                if let Err(e) = req.send(self.device_independent_int_size_viewport().into()) {
+                if let Err(e) = req.send(self.device_independent_int_size_viewport()) {
                     warn!(
                         "Sending response to get screen avail size failed ({:?}).",
                         e
@@ -843,14 +840,14 @@ impl IOCompositor {
                 }
             }
             CompositorMsg::CrossProcess(CrossProcessCompositorMessage::GetScreenSize(req)) => {
-                if let Err(e) = req.send(self.device_independent_int_size_viewport().into()) {
+                if let Err(e) = req.send(self.device_independent_int_size_viewport()) {
                     warn!("Sending response to get screen size failed ({:?}).", e);
                 }
             }
             CompositorMsg::CrossProcess(CrossProcessCompositorMessage::GetAvailableScreenSize(
                 req,
             )) => {
-                if let Err(e) = req.send(self.device_independent_int_size_viewport().into()) {
+                if let Err(e) = req.send(self.device_independent_int_size_viewport()) {
                     warn!(
                         "Sending response to get screen avail size failed ({:?}).",
                         e
@@ -1249,8 +1246,7 @@ impl IOCompositor {
             return;
         }
 
-        let _ = self
-            .rendering_context
+        self.rendering_context
             .resize(&window.surface, new_viewport.to_untyped());
         self.viewport = new_viewport;
         let mut transaction = Transaction::new();
@@ -1326,10 +1322,9 @@ impl IOCompositor {
     }
 
     fn hit_test_at_point(&self, point: DevicePoint) -> Option<CompositorHitTestResult> {
-        return self
-            .hit_test_at_point_with_flags_and_pipeline(point, HitTestFlags::empty(), None)
+        self.hit_test_at_point_with_flags_and_pipeline(point, HitTestFlags::empty(), None)
             .first()
-            .cloned();
+            .cloned()
     }
 
     fn hit_test_at_point_with_flags_and_pipeline(
@@ -1763,11 +1758,8 @@ impl IOCompositor {
             return;
         }
 
-        self.page_zoom = Scale::new(
-            (self.page_zoom.get() * magnification)
-                .max(MIN_ZOOM)
-                .min(MAX_ZOOM),
-        );
+        self.page_zoom =
+            Scale::new((self.page_zoom.get() * magnification).clamp(MIN_ZOOM, MAX_ZOOM));
         self.update_after_zoom_or_hidpi_change(window);
     }
 
@@ -1811,7 +1803,7 @@ impl IOCompositor {
         });
 
         if let Some(pipeline) = details.pipeline.as_ref() {
-            let message = ConstellationControlMsg::SetScrollStates(*pipeline_id, scroll_states);
+            let message = ScriptThreadMessage::SetScrollStates(*pipeline_id, scroll_states);
             let _ = pipeline.script_chan.send(message);
         }
     }
@@ -1855,7 +1847,8 @@ impl IOCompositor {
                 for id in self.pipeline_details.keys() {
                     if let Some(WebRenderEpoch(epoch)) = self
                         .webrender
-                        .current_epoch(self.webrender_document, id.into())
+                        .as_ref()
+                        .and_then(|wr| wr.current_epoch(self.webrender_document, id.into()))
                     {
                         let epoch = Epoch(epoch);
                         pipeline_epochs.insert(*id, epoch);
@@ -1913,7 +1906,9 @@ impl IOCompositor {
         }
         self.assert_no_gl_error();
 
-        self.webrender.update();
+        if let Some(webrender) = self.webrender.as_mut() {
+            webrender.update();
+        }
 
         let wait_for_stable_image = self.exit_after_load;
 
@@ -1940,10 +1935,9 @@ impl IOCompositor {
                 trace!("Compositing");
                 // Paint the scene.
                 // TODO(gw): Take notice of any errors the renderer returns!
-                self.webrender
-                    // TODO to untyped?
-                    .render(self.viewport, 0)
-                    .ok();
+                if let Some(webrender) = self.webrender.as_mut() {
+                    webrender.render(self.viewport, 0 /* buffer_age */).ok();
+                }
             },
         );
 
@@ -2063,7 +2057,10 @@ impl IOCompositor {
 
     /// Update debug option of the webrender.
     pub fn toggle_webrender_debug(&mut self, option: WebRenderDebugOption) {
-        let mut flags = self.webrender.get_debug_flags();
+        let Some(webrender) = self.webrender.as_mut() else {
+            return;
+        };
+        let mut flags = webrender.get_debug_flags();
         let flag = match option {
             WebRenderDebugOption::Profiler => {
                 webrender::DebugFlags::PROFILER_DBG
@@ -2074,7 +2071,7 @@ impl IOCompositor {
             WebRenderDebugOption::RenderTargetDebug => webrender::DebugFlags::RENDER_TARGET_DBG,
         };
         flags.toggle(flag);
-        self.webrender.set_debug_flags(flags);
+        webrender.set_debug_flags(flags);
 
         let mut txn = Transaction::new();
         self.generate_frame(&mut txn, RenderReasons::TESTING);
@@ -2132,7 +2129,8 @@ impl IOCompositor {
         for (pipeline_id, pending_epochs) in pending_paint_metrics.iter_mut() {
             let Some(WebRenderEpoch(current_epoch)) = self
                 .webrender
-                .current_epoch(self.webrender_document, pipeline_id.into())
+                .as_ref()
+                .and_then(|wr| wr.current_epoch(self.webrender_document, pipeline_id.into()))
             else {
                 continue;
             };
@@ -2155,14 +2153,13 @@ impl IOCompositor {
             // Remove all epochs that were pending before the current epochs. They were not and will not,
             // be painted.
             pending_epochs.drain(0..index);
-            if let Err(error) =
-                pipeline
-                    .script_chan
-                    .send(ConstellationControlMsg::SetEpochPaintTime(
-                        *pipeline_id,
-                        current_epoch,
-                        paint_time,
-                    ))
+            if let Err(error) = pipeline
+                .script_chan
+                .send(ScriptThreadMessage::SetEpochPaintTime(
+                    *pipeline_id,
+                    current_epoch,
+                    paint_time,
+                ))
             {
                 warn!("Sending RequestLayoutPaintMetric message to layout failed ({error:?}).");
             }

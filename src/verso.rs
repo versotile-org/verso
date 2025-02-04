@@ -5,18 +5,15 @@ use std::{
 };
 
 use arboard::Clipboard;
-use base::id::{PipelineNamespace, PipelineNamespaceId};
+use base::id::{PipelineNamespace, PipelineNamespaceId, WebViewId};
 use bluetooth::BluetoothThreadFactory;
 use bluetooth_traits::BluetoothRequest;
 use canvas::canvas_paint_thread::CanvasPaintThread;
 use compositing_traits::{CompositorMsg, CompositorProxy, CompositorReceiver, ConstellationMsg};
 use constellation::{Constellation, FromCompositorLogger, InitialConstellationState};
-use crossbeam_channel::{unbounded, Sender};
+use crossbeam_channel::{unbounded, Receiver, Sender};
 use devtools;
-use embedder_traits::{
-    EmbedderMsg, EmbedderProxy, EmbedderReceiver, EventLoopWaker, PromptDefinition, PromptOrigin,
-    PromptResult,
-};
+use embedder_traits::{EmbedderMsg, EmbedderProxy, EventLoopWaker};
 use euclid::Scale;
 use fonts::SystemFontService;
 use ipc_channel::ipc::{self, IpcSender};
@@ -53,7 +50,7 @@ pub struct Verso {
     windows: HashMap<WindowId, (Window, DocumentId)>,
     compositor: Option<IOCompositor>,
     constellation_sender: Sender<ConstellationMsg>,
-    embedder_receiver: EmbedderReceiver,
+    embedder_receiver: Receiver<EmbedderMsg>,
     /// For single-process Servo instances, this field controls the initialization
     /// and deinitialization of the JS Engine. Multiprocess Servo instances have their
     /// own instance that exists in the content process instead.
@@ -165,21 +162,21 @@ impl Verso {
             ROUTER.add_typed_route(
                 compositor_ipc_receiver,
                 Box::new(move |message| {
-                    let _ = compositor_proxy_clone.send(CompositorMsg::CrossProcess(
+                    compositor_proxy_clone.send(CompositorMsg::CrossProcess(
                         message.expect("Could not convert Compositor message"),
                     ));
                 }),
             );
             (compositor_proxy, CompositorReceiver { receiver })
         };
-        let (embedder_sender, embedder_receiver) = {
+        let (embedder_proxy, embedder_receiver) = {
             let (sender, receiver) = unbounded();
             (
                 EmbedderProxy {
                     sender,
                     event_loop_waker: event_loop_waker.clone(),
                 },
-                EmbedderReceiver { receiver },
+                receiver,
             )
         };
 
@@ -187,7 +184,7 @@ impl Verso {
         let devtools_sender = if pref!(devtools_server_enabled) {
             Some(devtools::start_server(
                 pref!(devtools_server_port) as u16,
-                embedder_sender.clone(),
+                embedder_proxy.clone(),
             ))
         } else {
             None
@@ -279,7 +276,7 @@ impl Verso {
 
         // Create bluetooth thread
         let bluetooth_thread: IpcSender<BluetoothRequest> =
-            BluetoothThreadFactory::new(embedder_sender.clone());
+            BluetoothThreadFactory::new(embedder_proxy.clone());
 
         // Create resource thread pool
         let (public_resource_threads, private_resource_threads) =
@@ -288,7 +285,7 @@ impl Verso {
                 devtools_sender.clone(),
                 time_profiler_sender.clone(),
                 mem_profiler_sender.clone(),
-                embedder_sender.clone(),
+                embedder_proxy.clone(),
                 opts.config_dir.clone(),
                 opts.certificate_path.clone(),
                 opts.ignore_certificate_errors,
@@ -312,7 +309,7 @@ impl Verso {
         let layout_factory = Arc::new(layout_thread_2020::LayoutFactoryImpl());
         let initial_state = InitialConstellationState {
             compositor_proxy: compositor_sender.clone(),
-            embedder_proxy: embedder_sender,
+            embedder_proxy,
             devtools_sender,
             bluetooth_thread,
             system_font_service,
@@ -461,92 +458,95 @@ impl Verso {
 
     /// Handle message came from Servo.
     pub fn handle_servo_messages(&mut self, evl: &ActiveEventLoop) {
+        if self.compositor.is_none() {
+            log::error!("Verso shouldn't be handling messages after compositor has shut down");
+            return;
+        }
+        let compositor = self.compositor.as_mut().unwrap();
+
         let mut shutdown = false;
-        if let Some(compositor) = &mut self.compositor {
-            // Handle Compositor's messages first
-            log::trace!("Verso is handling Compositor messages");
-            if compositor.receive_messages(&mut self.windows) {
-                // And then handle Embedder messages
-                log::trace!(
-                    "Verso is handling Embedder messages when shutdown state is set to {:?}",
-                    compositor.shutdown_state
-                );
-                while let Some((webview_id, msg)) = self.embedder_receiver.try_recv_embedder_msg() {
-                    match compositor.shutdown_state {
-                        ShutdownState::NotShuttingDown => {
-                            if let Some(id) = webview_id {
-                                for (window, document) in self.windows.values_mut() {
-                                    if window.has_webview(id) {
-                                        if window.handle_servo_message(
-                                            id,
-                                            msg,
-                                            &self.constellation_sender,
-                                            self.clipboard.as_mut(),
-                                            compositor,
-                                        ) {
-                                            let mut window =
-                                                Window::new_with_compositor(evl, compositor);
-                                            window.create_panel(&self.constellation_sender, None);
-                                            let webrender_document = document.clone();
-                                            self.windows
-                                                .insert(window.id(), (window, webrender_document));
-                                        }
-                                        break;
-                                    }
+
+        // Handle Compositor's messages first
+        log::trace!("Verso is handling Compositor messages");
+
+        let mut messages: Vec<EmbedderMsg> = vec![];
+        if compositor.receive_messages(&mut self.windows) {
+            // And then handle Embedder messages
+            log::trace!(
+                "Verso is handling Embedder messages when shutdown state is set to {:?}",
+                compositor.shutdown_state
+            );
+            while let Ok(msg) = self.embedder_receiver.try_recv() {
+                messages.push(msg);
+            }
+        }
+
+        match compositor.shutdown_state {
+            ShutdownState::NotShuttingDown => {
+                for msg in messages {
+                    if let Some(webview_id) = Self::get_embedder_message_webview_id(&msg) {
+                        for (window, document) in self.windows.values_mut() {
+                            if window.has_webview(*webview_id) {
+                                if window.handle_servo_message(
+                                    *webview_id,
+                                    msg,
+                                    &self.constellation_sender,
+                                    self.clipboard.as_mut(),
+                                    compositor,
+                                ) {
+                                    let mut window = Window::new_with_compositor(evl, compositor);
+                                    window.create_panel(&self.constellation_sender, None);
+                                    let webrender_document = *document;
+                                    self.windows
+                                        .insert(window.id(), (window, webrender_document));
                                 }
-                            } else {
-                                // Handle message in Verso Window
-                                log::trace!("Verso Window is handling Embedder message: {msg:?}");
-                                match msg {
-                                    EmbedderMsg::SetCursor(cursor) => {
-                                        // TODO: This should move to compositor
-                                        if let Some(window) =
-                                            self.windows.get(&compositor.current_window)
-                                        {
-                                            window.0.set_cursor_icon(cursor);
-                                        }
-                                    }
-                                    EmbedderMsg::Shutdown | EmbedderMsg::ReadyToPresent(_) => {}
-                                    EmbedderMsg::Prompt(definition, origin) => match origin {
-                                        // TODO: actually prompt the user with a dialog
-                                        PromptOrigin::Trusted => match definition {
-                                            PromptDefinition::YesNo(question, ipc_sender) => {
-                                                if question
-                                                    == "Accept incoming devtools connection?"
-                                                {
-                                                    if let Err(err) =
-                                                        ipc_sender.send(PromptResult::Primary)
-                                                    {
-                                                        log::error!(
-                                                            "Failed to send prompt result back: {err}"
-                                                        );
-                                                    }
-                                                }
-                                            }
-                                            _ => {}
-                                        },
-                                        _ => {}
-                                    },
-                                    e => {
-                                        log::trace!("Verso Window isn't supporting handling this message yet: {e:?}")
-                                    }
-                                }
+                                break;
                             }
                         }
-                        ShutdownState::FinishedShuttingDown => {
-                            log::error!("Verso shouldn't be handling messages after compositor has shut down");
+                    } else {
+                        // Handle message in Verso Window
+                        log::trace!("Verso Window is handling Embedder message: {msg:?}");
+                        match msg {
+                            // EmbedderMsg::SetCursor(_, cursor) => {
+                            //     // TODO: This should move to compositor
+                            //     if let Some(window) = self.windows.get(&compositor.current_window) {
+                            //         window.0.set_cursor_icon(cursor);
+                            //     }
+                            // }
+                            EmbedderMsg::Shutdown | EmbedderMsg::ReadyToPresent(_) => {}
+                            // TODO: Check devtools' prompt has WebViewId?
+                            // EmbedderMsg::Prompt(_, definition, origin) => match origin {
+                            //     // TODO: actually prompt the user with a dialog
+                            //     PromptOrigin::Trusted => match definition {
+                            //         PromptDefinition::YesNo(question, ipc_sender) => {
+                            //             if question == "Accept incoming devtools connection?" {
+                            //                 if let Err(err) = ipc_sender.send(PromptResult::Primary) {
+                            //                     log::error!("Failed to send prompt result back: {err}");
+                            //                 }
+                            //             }
+                            //         }
+                            //         _ => {}
+                            //     },
+                            //     _ => {}
+                            // },
+                            e => {
+                                log::trace!("Verso Window isn't supporting handling this message yet: {e:?}")
+                            }
                         }
-                        ShutdownState::ShuttingDown => {}
                     }
                 }
             }
-
-            if compositor.shutdown_state != ShutdownState::FinishedShuttingDown {
-                // Update compositor
-                compositor.perform_updates(&mut self.windows);
-            } else {
-                shutdown = true;
+            ShutdownState::FinishedShuttingDown => {
+                log::error!("Verso shouldn't be handling messages after compositor has shut down");
             }
+            ShutdownState::ShuttingDown => {}
+        }
+
+        if compositor.shutdown_state != ShutdownState::FinishedShuttingDown {
+            // Update compositor
+            compositor.perform_updates(&mut self.windows);
+        } else {
+            shutdown = true;
         }
 
         // Check if Verso need to start shutting down.
@@ -559,14 +559,59 @@ impl Verso {
         // Check compositor status and set control flow.
         if shutdown {
             // If Compositor has shut down, deinit and remove it.
-            if let Some(compositor) = self.compositor.take() {
-                IOCompositor::deinit(compositor)
+            if let Some(mut compositor) = self.compositor.take() {
+                IOCompositor::deinit(&mut compositor)
             }
             evl.exit();
         } else if self.is_animating() {
             evl.set_control_flow(ControlFlow::Poll);
         } else {
             evl.set_control_flow(ControlFlow::Wait);
+        }
+    }
+
+    fn get_embedder_message_webview_id(msg: &EmbedderMsg) -> Option<&WebViewId> {
+        match msg {
+            EmbedderMsg::Status(webview_id, _) => Some(webview_id),
+            EmbedderMsg::ChangePageTitle(webview_id, _) => Some(webview_id),
+            EmbedderMsg::MoveTo(webview_id, _) => Some(webview_id),
+            EmbedderMsg::ResizeTo(webview_id, _) => Some(webview_id),
+            EmbedderMsg::Prompt(webview_id, _, _) => Some(webview_id),
+            EmbedderMsg::ShowContextMenu(webview_id, _, _, _) => Some(webview_id),
+            EmbedderMsg::AllowNavigationRequest(webview_id, _, _) => Some(webview_id),
+            EmbedderMsg::AllowOpeningWebView(webview_id, _) => Some(webview_id),
+            EmbedderMsg::WebViewOpened(webview_id) => Some(webview_id),
+            EmbedderMsg::WebViewClosed(webview_id) => Some(webview_id),
+            EmbedderMsg::WebViewFocused(webview_id) => Some(webview_id),
+            EmbedderMsg::WebViewBlurred => None,
+            EmbedderMsg::AllowUnload(webview_id, _) => Some(webview_id),
+            EmbedderMsg::Keyboard(webview_id, _) => Some(webview_id),
+            EmbedderMsg::ClearClipboardContents(webview_id) => Some(webview_id),
+            EmbedderMsg::GetClipboardContents(webview_id, _) => Some(webview_id),
+            EmbedderMsg::SetClipboardContents(webview_id, _) => Some(webview_id),
+            EmbedderMsg::SetCursor(webview_id, _) => Some(webview_id),
+            EmbedderMsg::NewFavicon(webview_id, _) => Some(webview_id),
+            EmbedderMsg::HeadParsed(webview_id) => Some(webview_id),
+            EmbedderMsg::HistoryChanged(webview_id, _, _) => Some(webview_id),
+            EmbedderMsg::SetFullscreenState(webview_id, _) => Some(webview_id),
+            EmbedderMsg::LoadStart(webview_id) => Some(webview_id),
+            EmbedderMsg::LoadComplete(webview_id) => Some(webview_id),
+            EmbedderMsg::WebResourceRequested(opt_webview_id, _, _) => opt_webview_id.as_ref(),
+            EmbedderMsg::Panic(webview_id, _, _) => Some(webview_id),
+            EmbedderMsg::GetSelectedBluetoothDevice(webview_id, _, _) => Some(webview_id),
+            EmbedderMsg::SelectFiles(webview_id, _, _, _) => Some(webview_id),
+            EmbedderMsg::PromptPermission(webview_id, _, _) => Some(webview_id),
+            EmbedderMsg::ShowIME(webview_id, _, _, _, _) => Some(webview_id),
+            EmbedderMsg::HideIME(webview_id) => Some(webview_id),
+            EmbedderMsg::Shutdown => None,
+            EmbedderMsg::ReportProfile(_) => None,
+            EmbedderMsg::MediaSessionEvent(webview_id, _) => Some(webview_id),
+            EmbedderMsg::OnDevtoolsStarted(_, _) => None,
+            EmbedderMsg::RequestDevtoolsConnection(_) => None,
+            EmbedderMsg::ReadyToPresent(_) => None, // TODO: check if we need dispatch this message to each window
+            EmbedderMsg::EventDelivered(webview_id, _) => Some(webview_id),
+            EmbedderMsg::PlayGamepadHapticEffect(webview_id, _, _, _) => Some(webview_id),
+            EmbedderMsg::StopGamepadHapticEffect(webview_id, _, _) => Some(webview_id),
         }
     }
 

@@ -9,7 +9,7 @@ use net_traits::{
     ResourceFetchTiming,
 };
 use servo_config::{
-    opts::{default_opts, set_options, Opts, OutputOptions},
+    opts::{set_options, Opts, OutputOptions},
     prefs::Preferences,
 };
 use winit::{dpi, window::WindowAttributes};
@@ -168,7 +168,7 @@ fn parse_cli_args() -> Result<CliArgs, getopts::Fail> {
                 None
             }
         });
-    let resource_dir = matches.opt_str("resources").map(|r| PathBuf::from(r));
+    let resource_dir = matches.opt_str("resources").map(PathBuf::from);
     let ipc_channel = matches.opt_str("ipc-channel");
     let no_panel = matches.opt_present("no-panel");
     let devtools_port = matches.opt_get::<u16>("devtools-port").unwrap_or_else(|e| {
@@ -272,7 +272,7 @@ fn parse_cli_args() -> Result<CliArgs, getopts::Fail> {
 impl Config {
     /// Create a new configuration for creating Verso instance.
     pub fn new() -> Self {
-        let mut opts = default_opts();
+        let mut opts = Opts::default();
         let args = parse_cli_args().unwrap_or_default();
 
         let (devtools_server_enabled, devtools_port) =

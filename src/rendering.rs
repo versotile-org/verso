@@ -147,7 +147,7 @@ impl RenderingContext {
         &self,
         surface: &Surface<impl SurfaceTypeTrait>,
     ) -> Result<(), crate::errors::Error> {
-        self.context.make_current(&surface)?;
+        self.context.make_current(surface)?;
         surface.swap_buffers(&self.context)?;
         Ok(())
     }

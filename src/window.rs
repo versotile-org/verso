@@ -4,7 +4,8 @@ use base::id::WebViewId;
 use compositing_traits::ConstellationMsg;
 use crossbeam_channel::Sender;
 use embedder_traits::{
-    Cursor, EmbedderMsg, PermissionRequest, PromptCredentialsInput, PromptResult,
+    Cursor, EmbedderMsg, MouseButton, PermissionRequest, PromptCredentialsInput, PromptResult,
+    TouchEventType, TraversalDirection, WheelDelta, WheelMode,
 };
 use euclid::{Point2D, Size2D};
 use glutin::{
@@ -17,8 +18,10 @@ use keyboard_types::{Code, KeyState, KeyboardEvent, Modifiers};
 use muda::{Menu as MudaMenu, MenuEvent, MenuEventReceiver, MenuItem};
 #[cfg(any(target_os = "macos", target_os = "windows"))]
 use raw_window_handle::HasWindowHandle;
-use script_traits::{webdriver_msg::WebDriverJSValue, TraversalDirection};
-use script_traits::{TouchEventType, WheelDelta, WheelMode};
+use script_traits::{
+    webdriver_msg::{WebDriverJSResult, WebDriverJSValue, WebDriverScriptCommand},
+    WebDriverCommandMsg,
+};
 use servo_url::ServoUrl;
 use webrender_api::{
     units::{DeviceIntPoint, DeviceIntRect, DeviceIntSize, DevicePoint, LayoutVector2D},
@@ -81,6 +84,7 @@ pub struct Window {
     menu_event_receiver: MenuEventReceiver,
     /// Window tabs manager
     pub(crate) tab_manager: TabManager,
+    pub(crate) focused_webview_id: Option<WebViewId>,
 }
 
 impl Window {
@@ -134,6 +138,7 @@ impl Window {
                 #[cfg(any(target_os = "macos", target_os = "windows"))]
                 menu_event_receiver: MenuEvent::receiver().clone(),
                 tab_manager: TabManager::new(),
+                focused_webview_id: None,
             },
             rendering_context,
         )
@@ -177,6 +182,7 @@ impl Window {
             #[cfg(any(target_os = "macos", target_os = "windows"))]
             menu_event_receiver: MenuEvent::receiver().clone(),
             tab_manager: TabManager::new(),
+            focused_webview_id: None,
         };
         compositor.swap_current_window(&mut window);
         window
@@ -274,12 +280,9 @@ impl Window {
                 )
                 .unwrap();
 
-                match active_tab_id {
-                    WebDriverJSValue::String(resp) => {
-                        let active_id: WebViewId = serde_json::from_str(&resp).unwrap();
-                        self.activate_tab(compositor, active_id, self.tab_manager.count() > 2);
-                    }
-                    _ => {}
+                if let WebDriverJSValue::String(resp) = active_tab_id {
+                    let active_id: WebViewId = serde_json::from_str(&resp).unwrap();
+                    self.activate_tab(compositor, active_id, self.tab_manager.count() > 2);
                 }
             }
         }
@@ -307,7 +310,7 @@ impl Window {
         if let Some(tab_id) = tab_id {
             compositor.on_resize_webview_event(tab_id, content_size);
 
-            if let Some(_) = self.tab_manager.activate_tab(tab_id) {
+            if self.tab_manager.activate_tab(tab_id).is_some() {
                 // throttle the old tab to avoid unnecessary animation caclulations
                 if let Some(old_tab_id) = self.tab_manager.current_tab_id() {
                     let _ = compositor
@@ -438,10 +441,10 @@ impl Window {
 
                 /* handle mouse events */
 
-                let button: script_traits::MouseButton = match button {
-                    winit::event::MouseButton::Left => script_traits::MouseButton::Left,
-                    winit::event::MouseButton::Right => script_traits::MouseButton::Right,
-                    winit::event::MouseButton::Middle => script_traits::MouseButton::Middle,
+                let button: MouseButton = match button {
+                    winit::event::MouseButton::Left => MouseButton::Left,
+                    winit::event::MouseButton::Right => MouseButton::Right,
+                    winit::event::MouseButton::Middle => MouseButton::Middle,
                     _ => {
                         log::trace!(
                             "Verso Window isn't supporting this mouse button yet: {button:?}"
@@ -519,6 +522,21 @@ impl Window {
             }
             WindowEvent::ModifiersChanged(modifier) => self.modifiers_state.set(modifier.state()),
             WindowEvent::KeyboardInput { event, .. } => {
+                let webview_id = match self.focused_webview_id {
+                    Some(webview_id) => webview_id,
+                    None => {
+                        log::trace!("No focused webview, skipping KeyboardInput event.");
+                        return;
+                    }
+                };
+                if !self.has_webview(webview_id) {
+                    log::trace!(
+                        "Webview {:?} doesn't exist, skipping KeyboardInput event.",
+                        webview_id
+                    );
+                    return;
+                }
+
                 let event = keyboard_event_from_winit(event, self.modifiers_state.get());
                 log::trace!("Verso is handling {:?}", event);
 
@@ -526,8 +544,7 @@ impl Window {
                 if self.handle_keyboard_shortcut(compositor, &event) {
                     return;
                 }
-
-                let msg = ConstellationMsg::Keyboard(event);
+                let msg = ConstellationMsg::Keyboard(webview_id, event);
                 send_to_constellation(sender, msg);
             }
             e => log::trace!("Verso Window isn't supporting this window event yet: {e:?}"),
@@ -646,10 +663,17 @@ impl Window {
             return true;
         }
 
-        self.panel
-            .as_ref()
-            .map_or(false, |w| w.webview.webview_id == id)
-            || self.tab_manager.tab(id).is_some()
+        if let Some(panel) = &self.panel {
+            if panel.webview.webview_id == id {
+                return true;
+            }
+        }
+
+        if self.tab_manager.tab(id).is_some() {
+            return true;
+        }
+
+        false
     }
 
     /// Remove the webview in this window by provided webview ID.
@@ -691,6 +715,9 @@ impl Window {
             (self.panel.take().map(|panel| panel.webview), false)
         } else if let Ok(tab) = self.tab_manager.close_tab(id) {
             let close_window = self.tab_manager.count() == 0 || self.panel.is_none();
+            if self.focused_webview_id == Some(id) {
+                self.focused_webview_id = None;
+            }
             (Some(tab.webview().clone()), close_window)
         } else {
             (None, false)
