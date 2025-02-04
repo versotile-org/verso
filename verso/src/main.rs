@@ -12,6 +12,12 @@ fn main() {
             ..Default::default()
         },
     );
+    controller
+        .on_navigation_starting(|url| {
+            dbg!(url);
+            true
+        })
+        .unwrap();
     sleep(Duration::from_secs(10));
     dbg!(controller
         .navigate(url::Url::parse("https://docs.rs").unwrap())

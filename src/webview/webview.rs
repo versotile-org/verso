@@ -13,6 +13,7 @@ use script_traits::{
 };
 use servo_url::ServoUrl;
 use url::Url;
+use versoview_messages::ToControllerMessage;
 use webrender_api::units::DeviceIntRect;
 
 use crate::{
@@ -72,6 +73,7 @@ impl Window {
         webview_id: WebViewId,
         message: EmbedderMsg,
         sender: &Sender<ConstellationMsg>,
+        to_controller_sender: &Option<ipc::IpcSender<ToControllerMessage>>,
         clipboard: Option<&mut Clipboard>,
         compositor: &mut IOCompositor,
     ) {
@@ -125,8 +127,23 @@ impl Window {
                     let _ = rx.recv();
                 }
             }
-            EmbedderMsg::AllowNavigationRequest(_webview_id, id, _url) => {
-                // TODO should provide a API for users to check url
+            EmbedderMsg::AllowNavigationRequest(_webview_id, id, url) => {
+                if let Some(to_controller_sender) = to_controller_sender {
+                    if self.event_listeners.on_navigation_starting {
+                        if let Err(error) =
+                            to_controller_sender.send(ToControllerMessage::OnNavigationStarting(
+                                bincode::serialize(&id).unwrap(),
+                                url.into_url(),
+                            ))
+                        {
+                            log::error!("Verso failed to send AllowNavigationRequest to controller: {error}")
+                        } else {
+                            // We will handle a ControllerMessage::OnNavigationStartingResponse
+                            // and send ConstellationMsg::AllowNavigationResponse there if the call succeed
+                            return;
+                        }
+                    }
+                }
                 send_to_constellation(sender, ConstellationMsg::AllowNavigationResponse(id, true));
             }
             EmbedderMsg::GetClipboardContents(_webview_id, sender) => {
