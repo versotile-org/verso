@@ -136,6 +136,8 @@ impl Window {
                         )) {
                             log::error!("Verso failed to send AllowNavigationRequest to controller: {error}")
                         } else {
+                            // We will handle a ControllerMessage::OnNavigationStartingResponse
+                            // and send ConstellationMsg::AllowNavigationResponse there if the call succeed
                             return;
                         }
                     }
