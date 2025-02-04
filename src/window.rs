@@ -20,6 +20,7 @@ use muda::{Menu as MudaMenu, MenuEvent, MenuEventReceiver, MenuItem};
 use raw_window_handle::HasWindowHandle;
 use script_traits::webdriver_msg::WebDriverJSValue;
 use servo_url::ServoUrl;
+use versoview_messages::ToControllerMessage;
 use webrender_api::{
     units::{DeviceIntPoint, DeviceIntRect, DeviceIntSize, DevicePoint, LayoutVector2D},
     ScrollLocation,
@@ -54,6 +55,11 @@ const PANEL_HEIGHT: f64 = 50.0;
 const TAB_HEIGHT: f64 = 30.0;
 const PANEL_PADDING: f64 = 4.0;
 
+#[derive(Default)]
+pub(crate) struct EventListeners {
+    pub(crate) on_navigation_starting: bool,
+}
+
 /// A Verso window is a Winit window containing several web views.
 pub struct Window {
     /// Access to Winit window
@@ -66,6 +72,8 @@ pub struct Window {
     // pub(crate) webview: Option<WebView>,
     /// Script to run on document started to load
     pub(crate) init_script: Option<String>,
+    /// Event listeners registered from the webview controller
+    pub(crate) event_listeners: EventListeners,
     /// The mouse physical position in the web view.
     mouse_position: Cell<Option<PhysicalPosition<f64>>>,
     /// Modifiers state of the keyboard.
@@ -127,6 +135,7 @@ impl Window {
                 surface,
                 panel: None,
                 init_script: None,
+                event_listeners: Default::default(),
                 mouse_position: Default::default(),
                 modifiers_state: Cell::new(ModifiersState::default()),
                 resizing: false,
@@ -171,6 +180,7 @@ impl Window {
             panel: None,
             // webview: None,
             init_script: None,
+            event_listeners: Default::default(),
             mouse_position: Default::default(),
             modifiers_state: Cell::new(ModifiersState::default()),
             resizing: false,
@@ -592,6 +602,7 @@ impl Window {
         webview_id: WebViewId,
         message: EmbedderMsg,
         sender: &Sender<ConstellationMsg>,
+        to_controller_sender: &Option<ipc::IpcSender<ToControllerMessage>>,
         clipboard: Option<&mut Clipboard>,
         compositor: &mut IOCompositor,
     ) -> bool {
@@ -620,7 +631,14 @@ impl Window {
         }
 
         // Handle message in Verso WebView
-        self.handle_servo_messages_with_webview(webview_id, message, sender, clipboard, compositor);
+        self.handle_servo_messages_with_webview(
+            webview_id,
+            message,
+            sender,
+            to_controller_sender,
+            clipboard,
+            compositor,
+        );
         false
     }
 

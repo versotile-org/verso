@@ -14,4 +14,7 @@ pub enum Error {
     /// Glutin errors.
     #[error(transparent)]
     GlutinError(#[from] glutin::error::Error),
+    /// IPC errors.
+    #[error(transparent)]
+    IpcError(#[from] ipc_channel::ipc::IpcError),
 }

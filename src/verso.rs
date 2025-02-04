@@ -28,7 +28,7 @@ use script_traits::WindowSizeData;
 use servo_config::{opts, pref};
 use servo_url::ServoUrl;
 use style;
-use versoview_messages::ControllerMessage;
+use versoview_messages::{ToControllerMessage, ToVersoMessage};
 use webgpu;
 use webrender::{create_webrender_instance, ShaderPrecacheFlags, WebRenderOptions};
 use webrender_api::*;
@@ -50,6 +50,7 @@ pub struct Verso {
     windows: HashMap<WindowId, (Window, DocumentId)>,
     compositor: Option<IOCompositor>,
     constellation_sender: Sender<ConstellationMsg>,
+    to_controller_sender: Option<IpcSender<ToControllerMessage>>,
     embedder_receiver: Receiver<EmbedderMsg>,
     /// For single-process Servo instances, this field controls the initialization
     /// and deinitialization of the JS Engine. Multiprocess Servo instances have their
@@ -78,12 +79,13 @@ impl Verso {
     /// - Image Cache: Enabled
     pub fn new(evl: &ActiveEventLoop, proxy: EventLoopProxy<EventLoopProxyMessage>) -> Self {
         let config = Config::new();
-        if let Some(ipc_channel) = &config.args.ipc_channel {
+        let to_controller_sender = if let Some(ipc_channel) = &config.args.ipc_channel {
             let sender =
-                IpcSender::<IpcSender<ControllerMessage>>::connect(ipc_channel.to_string())
-                    .unwrap();
-            let (controller_sender, receiver) = ipc::channel::<ControllerMessage>().unwrap();
-            sender.send(controller_sender).unwrap();
+                IpcSender::<ToControllerMessage>::connect(ipc_channel.to_string()).unwrap();
+            let (to_verso_sender, receiver) = ipc::channel::<ToVersoMessage>().unwrap();
+            sender
+                .send(ToControllerMessage::SetToVersoSender(to_verso_sender))
+                .unwrap();
             let proxy_clone = proxy.clone();
             ROUTER.add_typed_route(
                 receiver,
@@ -98,6 +100,9 @@ impl Verso {
                     Err(e) => log::error!("Failed to receive controller message: {e}"),
                 }),
             );
+            Some(sender)
+        } else {
+            None
         };
 
         // Initialize configurations and Verso window
@@ -395,6 +400,7 @@ impl Verso {
             windows,
             compositor: Some(compositor),
             constellation_sender,
+            to_controller_sender,
             embedder_receiver,
             _js_engine_setup: js_engine_setup,
             clipboard: Clipboard::new().ok(),
@@ -491,6 +497,7 @@ impl Verso {
                                     *webview_id,
                                     msg,
                                     &self.constellation_sender,
+                                    &self.to_controller_sender,
                                     self.clipboard.as_mut(),
                                     compositor,
                                 ) {
@@ -628,9 +635,9 @@ impl Verso {
     }
 
     /// Handle message came from webview controller.
-    pub fn handle_incoming_webview_message(&self, message: ControllerMessage) {
+    pub fn handle_incoming_webview_message(&mut self, message: ToVersoMessage) {
         match message {
-            ControllerMessage::NavigateTo(to_url) => {
+            ToVersoMessage::NavigateTo(to_url) => {
                 if let Some(webview_id) =
                     self.windows.values().next().and_then(|(window, _)| {
                         window.tab_manager.current_tab().map(|tab| tab.id())
@@ -641,6 +648,20 @@ impl Verso {
                         ConstellationMsg::LoadUrl(webview_id, ServoUrl::from_url(to_url)),
                     );
                 }
+            }
+            ToVersoMessage::ListenToOnNavigationStarting => {
+                if let Some((window, _)) = self.windows.values_mut().next() {
+                    window.event_listeners.on_navigation_starting = true;
+                }
+            }
+            ToVersoMessage::OnNavigationStartingResponse(id, allow) => {
+                send_to_constellation(
+                    &self.constellation_sender,
+                    ConstellationMsg::AllowNavigationResponse(
+                        bincode::deserialize(&id).unwrap(),
+                        allow,
+                    ),
+                );
             }
             _ => {}
         }
@@ -674,7 +695,7 @@ pub enum EventLoopProxyMessage {
     /// Wake
     Wake,
     /// Message coming from the webview controller
-    IpcMessage(ControllerMessage),
+    IpcMessage(ToVersoMessage),
 }
 
 #[derive(Debug, Clone)]
