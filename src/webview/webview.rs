@@ -13,6 +13,7 @@ use script_traits::{
 };
 use servo_url::ServoUrl;
 use url::Url;
+use versoview_messages::VersoMessage;
 use webrender_api::units::DeviceIntRect;
 
 use crate::{
@@ -72,6 +73,7 @@ impl Window {
         webview_id: WebViewId,
         message: EmbedderMsg,
         sender: &Sender<ConstellationMsg>,
+        ipc_sender: &Option<ipc::IpcSender<VersoMessage>>,
         clipboard: Option<&mut Clipboard>,
         compositor: &mut IOCompositor,
     ) {
@@ -126,14 +128,19 @@ impl Window {
                 }
             }
             EmbedderMsg::AllowNavigationRequest(_webview_id, id, url) => {
-                let allow = match self.allow_navigation(url) {
-                    Ok(allow) => allow,
-                    Err(e) => {
-                        log::error!("Error when calling navigation handler: {e}");
-                        true
+                if let Some(ipc_sender) = ipc_sender {
+                    if self.event_listeners.on_navigation_starting {
+                        if let Err(error) = ipc_sender.send(VersoMessage::OnNavigationStarting(
+                            bincode::serialize(&id).unwrap(),
+                            url.into_url(),
+                        )) {
+                            log::error!("Verso failed to send AllowNavigationRequest to controller: {error}")
+                        } else {
+                            return;
+                        }
                     }
-                };
-                send_to_constellation(sender, ConstellationMsg::AllowNavigationResponse(id, allow));
+                }
+                send_to_constellation(sender, ConstellationMsg::AllowNavigationResponse(id, true));
             }
             EmbedderMsg::GetClipboardContents(_webview_id, sender) => {
                 let contents = clipboard
@@ -624,19 +631,5 @@ impl Window {
             }
         }
         false
-    }
-
-    fn allow_navigation(&self, url: ServoUrl) -> crate::Result<bool> {
-        if let Some(ref sender) = self.event_listeners.on_navigation_starting {
-            let (result_sender, receiver) =
-                ipc::channel::<bool>().map_err(|e| ipc::IpcError::Io(e))?;
-            sender
-                .send((url.into_url(), result_sender))
-                .map_err(|e| ipc::IpcError::Bincode(e))?;
-            let result = receiver.recv()?;
-            Ok(result)
-        } else {
-            Ok(true)
-        }
     }
 }

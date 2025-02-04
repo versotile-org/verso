@@ -4,8 +4,9 @@ version = "0.0.1"
 edition = "2021"
 
 [dependencies]
-ipc-channel = { workspace = true }
 serde = { workspace = true }
+ipc-channel = { workspace = true }
+bincode = { workspace = true }
 url = { workspace = true }
 log = { workspace = true }
 versoview_messages = { path = "../versoview_messages" }

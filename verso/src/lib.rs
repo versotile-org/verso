@@ -4,10 +4,10 @@ use std::{
     process::Command,
     sync::{Arc, Mutex},
 };
-use versoview_messages::ControllerMessage;
+use versoview_messages::{ControllerMessage, VersoMessage};
 
 use ipc_channel::{
-    ipc::{self, IpcOneShotServer, IpcSender},
+    ipc::{IpcOneShotServer, IpcSender},
     router::ROUTER,
 };
 
@@ -25,17 +25,42 @@ impl VersoviewController {
     /// Create a new verso instance and get the controller to it
     pub fn new(verso_path: impl AsRef<Path>, initial_url: url::Url) -> Self {
         let path = verso_path.as_ref();
-        let (server, server_name) =
-            IpcOneShotServer::<IpcSender<ControllerMessage>>::new().unwrap();
+        let (server, server_name) = IpcOneShotServer::<VersoMessage>::new().unwrap();
         Command::new(path)
             .arg(format!("--ipc-channel={server_name}"))
             .arg(format!("--url={initial_url}"))
             .spawn()
             .unwrap();
-        let (_, sender) = server.accept().unwrap();
+        let (receiver, message) = server.accept().unwrap();
+        let VersoMessage::IpcSender(sender) = message else {
+            panic!("The initial message sent from versoview is not a `VersoMessage::IpcSender`")
+        };
+        let event_listeners = EventListeners::default();
+        let on_navigation_starting = event_listeners.on_navigation_starting.clone();
+        let send_clone = sender.clone();
+        ROUTER.add_typed_route(
+            receiver,
+            Box::new(move |message| match message {
+                Ok(message) => match message {
+                    VersoMessage::OnNavigationStarting(id, url) => {
+                        if let Some(ref callback) = *on_navigation_starting.lock().unwrap() {
+                            if let Err(error) = send_clone.send(
+                                ControllerMessage::OnNavigationStartingResponse(id, callback(url)),
+                            ) {
+                                error!(
+                                    "Error while sending back OnNavigationStarting result: {error}"
+                                );
+                            }
+                        }
+                    }
+                    _ => {}
+                },
+                Err(e) => error!("Error while receiving VersoMessage: {e}"),
+            }),
+        );
         Self {
             sender,
-            event_listeners: EventListeners::default(),
+            event_listeners,
         }
     }
 
@@ -60,21 +85,8 @@ impl VersoviewController {
         {
             return Ok(());
         }
-        let cb = self.event_listeners.on_navigation_starting.clone();
-        let (sender, receiver) = ipc::channel::<(url::Url, ipc::IpcSender<bool>)>()?;
         self.sender
-            .send(ControllerMessage::OnNavigationStarting(sender))?;
-        ROUTER.add_typed_route(
-            receiver,
-            Box::new(move |message| match message {
-                Ok((url, result_sender)) => {
-                    if let Err(e) = result_sender.send(cb.lock().unwrap().as_ref().unwrap()(url)) {
-                        error!("Error while sending back OnNavigationStarting result: {e}");
-                    }
-                }
-                Err(e) => error!("Error while receiving OnNavigationStarting message: {e}"),
-            }),
-        );
+            .send(ControllerMessage::ListenToOnNavigationStarting)?;
         Ok(())
     }
 }

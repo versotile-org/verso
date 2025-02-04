@@ -2,8 +2,9 @@
 members = ["verso", "versoview_messages"]
 
 [workspace.dependencies]
-ipc-channel = "0.19"
 serde = { version = "1.0", features = ["derive"] }
+ipc-channel = "0.19"
+bincode = "1"
 url = { version = "2.5.2", features = ["serde"] }
 log = "0.4"
 
@@ -109,8 +110,9 @@ cargo-packager-resource-resolver = { version = "0.1.1", features = [
 url = { workspace = true }
 headers = "0.4"
 versoview_messages = { path = "./versoview_messages" }
-serde_json = "1.0"
 serde = { workspace = true }
+serde_json = "1.0"
+bincode = { workspace = true }
 mime = "0.3"
 
 [target.'cfg(any(target_os = "macos", target_os = "windows"))'.dependencies]

@@ -28,7 +28,7 @@ use script_traits::WindowSizeData;
 use servo_config::{opts, pref};
 use servo_url::ServoUrl;
 use style;
-use versoview_messages::ControllerMessage;
+use versoview_messages::{ControllerMessage, VersoMessage};
 use webgpu;
 use webrender::{create_webrender_instance, ShaderPrecacheFlags, WebRenderOptions};
 use webrender_api::*;
@@ -50,6 +50,7 @@ pub struct Verso {
     windows: HashMap<WindowId, (Window, DocumentId)>,
     compositor: Option<IOCompositor>,
     constellation_sender: Sender<ConstellationMsg>,
+    ipc_sender: Option<IpcSender<VersoMessage>>,
     embedder_receiver: Receiver<EmbedderMsg>,
     /// For single-process Servo instances, this field controls the initialization
     /// and deinitialization of the JS Engine. Multiprocess Servo instances have their
@@ -78,12 +79,12 @@ impl Verso {
     /// - Image Cache: Enabled
     pub fn new(evl: &ActiveEventLoop, proxy: EventLoopProxy<EventLoopProxyMessage>) -> Self {
         let config = Config::new();
-        if let Some(ipc_channel) = &config.args.ipc_channel {
-            let sender =
-                IpcSender::<IpcSender<ControllerMessage>>::connect(ipc_channel.to_string())
-                    .unwrap();
+        let ipc_sender = if let Some(ipc_channel) = &config.args.ipc_channel {
+            let sender = IpcSender::<VersoMessage>::connect(ipc_channel.to_string()).unwrap();
             let (controller_sender, receiver) = ipc::channel::<ControllerMessage>().unwrap();
-            sender.send(controller_sender).unwrap();
+            sender
+                .send(VersoMessage::IpcSender(controller_sender))
+                .unwrap();
             let proxy_clone = proxy.clone();
             ROUTER.add_typed_route(
                 receiver,
@@ -98,6 +99,9 @@ impl Verso {
                     Err(e) => log::error!("Failed to receive controller message: {e}"),
                 }),
             );
+            Some(sender)
+        } else {
+            None
         };
 
         // Initialize configurations and Verso window
@@ -392,6 +396,7 @@ impl Verso {
             windows,
             compositor: Some(compositor),
             constellation_sender,
+            ipc_sender,
             embedder_receiver,
             _js_engine_setup: js_engine_setup,
             clipboard: Clipboard::new().ok(),
@@ -488,6 +493,7 @@ impl Verso {
                                     *webview_id,
                                     msg,
                                     &self.constellation_sender,
+                                    &self.ipc_sender,
                                     self.clipboard.as_mut(),
                                     compositor,
                                 ) {
@@ -639,13 +645,19 @@ impl Verso {
                     );
                 }
             }
-            ControllerMessage::OnNavigationStarting(sender) => {
+            ControllerMessage::ListenToOnNavigationStarting => {
                 if let Some((window, _)) = self.windows.values_mut().next() {
-                    window
-                        .event_listeners
-                        .on_navigation_starting
-                        .replace(sender);
+                    window.event_listeners.on_navigation_starting = true;
                 }
+            }
+            ControllerMessage::OnNavigationStartingResponse(id, allow) => {
+                send_to_constellation(
+                    &self.constellation_sender,
+                    ConstellationMsg::AllowNavigationResponse(
+                        bincode::deserialize(&id).unwrap(),
+                        allow,
+                    ),
+                );
             }
             _ => {}
         }

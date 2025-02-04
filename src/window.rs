@@ -24,7 +24,7 @@ use script_traits::{
     WebDriverCommandMsg,
 };
 use servo_url::ServoUrl;
-use versoview_messages::OnNavigationStartingPayload;
+use versoview_messages::VersoMessage;
 use webrender_api::{
     units::{DeviceIntPoint, DeviceIntRect, DeviceIntSize, DevicePoint, LayoutVector2D},
     ScrollLocation,
@@ -60,7 +60,7 @@ const PANEL_PADDING: f64 = 4.0;
 
 #[derive(Default)]
 pub(crate) struct EventListeners {
-    pub(crate) on_navigation_starting: Option<OnNavigationStartingPayload>,
+    pub(crate) on_navigation_starting: bool,
 }
 
 /// A Verso window is a Winit window containing several web views.
@@ -604,6 +604,7 @@ impl Window {
         webview_id: WebViewId,
         message: EmbedderMsg,
         sender: &Sender<ConstellationMsg>,
+        ipc_sender: &Option<ipc::IpcSender<VersoMessage>>,
         clipboard: Option<&mut Clipboard>,
         compositor: &mut IOCompositor,
     ) -> bool {
@@ -632,7 +633,9 @@ impl Window {
         }
 
         // Handle message in Verso WebView
-        self.handle_servo_messages_with_webview(webview_id, message, sender, clipboard, compositor);
+        self.handle_servo_messages_with_webview(
+            webview_id, message, sender, ipc_sender, clipboard, compositor,
+        );
         false
     }
 
