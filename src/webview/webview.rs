@@ -96,7 +96,7 @@ impl Window {
             }
             EmbedderMsg::LoadStart(_) => {
                 if let Some(init_script) = &self.init_script {
-                    let _ = execute_script(&sender, &webview_id, init_script);
+                    let _ = execute_script(sender, &webview_id, init_script);
                 }
             }
             EmbedderMsg::LoadComplete(_webview_id) => {
