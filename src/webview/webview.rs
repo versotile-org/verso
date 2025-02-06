@@ -96,7 +96,7 @@ impl Window {
             }
             EmbedderMsg::LoadStart(_) => {
                 if let Some(init_script) = &self.init_script {
-                    execute_script_async(&sender, &webview_id, init_script);
+                    let _ = execute_script(&sender, &webview_id, init_script);
                 }
             }
             EmbedderMsg::LoadComplete(_webview_id) => {
@@ -638,31 +638,4 @@ pub fn execute_script(
         )),
     );
     result_receiver.recv().unwrap()
-}
-
-/// Execute a script asynchronous on this webview
-pub fn execute_script_async(
-    constellation_sender: &Sender<ConstellationMsg>,
-    webview: &WebViewId,
-    js: impl ToString,
-) {
-    execute_script_async_with_callback(constellation_sender, webview, js, |_| {})
-}
-
-/// Execute a script asynchronous on this webview with a callback processing the result
-pub fn execute_script_async_with_callback(
-    constellation_sender: &Sender<ConstellationMsg>,
-    webview: &WebViewId,
-    js: impl ToString,
-    callback: impl FnOnce(WebDriverJSResult) + Send + 'static,
-) {
-    let (result_sender, result_receiver) = ipc::channel::<WebDriverJSResult>().unwrap();
-    send_to_constellation(
-        constellation_sender,
-        ConstellationMsg::WebDriverCommand(script_traits::WebDriverCommandMsg::ScriptCommand(
-            webview.0,
-            WebDriverScriptCommand::ExecuteAsyncScript(js.to_string(), result_sender),
-        )),
-    );
-    std::thread::spawn(move || callback(result_receiver.recv().unwrap()));
 }
