@@ -116,6 +116,7 @@ impl Verso {
             .clone()
             .unwrap_or_else(|| default_user_agent_string().to_string())
             .into();
+        let init_script = config.args.init_script.clone();
         let zoom_level = config.args.zoom_level;
 
         config.init();
@@ -388,6 +389,8 @@ impl Verso {
         } else if let Some(initial_url) = initial_url {
             window.create_tab(&constellation_sender, initial_url.into());
         }
+
+        window.set_init_script(init_script);
 
         let mut windows = HashMap::new();
         windows.insert(window.id(), (window, webrender_document));

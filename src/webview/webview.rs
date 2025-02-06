@@ -1,5 +1,5 @@
 use arboard::Clipboard;
-use base::id::{BrowsingContextId, WebViewId};
+use base::id::WebViewId;
 use compositing_traits::ConstellationMsg;
 use crossbeam_channel::Sender;
 use embedder_traits::{
@@ -7,10 +7,7 @@ use embedder_traits::{
     PromptCredentialsInput, PromptDefinition, PromptResult, TraversalDirection,
 };
 use ipc_channel::ipc;
-use script_traits::{
-    webdriver_msg::{WebDriverJSResult, WebDriverScriptCommand},
-    WebDriverCommandMsg,
-};
+use script_traits::webdriver_msg::{WebDriverJSResult, WebDriverScriptCommand};
 use servo_url::ServoUrl;
 use url::Url;
 use versoview_messages::ToControllerMessage;
@@ -37,7 +34,7 @@ pub struct WebView {
 }
 
 impl WebView {
-    /// Create a web view from Winit window.
+    /// Create a web view.
     pub fn new(webview_id: WebViewId, rect: DeviceIntRect) -> Self {
         Self { webview_id, rect }
     }
@@ -79,8 +76,7 @@ impl Window {
     ) {
         log::trace!("Verso WebView {webview_id:?} is handling Embedder message: {message:?}",);
         match message {
-            EmbedderMsg::LoadStart(_)
-            | EmbedderMsg::HeadParsed(_)
+            EmbedderMsg::HeadParsed(_)
             | EmbedderMsg::WebViewOpened(_)
             | EmbedderMsg::WebViewClosed(_) => {
                 // Most WebView messages are ignored because it's done by compositor.
@@ -97,6 +93,11 @@ impl Window {
                     self.id(),
                     w
                 );
+            }
+            EmbedderMsg::LoadStart(_) => {
+                if let Some(init_script) = &self.init_script {
+                    let _ = execute_script(sender, &webview_id, init_script);
+                }
             }
             EmbedderMsg::LoadComplete(_webview_id) => {
                 self.window.request_redraw();
@@ -115,16 +116,7 @@ impl Window {
                         serde_json::to_string(&webview_id).unwrap(),
                         title.as_str()
                     );
-
-                    let (tx, rx) = ipc::channel::<WebDriverJSResult>().unwrap();
-                    send_to_constellation(
-                        sender,
-                        ConstellationMsg::WebDriverCommand(WebDriverCommandMsg::ScriptCommand(
-                            BrowsingContextId::from(panel.webview.webview_id),
-                            WebDriverScriptCommand::ExecuteScript(script, tx),
-                        )),
-                    );
-                    let _ = rx.recv();
+                    let _ = execute_script(sender, &panel.webview.webview_id, script);
                 }
             }
             EmbedderMsg::AllowNavigationRequest(_webview_id, id, url) => {
@@ -183,18 +175,11 @@ impl Window {
                     .set_history(webview_id, list.clone(), index);
                 let url = list.get(index).unwrap();
                 if let Some(panel) = self.panel.as_ref() {
-                    let (tx, rx) = ipc::channel::<WebDriverJSResult>().unwrap();
-                    send_to_constellation(
+                    let _ = execute_script(
                         sender,
-                        ConstellationMsg::WebDriverCommand(WebDriverCommandMsg::ScriptCommand(
-                            BrowsingContextId::from(panel.webview.webview_id),
-                            WebDriverScriptCommand::ExecuteScript(
-                                format!("window.navbar.setNavbarUrl('{}')", url.as_str()),
-                                tx,
-                            ),
-                        )),
+                        &panel.webview.webview_id,
+                        format!("window.navbar.setNavbarUrl('{}')", url.as_str()),
                     );
-                    let _ = rx.recv();
                 }
             }
             EmbedderMsg::EventDelivered(_webview_id, event) => {
@@ -636,4 +621,21 @@ impl Window {
         }
         false
     }
+}
+
+/// Blocking execute a script on this webview
+pub fn execute_script(
+    constellation_sender: &Sender<ConstellationMsg>,
+    webview: &WebViewId,
+    js: impl ToString,
+) -> WebDriverJSResult {
+    let (result_sender, result_receiver) = ipc::channel::<WebDriverJSResult>().unwrap();
+    send_to_constellation(
+        constellation_sender,
+        ConstellationMsg::WebDriverCommand(script_traits::WebDriverCommandMsg::ScriptCommand(
+            webview.0,
+            WebDriverScriptCommand::ExecuteScript(js.to_string(), result_sender),
+        )),
+    );
+    result_receiver.recv().unwrap()
 }

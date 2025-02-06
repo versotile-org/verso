@@ -13,16 +13,13 @@ use glutin::{
     surface::{Surface, WindowSurface},
 };
 use glutin_winit::DisplayBuilder;
-use ipc_channel::ipc;
+use ipc_channel::ipc::IpcSender;
 use keyboard_types::{Code, KeyState, KeyboardEvent, Modifiers};
 #[cfg(any(target_os = "macos", target_os = "windows"))]
 use muda::{Menu as MudaMenu, MenuEvent, MenuEventReceiver, MenuItem};
 #[cfg(any(target_os = "macos", target_os = "windows"))]
 use raw_window_handle::HasWindowHandle;
-use script_traits::{
-    webdriver_msg::{WebDriverJSResult, WebDriverJSValue, WebDriverScriptCommand},
-    WebDriverCommandMsg,
-};
+use script_traits::webdriver_msg::WebDriverJSValue;
 use servo_url::ServoUrl;
 use versoview_messages::ToControllerMessage;
 use webrender_api::{
@@ -47,6 +44,7 @@ use crate::{
     verso::send_to_constellation,
     webview::{
         context_menu::{ContextMenu, Menu},
+        execute_script,
         prompt::PromptSender,
         Panel, WebView,
     },
@@ -73,6 +71,8 @@ pub struct Window {
     pub(crate) panel: Option<Panel>,
     /// The WebView of this window.
     // pub(crate) webview: Option<WebView>,
+    /// Script to run on document started to load
+    pub(crate) init_script: Option<String>,
     /// Event listeners registered from the webview controller
     pub(crate) event_listeners: EventListeners,
     /// The mouse physical position in the web view.
@@ -135,6 +135,7 @@ impl Window {
                 window,
                 surface,
                 panel: None,
+                init_script: None,
                 event_listeners: Default::default(),
                 mouse_position: Default::default(),
                 modifiers_state: Cell::new(ModifiersState::default()),
@@ -179,6 +180,7 @@ impl Window {
             surface,
             panel: None,
             // webview: None,
+            init_script: None,
             event_listeners: Default::default(),
             mouse_position: Default::default(),
             modifiers_state: Cell::new(ModifiersState::default()),
@@ -252,20 +254,13 @@ impl Window {
         webview.set_size(content_size);
 
         if let Some(panel) = &self.panel {
-            let (tx, rx) = ipc::channel::<WebDriverJSResult>().unwrap();
             let cmd: String = format!(
                 "window.navbar.addTab('{}', {})",
                 serde_json::to_string(&webview.webview_id).unwrap(),
                 true,
             );
-            send_to_constellation(
-                constellation_sender,
-                ConstellationMsg::WebDriverCommand(WebDriverCommandMsg::ScriptCommand(
-                    panel.webview.webview_id.into(),
-                    WebDriverScriptCommand::ExecuteScript(cmd, tx),
-                )),
-            );
-            let _ = rx.recv();
+
+            let _ = execute_script(constellation_sender, &panel.webview.webview_id, cmd);
         }
 
         self.tab_manager.append_tab(webview, true);
@@ -279,31 +274,30 @@ impl Window {
 
     /// Close a tab
     pub fn close_tab(&mut self, compositor: &mut IOCompositor, tab_id: WebViewId) {
-        let sender = compositor.constellation_chan.clone();
         // if there are more than 2 tabs, we need to ask for the new active tab after tab is closed
         if self.tab_manager.count() > 1 {
             if let Some(panel) = &self.panel {
-                let (tx, rx) = ipc::channel::<WebDriverJSResult>().unwrap();
                 let cmd: String = format!(
                     "window.navbar.closeTab('{}')",
                     serde_json::to_string(&tab_id).unwrap()
                 );
-                send_to_constellation(
-                    &sender,
-                    ConstellationMsg::WebDriverCommand(WebDriverCommandMsg::ScriptCommand(
-                        panel.webview.webview_id.into(),
-                        WebDriverScriptCommand::ExecuteScript(cmd, tx),
-                    )),
-                );
+                let active_tab_id = execute_script(
+                    &compositor.constellation_chan,
+                    &panel.webview.webview_id,
+                    cmd,
+                )
+                .unwrap();
 
-                let active_tab_id = rx.recv().unwrap().unwrap();
                 if let WebDriverJSValue::String(resp) = active_tab_id {
                     let active_id: WebViewId = serde_json::from_str(&resp).unwrap();
                     self.activate_tab(compositor, active_id, self.tab_manager.count() > 2);
                 }
             }
         }
-        send_to_constellation(&sender, ConstellationMsg::CloseWebView(tab_id));
+        send_to_constellation(
+            &compositor.constellation_chan,
+            ConstellationMsg::CloseWebView(tab_id),
+        );
     }
 
     /// Activate a tab
@@ -339,6 +333,11 @@ impl Window {
                 compositor.send_root_pipeline_display_list(self);
             }
         }
+    }
+
+    /// Set the init script that runs on document started to load.
+    pub fn set_init_script(&mut self, init_script: Option<String>) {
+        self.init_script = init_script;
     }
 
     /// Handle Winit window event and return a boolean to indicate if the compositor should repaint immediately.
@@ -604,7 +603,7 @@ impl Window {
         webview_id: WebViewId,
         message: EmbedderMsg,
         sender: &Sender<ConstellationMsg>,
-        to_controller_sender: &Option<ipc::IpcSender<ToControllerMessage>>,
+        to_controller_sender: &Option<IpcSender<ToControllerMessage>>,
         clipboard: Option<&mut Clipboard>,
         compositor: &mut IOCompositor,
     ) -> bool {
