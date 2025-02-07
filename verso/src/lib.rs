@@ -90,6 +90,10 @@ impl VersoviewController {
         Self::create(verso_path, initial_url, settings)
     }
 
+    pub fn execute_script(&self, script: String) -> Result<(), Box<ipc_channel::ErrorKind>> {
+        self.sender.send(ToVersoMessage::ExecuteScript(script))
+    }
+
     /// Navigate to url
     pub fn navigate(&self, url: url::Url) -> Result<(), Box<ipc_channel::ErrorKind>> {
         self.sender.send(ToVersoMessage::NavigateTo(url))

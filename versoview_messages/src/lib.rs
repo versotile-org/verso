@@ -14,6 +14,8 @@ pub enum ToVersoMessage {
     ListenToOnNavigationStarting,
     /// Response to a [`VersoMessage::OnNavigationStarting`] message from versoview
     OnNavigationStartingResponse(SerializedPipelineId, bool),
+    /// Execute JavaScript
+    ExecuteScript(String),
 }
 
 /// Message sent from versoview to the controller

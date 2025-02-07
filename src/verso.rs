@@ -5,7 +5,7 @@ use std::{
 };
 
 use arboard::Clipboard;
-use base::id::{PipelineNamespace, PipelineNamespaceId, WebViewId};
+use base::id::{PipelineNamespace, PipelineNamespaceId, TopLevelBrowsingContextId, WebViewId};
 use bluetooth::BluetoothThreadFactory;
 use bluetooth_traits::BluetoothRequest;
 use canvas::canvas_paint_thread::CanvasPaintThread;
@@ -42,6 +42,7 @@ use winit::{
 use crate::{
     compositor::{IOCompositor, InitialCompositorState, ShutdownState},
     config::Config,
+    webview::execute_script,
     window::Window,
 };
 
@@ -638,11 +639,7 @@ impl Verso {
     pub fn handle_incoming_webview_message(&mut self, message: ToVersoMessage) {
         match message {
             ToVersoMessage::NavigateTo(to_url) => {
-                if let Some(webview_id) =
-                    self.windows.values().next().and_then(|(window, _)| {
-                        window.tab_manager.current_tab().map(|tab| tab.id())
-                    })
-                {
+                if let Some(webview_id) = self.first_webview_id() {
                     send_to_constellation(
                         &self.constellation_sender,
                         ConstellationMsg::LoadUrl(webview_id, ServoUrl::from_url(to_url)),
@@ -663,8 +660,20 @@ impl Verso {
                     ),
                 );
             }
+            ToVersoMessage::ExecuteScript(js) => {
+                if let Some(webview_id) = self.first_webview_id() {
+                    let _ = execute_script(&self.constellation_sender, &webview_id, js);
+                }
+            }
             _ => {}
         }
+    }
+
+    fn first_webview_id(&self) -> Option<TopLevelBrowsingContextId> {
+        self.windows
+            .values()
+            .next()
+            .and_then(|(window, _)| window.tab_manager.current_tab().map(|tab| tab.id()))
     }
 
     /// Return true if one of the Verso windows is animating.
