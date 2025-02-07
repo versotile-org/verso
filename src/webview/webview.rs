@@ -130,13 +130,44 @@ impl Window {
                         {
                             log::error!("Verso failed to send AllowNavigationRequest to controller: {error}")
                         } else {
-                            // We will handle a ControllerMessage::OnNavigationStartingResponse
+                            // We will handle a ToVersoMessage::OnNavigationStartingResponse
                             // and send ConstellationMsg::AllowNavigationResponse there if the call succeed
                             return;
                         }
                     }
                 }
                 send_to_constellation(sender, ConstellationMsg::AllowNavigationResponse(id, true));
+            }
+            EmbedderMsg::WebResourceRequested(_webview_id, request, sender) => {
+                if let Some(to_controller_sender) = to_controller_sender {
+                    if let Some(request_map) = &mut self.event_listeners.on_web_resource_requested {
+                        let id = uuid::Uuid::new_v4();
+                        let mut builder = http::request::Builder::new()
+                            .uri(request.url.as_str())
+                            .method(request.method);
+                        for (key, value) in request.headers.iter() {
+                            builder = builder.header(key, value);
+                        }
+                        if let Err(error) =
+                            to_controller_sender.send(ToControllerMessage::OnWebResourceRequested(
+                                versoview_messages::WebResourceRequest {
+                                    id,
+                                    // TODO: Actually send the body
+                                    request: builder.body(Vec::new()).unwrap(),
+                                },
+                            ))
+                        {
+                            log::error!(
+                                "Verso failed to send WebResourceRequested to controller: {error}"
+                            )
+                        } else {
+                            request_map.insert(id, (request.url, sender));
+                            // We will handle a ToVersoMessage::WebResourceRequestResponse
+                            // and send the response through this sender there if the call succeed
+                            return;
+                        }
+                    }
+                }
             }
             EmbedderMsg::GetClipboardContents(_webview_id, sender) => {
                 let contents = clipboard

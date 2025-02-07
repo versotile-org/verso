@@ -2800,6 +2800,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "http-serde-ext"
+version = "1.0.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "665c24b8e7e21688dc74edb228f07c1815bbc7ff3b48a3ee72fa20937fbde095"
+dependencies = [
+ "http 1.2.0",
+ "serde",
+]
+
+[[package]]
 name = "httparse"
 version = "1.10.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -7031,6 +7041,7 @@ name = "verso"
 version = "0.0.1"
 dependencies = [
  "bincode",
+ "http 1.2.0",
  "ipc-channel",
  "log",
  "serde",
@@ -7064,6 +7075,7 @@ dependencies = [
  "glutin",
  "glutin-winit",
  "headers 0.4.0",
+ "http 1.2.0",
  "ipc-channel",
  "keyboard-types",
  "layout_thread_2020",
@@ -7094,6 +7106,7 @@ dependencies = [
  "style_traits",
  "thiserror 1.0.69",
  "url",
+ "uuid",
  "versoview_messages",
  "webdriver_server",
  "webgpu",
@@ -7107,9 +7120,13 @@ dependencies = [
 name = "versoview_messages"
 version = "0.0.1"
 dependencies = [
+ "headers 0.4.0",
+ "http 1.2.0",
+ "http-serde-ext",
  "ipc-channel",
  "serde",
  "url",
+ "uuid",
 ]
 
 [[package]]

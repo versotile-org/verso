@@ -403,7 +403,14 @@ fn resources_dir_path() -> PathBuf {
         std::path::PathBuf::from_str("/app")
     };
     #[cfg(not(any(feature = "packager", feature = "flatpak")))]
-    let root_dir = std::env::current_dir();
+    // let root_dir = std::env::current_dir();
+    let current_exe_path = std::env::current_exe().unwrap();
+    let root_dir = current_exe_path
+        .parent()
+        .unwrap()
+        .parent()
+        .unwrap()
+        .parent();
 
-    root_dir.ok().map(|dir| dir.join("resources")).unwrap()
+    root_dir.map(|dir| dir.join("resources")).unwrap()
 }

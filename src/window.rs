@@ -1,11 +1,11 @@
-use std::cell::Cell;
+use std::{cell::Cell, collections::HashMap};
 
 use base::id::WebViewId;
 use compositing_traits::ConstellationMsg;
 use crossbeam_channel::Sender;
 use embedder_traits::{
     Cursor, EmbedderMsg, MouseButton, PermissionRequest, PromptCredentialsInput, PromptResult,
-    TouchEventType, TraversalDirection, WheelDelta, WheelMode,
+    TouchEventType, TraversalDirection, WebResourceResponseMsg, WheelDelta, WheelMode,
 };
 use euclid::{Point2D, Size2D};
 use glutin::{
@@ -58,7 +58,11 @@ const PANEL_PADDING: f64 = 4.0;
 
 #[derive(Default)]
 pub(crate) struct EventListeners {
+    /// This is `true` if the controller wants to get and handle OnNavigationStarting/AllowNavigationRequest
     pub(crate) on_navigation_starting: bool,
+    /// A id to request response sender map if the controller wants to get and handle web resource requests
+    pub(crate) on_web_resource_requested:
+        Option<HashMap<uuid::Uuid, (ServoUrl, IpcSender<WebResourceResponseMsg>)>>,
 }
 
 /// A Verso window is a Winit window containing several web views.

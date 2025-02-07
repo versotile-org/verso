@@ -13,7 +13,10 @@ use compositing_traits::{CompositorMsg, CompositorProxy, CompositorReceiver, Con
 use constellation::{Constellation, FromCompositorLogger, InitialConstellationState};
 use crossbeam_channel::{unbounded, Receiver, Sender};
 use devtools;
-use embedder_traits::{EmbedderMsg, EmbedderProxy, EventLoopWaker};
+use embedder_traits::{
+    EmbedderMsg, EmbedderProxy, EventLoopWaker, HttpBodyData, WebResourceResponse,
+    WebResourceResponseMsg,
+};
 use euclid::Scale;
 use fonts::SystemFontService;
 use ipc_channel::ipc::{self, IpcSender};
@@ -663,6 +666,43 @@ impl Verso {
             ToVersoMessage::ExecuteScript(js) => {
                 if let Some(webview_id) = self.first_webview_id() {
                     let _ = execute_script(&self.constellation_sender, &webview_id, js);
+                }
+            }
+            ToVersoMessage::ListenToWebResourceRequests => {
+                if let Some((window, _)) = self.windows.values_mut().next() {
+                    window
+                        .event_listeners
+                        .on_web_resource_requested
+                        .replace(HashMap::new());
+                }
+            }
+            ToVersoMessage::WebResourceRequestResponse(response) => {
+                if let Some((window, _)) = self.windows.values_mut().next() {
+                    if let Some((url, sender)) = window
+                        .event_listeners
+                        .on_web_resource_requested
+                        .as_mut()
+                        .and_then(|senders| senders.remove(&response.id))
+                    {
+                        if let Some(response) = response.response {
+                            let _ = sender
+                                .send(WebResourceResponseMsg::Start(
+                                    WebResourceResponse::new(url)
+                                        .headers(response.headers().clone())
+                                        .status_code(response.status()),
+                                ))
+                                .and_then(|_| {
+                                    sender.send(WebResourceResponseMsg::Body(HttpBodyData::Chunk(
+                                        response.body().to_vec(),
+                                    )))
+                                })
+                                .and_then(|_| {
+                                    sender.send(WebResourceResponseMsg::Body(HttpBodyData::Done))
+                                });
+                        } else {
+                            let _ = sender.send(WebResourceResponseMsg::None);
+                        }
+                    }
                 }
             }
             _ => {}

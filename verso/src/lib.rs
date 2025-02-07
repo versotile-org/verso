@@ -4,16 +4,22 @@ use std::{
     process::Command,
     sync::{Arc, Mutex},
 };
-use versoview_messages::{ToControllerMessage, ToVersoMessage};
+use versoview_messages::{
+    ToControllerMessage, ToVersoMessage, WebResourceRequest, WebResourceRequestResponse,
+};
 
 use ipc_channel::{
     ipc::{IpcOneShotServer, IpcSender},
     router::ROUTER,
 };
 
+type ResponseFunction = Box<dyn FnOnce(Option<http::Response<Vec<u8>>>) + Send>;
+
 #[derive(Default)]
 struct EventListeners {
     on_navigation_starting: Arc<Mutex<Option<Box<dyn Fn(url::Url) -> bool + Send + 'static>>>>,
+    on_web_resource_requested:
+        Arc<Mutex<Option<Box<dyn Fn(WebResourceRequest, ResponseFunction) + Send + 'static>>>>,
 }
 
 pub struct VersoviewController {
@@ -49,6 +55,7 @@ impl VersoviewController {
         };
         let event_listeners = EventListeners::default();
         let on_navigation_starting = event_listeners.on_navigation_starting.clone();
+        let on_web_resource_requested = event_listeners.on_web_resource_requested.clone();
         let send_clone = sender.clone();
         ROUTER.add_typed_route(
             receiver,
@@ -63,6 +70,22 @@ impl VersoviewController {
                                     "Error while sending back OnNavigationStarting result: {error}"
                                 );
                             }
+                        }
+                    }
+                    ToControllerMessage::OnWebResourceRequested(request) => {
+                        if let Some(ref callback) = *on_web_resource_requested.lock().unwrap() {
+                            let sender_clone = send_clone.clone();
+                            let id = request.id;
+                            callback(
+                                request,
+                                Box::new(move |response| {
+                                    if let Err(error) = sender_clone.send(ToVersoMessage::WebResourceRequestResponse(
+                                        WebResourceRequestResponse { id, response },
+                                    )) {
+                                        error!("Error while sending back OnNavigationStarting result: {error}");
+                                    }
+                                }),
+                            );
                         }
                     }
                     _ => {}
@@ -117,6 +140,27 @@ impl VersoviewController {
         }
         self.sender
             .send(ToVersoMessage::ListenToOnNavigationStarting)?;
+        Ok(())
+    }
+
+    /// Listen on web resource requests,
+    /// return a boolean in the callback to decide whether or not allowing this navigation
+    pub fn on_web_resource_requested(
+        &self,
+        callback: impl Fn(WebResourceRequest, ResponseFunction) + Send + 'static,
+    ) -> Result<(), Box<ipc_channel::ErrorKind>> {
+        if self
+            .event_listeners
+            .on_web_resource_requested
+            .lock()
+            .unwrap()
+            .replace(Box::new(callback))
+            .is_some()
+        {
+            return Ok(());
+        }
+        self.sender
+            .send(ToVersoMessage::ListenToWebResourceRequests)?;
         Ok(())
     }
 }
