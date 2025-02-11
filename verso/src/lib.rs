@@ -34,6 +34,7 @@ pub struct VersoviewSettings {
     pub size: Option<PhysicalSize<u32>>,
     pub position: Option<PhysicalPosition<i32>>,
     pub maximized: bool,
+    pub userscripts_directory: Option<String>,
 }
 
 impl VersoviewController {
@@ -67,6 +68,11 @@ impl VersoviewController {
         }
         if !settings.maximized {
             command.arg("--no-maximized");
+        }
+
+        if let Some(userscripts_directory) = settings.userscripts_directory {
+            command.arg("--userscripts-directory");
+            command.arg(userscripts_directory);
         }
 
         command.spawn().unwrap();
@@ -225,5 +231,10 @@ impl VersoviewController {
     pub fn set_visible(&self, visible: bool) -> Result<(), Box<ipc_channel::ErrorKind>> {
         self.sender.send(ToVersoMessage::SetVisible(visible))?;
         Ok(())
+    }
+
+    /// Add init script to run on document started to load
+    pub fn add_init_script(&self, script: String) -> Result<(), Box<ipc_channel::ErrorKind>> {
+        self.sender.send(ToVersoMessage::AddInitScript(script))
     }
 }
