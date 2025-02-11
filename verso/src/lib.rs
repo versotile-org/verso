@@ -1,3 +1,4 @@
+use dpi::{Position, Size};
 use log::error;
 use std::{
     path::Path,
@@ -161,6 +162,47 @@ impl VersoviewController {
         }
         self.sender
             .send(ToVersoMessage::ListenToWebResourceRequests)?;
+        Ok(())
+    }
+
+    /// Sets the webview window's size
+    pub fn set_size<S: Into<Size>>(&self, size: S) -> Result<(), Box<ipc_channel::ErrorKind>> {
+        self.sender.send(ToVersoMessage::SetSize(size.into()))?;
+        Ok(())
+    }
+
+    /// Sets the webview window's position
+    pub fn set_position<P: Into<Position>>(
+        &self,
+        position: P,
+    ) -> Result<(), Box<ipc_channel::ErrorKind>> {
+        self.sender
+            .send(ToVersoMessage::SetPosition(position.into()))?;
+        Ok(())
+    }
+
+    /// Maximize or unmaximize the window
+    pub fn set_maximized(&self, maximized: bool) -> Result<(), Box<ipc_channel::ErrorKind>> {
+        self.sender.send(ToVersoMessage::SetMaximized(maximized))?;
+        Ok(())
+    }
+
+    /// Minimize or unminimize the window
+    pub fn set_minimized(&self, minimized: bool) -> Result<(), Box<ipc_channel::ErrorKind>> {
+        self.sender.send(ToVersoMessage::SetMinimized(minimized))?;
+        Ok(())
+    }
+
+    /// Sets the window to fullscreen or back
+    pub fn set_fullscreen(&self, fullscreen: bool) -> Result<(), Box<ipc_channel::ErrorKind>> {
+        self.sender
+            .send(ToVersoMessage::SetFullscreen(fullscreen))?;
+        Ok(())
+    }
+
+    /// Show or hide the window
+    pub fn set_visible(&self, visible: bool) -> Result<(), Box<ipc_channel::ErrorKind>> {
+        self.sender.send(ToVersoMessage::SetVisible(visible))?;
         Ok(())
     }
 }

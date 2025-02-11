@@ -702,6 +702,40 @@ impl Verso {
                     }
                 }
             }
+            ToVersoMessage::SetSize(size) => {
+                if let Some((window, _)) = self.windows.values_mut().next() {
+                    let _ = window.window.request_inner_size(size);
+                }
+            }
+            ToVersoMessage::SetPosition(position) => {
+                if let Some((window, _)) = self.windows.values_mut().next() {
+                    window.window.set_outer_position(position);
+                }
+            }
+            ToVersoMessage::SetMaximized(maximized) => {
+                if let Some((window, _)) = self.windows.values_mut().next() {
+                    window.window.set_maximized(maximized);
+                }
+            }
+            ToVersoMessage::SetMinimized(minimized) => {
+                if let Some((window, _)) = self.windows.values_mut().next() {
+                    window.window.set_minimized(minimized);
+                }
+            }
+            ToVersoMessage::SetFullscreen(fullscreen) => {
+                if let Some((window, _)) = self.windows.values_mut().next() {
+                    window.window.set_fullscreen(if fullscreen {
+                        Some(winit::window::Fullscreen::Borderless(None))
+                    } else {
+                        None
+                    });
+                }
+            }
+            ToVersoMessage::SetVisible(visible) => {
+                if let Some((window, _)) = self.windows.values_mut().next() {
+                    window.window.set_visible(visible);
+                }
+            }
             _ => {}
         }
     }

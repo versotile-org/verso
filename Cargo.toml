@@ -10,6 +10,7 @@ log = "0.4"
 headers = "0.4"
 http = "1"
 uuid = { version = "1", features = ["v4"] }
+dpi = { version = "0.1", features = ["serde"] }
 
 [package]
 name = "versoview"

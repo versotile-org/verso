@@ -12,3 +12,4 @@ http = { workspace = true }
 # hyper_serde used by Servo has been archived, so using this one instead
 http-serde-ext = "1"
 uuid = { workspace = true }
+dpi = { workspace = true }

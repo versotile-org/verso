@@ -10,4 +10,5 @@ bincode = { workspace = true }
 url = { workspace = true }
 http = { workspace = true }
 log = { workspace = true }
+dpi = { workspace = true }
 versoview_messages = { path = "../versoview_messages" }

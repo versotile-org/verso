@@ -1,3 +1,4 @@
+use dpi::{Position, Size};
 use ipc_channel::ipc;
 use serde::{Deserialize, Serialize};
 
@@ -20,6 +21,18 @@ pub enum ToVersoMessage {
     ListenToWebResourceRequests,
     /// Response to a [`ToControllerMessage::OnWebResourceRequested`] message from versoview
     WebResourceRequestResponse(WebResourceRequestResponse),
+    /// Sets the webview window's size
+    SetSize(Size),
+    /// Sets the webview window's position
+    SetPosition(Position),
+    /// Maximize or unmaximize the window
+    SetMaximized(bool),
+    /// Minimize or unminimize the window
+    SetMinimized(bool),
+    /// Sets the window to fullscreen or back
+    SetFullscreen(bool),
+    /// Show or hide the window
+    SetVisible(bool),
 }
 
 /// Message sent from versoview to the controller

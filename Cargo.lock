@@ -1577,6 +1577,9 @@ name = "dpi"
 version = "0.1.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "f25c0e292a7ca6d6498557ff1df68f32c99850012b6ea401cf8daf771f22ff53"
+dependencies = [
+ "serde",
+]
 
 [[package]]
 name = "dtoa"
@@ -7050,6 +7053,7 @@ name = "verso"
 version = "0.0.1"
 dependencies = [
  "bincode",
+ "dpi",
  "http 1.2.0",
  "ipc-channel",
  "log",
@@ -7129,6 +7133,7 @@ dependencies = [
 name = "versoview_messages"
 version = "0.0.1"
 dependencies = [
+ "dpi",
  "headers 0.4.0",
  "http 1.2.0",
  "http-serde-ext",
