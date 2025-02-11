@@ -1,4 +1,4 @@
-use dpi::{Position, Size};
+use dpi::{PhysicalPosition, PhysicalSize, Position, Size};
 use log::error;
 use std::{
     path::Path,
@@ -31,6 +31,9 @@ pub struct VersoviewController {
 #[derive(Debug, Default)]
 pub struct VersoviewSettings {
     pub with_panel: bool,
+    pub size: Option<PhysicalSize<u32>>,
+    pub position: Option<PhysicalPosition<i32>>,
+    pub maximized: bool,
 }
 
 impl VersoviewController {
@@ -49,7 +52,25 @@ impl VersoviewController {
         if !settings.with_panel {
             command.arg("--no-panel");
         }
+
+        if let Some(size) = settings.size {
+            let width = size.width;
+            let height = size.height;
+            command.arg(format!("--width={width}"));
+            command.arg(format!("--height={height}"));
+        }
+        if let Some(position) = settings.position {
+            let x = position.x;
+            let y = position.y;
+            command.arg(format!("--x={x}"));
+            command.arg(format!("--y={y}"));
+        }
+        if !settings.maximized {
+            command.arg("--no-maximized");
+        }
+
         command.spawn().unwrap();
+
         let (receiver, message) = server.accept().unwrap();
         let ToControllerMessage::SetToVersoSender(sender) = message else {
             panic!("The initial message sent from versoview is not a `VersoMessage::IpcSender`")
