@@ -524,7 +524,7 @@ impl Verso {
                             //         window.0.set_cursor_icon(cursor);
                             //     }
                             // }
-                            EmbedderMsg::Shutdown | EmbedderMsg::ReadyToPresent(_) => {}
+                            EmbedderMsg::ReadyToPresent(_) => {}
                             // TODO: Check devtools' prompt has WebViewId?
                             // EmbedderMsg::Prompt(_, definition, origin) => match origin {
                             //     // TODO: actually prompt the user with a dialog
@@ -597,16 +597,14 @@ impl Verso {
             EmbedderMsg::WebViewBlurred => None,
             EmbedderMsg::AllowUnload(webview_id, _) => Some(webview_id),
             EmbedderMsg::Keyboard(webview_id, _) => Some(webview_id),
-            EmbedderMsg::ClearClipboardContents(webview_id) => Some(webview_id),
-            EmbedderMsg::GetClipboardContents(webview_id, _) => Some(webview_id),
-            EmbedderMsg::SetClipboardContents(webview_id, _) => Some(webview_id),
+            EmbedderMsg::ClearClipboard(webview_id) => Some(webview_id),
+            EmbedderMsg::GetClipboardText(webview_id, _) => Some(webview_id),
+            EmbedderMsg::SetClipboardText(webview_id, _) => Some(webview_id),
             EmbedderMsg::SetCursor(webview_id, _) => Some(webview_id),
             EmbedderMsg::NewFavicon(webview_id, _) => Some(webview_id),
-            EmbedderMsg::HeadParsed(webview_id) => Some(webview_id),
             EmbedderMsg::HistoryChanged(webview_id, _, _) => Some(webview_id),
             EmbedderMsg::SetFullscreenState(webview_id, _) => Some(webview_id),
-            EmbedderMsg::LoadStart(webview_id) => Some(webview_id),
-            EmbedderMsg::LoadComplete(webview_id) => Some(webview_id),
+            EmbedderMsg::NotifyLoadStatusChanged(webview_id, _) => Some(webview_id),
             EmbedderMsg::WebResourceRequested(opt_webview_id, _, _) => opt_webview_id.as_ref(),
             EmbedderMsg::Panic(webview_id, _, _) => Some(webview_id),
             EmbedderMsg::GetSelectedBluetoothDevice(webview_id, _, _) => Some(webview_id),
@@ -614,7 +612,6 @@ impl Verso {
             EmbedderMsg::PromptPermission(webview_id, _, _) => Some(webview_id),
             EmbedderMsg::ShowIME(webview_id, _, _, _, _) => Some(webview_id),
             EmbedderMsg::HideIME(webview_id) => Some(webview_id),
-            EmbedderMsg::Shutdown => None,
             EmbedderMsg::ReportProfile(_) => None,
             EmbedderMsg::MediaSessionEvent(webview_id, _) => Some(webview_id),
             EmbedderMsg::OnDevtoolsStarted(_, _) => None,

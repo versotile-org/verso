@@ -3,7 +3,7 @@ use base::id::WebViewId;
 use compositing_traits::ConstellationMsg;
 use crossbeam_channel::Sender;
 use embedder_traits::{
-    CompositorEventVariant, EmbedderMsg, PermissionPrompt, PermissionRequest,
+    CompositorEventVariant, EmbedderMsg, LoadStatus, PermissionPrompt, PermissionRequest,
     PromptCredentialsInput, PromptDefinition, PromptResult, TraversalDirection,
 };
 use ipc_channel::ipc;
@@ -76,9 +76,7 @@ impl Window {
     ) {
         log::trace!("Verso WebView {webview_id:?} is handling Embedder message: {message:?}",);
         match message {
-            EmbedderMsg::HeadParsed(_)
-            | EmbedderMsg::WebViewOpened(_)
-            | EmbedderMsg::WebViewClosed(_) => {
+            EmbedderMsg::WebViewOpened(_) | EmbedderMsg::WebViewClosed(_) => {
                 // Most WebView messages are ignored because it's done by compositor.
                 log::trace!("Verso WebView {webview_id:?} ignores this message: {message:?}")
             }
@@ -94,15 +92,22 @@ impl Window {
                     w
                 );
             }
-            EmbedderMsg::LoadStart(_) => {
-                if let Some(init_script) = &self.init_script {
-                    let _ = execute_script(sender, &webview_id, init_script);
+            EmbedderMsg::NotifyLoadStatusChanged(_webview_id, status) => match status {
+                LoadStatus::Started => {
+                    if let Some(init_script) = &self.init_script {
+                        let _ = execute_script(sender, &webview_id, init_script);
+                    }
                 }
-            }
-            EmbedderMsg::LoadComplete(_webview_id) => {
-                self.window.request_redraw();
-                send_to_constellation(sender, ConstellationMsg::FocusWebView(webview_id));
-            }
+                LoadStatus::Complete => {
+                    self.window.request_redraw();
+                    send_to_constellation(sender, ConstellationMsg::FocusWebView(webview_id));
+                }
+                _ => {
+                    log::trace!(
+                            "Verso WebView {webview_id:?} ignores NotifyLoadStatusChanged status: {status:?}"
+                        );
+                }
+            },
             EmbedderMsg::ChangePageTitle(_webview_id, title) => {
                 if let Some(panel) = self.panel.as_ref() {
                     let title = if let Some(title) = title {
@@ -169,30 +174,30 @@ impl Window {
                     }
                 }
             }
-            EmbedderMsg::GetClipboardContents(_webview_id, sender) => {
-                let contents = clipboard
+            EmbedderMsg::GetClipboardText(_webview_id, sender) => {
+                let text = clipboard
                     .map(|c| {
                         c.get_text().unwrap_or_else(|e| {
                             log::warn!(
-                                "Verso WebView {webview_id:?} failed to get clipboard content: {}",
+                                "Verso WebView {webview_id:?} failed to get clipboard text: {}",
                                 e
                             );
                             String::new()
                         })
                     })
                     .unwrap_or_default();
-                if let Err(e) = sender.send(contents) {
+                if let Err(e) = sender.send(Ok(text)) {
                     log::warn!(
-                        "Verso WebView {webview_id:?} failed to send clipboard content: {}",
+                        "Verso WebView {webview_id:?} failed to send clipboard text: {}",
                         e
                     );
                 }
             }
-            EmbedderMsg::SetClipboardContents(_webview_id, text) => {
+            EmbedderMsg::SetClipboardText(_webview_id, text) => {
                 if let Some(c) = clipboard {
                     if let Err(e) = c.set_text(text) {
                         log::warn!(
-                            "Verso WebView {webview_id:?} failed to set clipboard contents: {}",
+                            "Verso WebView {webview_id:?} failed to set clipboard text: {}",
                             e
                         );
                     }
@@ -231,14 +236,6 @@ impl Window {
                         }
                         PromptDefinition::OkCancel(message, prompt_sender) => {
                             prompt.ok_cancel(sender, rect, message, prompt_sender);
-                        }
-                        PromptDefinition::YesNo(message, prompt_sender) => {
-                            prompt.yes_no(
-                                sender,
-                                rect,
-                                message,
-                                PromptSender::ConfirmSender(prompt_sender),
-                            );
                         }
                         PromptDefinition::Input(message, default_value, prompt_sender) => {
                             prompt.input(sender, rect, message, Some(default_value), prompt_sender);
@@ -301,10 +298,7 @@ impl Window {
     ) -> bool {
         log::trace!("Verso Panel {panel_id:?} is handling Embedder message: {message:?}",);
         match message {
-            EmbedderMsg::LoadStart(_)
-            | EmbedderMsg::HeadParsed(_)
-            | EmbedderMsg::WebViewOpened(_)
-            | EmbedderMsg::WebViewClosed(_) => {
+            EmbedderMsg::WebViewOpened(_) | EmbedderMsg::WebViewClosed(_) => {
                 // Most WebView messages are ignored because it's done by compositor.
                 log::trace!("Verso Panel ignores this message: {message:?}")
             }
@@ -320,11 +314,15 @@ impl Window {
                     webview_id
                 );
             }
-            EmbedderMsg::LoadComplete(_webview_id) => {
-                self.window.request_redraw();
-                send_to_constellation(sender, ConstellationMsg::FocusWebView(panel_id));
+            EmbedderMsg::NotifyLoadStatusChanged(_webview_id, status) => {
+                if status == LoadStatus::Complete {
+                    self.window.request_redraw();
+                    send_to_constellation(sender, ConstellationMsg::FocusWebView(panel_id));
 
-                self.create_tab(sender, self.panel.as_ref().unwrap().initial_url.clone());
+                    self.create_tab(sender, self.panel.as_ref().unwrap().initial_url.clone());
+                } else {
+                    log::trace!("Verso Panel ignores NotifyLoadStatusChanged status: {status:?}");
+                }
             }
             EmbedderMsg::AllowNavigationRequest(_webview_id, id, _url) => {
                 // The panel shouldn't navigate to other pages.
@@ -469,23 +467,23 @@ impl Window {
                     _ => log::trace!("Verso Panel isn't supporting this prompt yet"),
                 }
             }
-            EmbedderMsg::GetClipboardContents(_webview_id, sender) => {
-                let contents = clipboard
+            EmbedderMsg::GetClipboardText(_webview_id, sender) => {
+                let text = clipboard
                     .map(|c| {
                         c.get_text().unwrap_or_else(|e| {
-                            log::warn!("Verso Panel failed to get clipboard content: {}", e);
+                            log::warn!("Verso Panel failed to get clipboard text: {}", e);
                             String::new()
                         })
                     })
                     .unwrap_or_default();
-                if let Err(e) = sender.send(contents) {
-                    log::warn!("Verso Panel failed to send clipboard content: {}", e);
+                if let Err(e) = sender.send(Ok(text)) {
+                    log::warn!("Verso Panel failed to send clipboard text: {}", e);
                 }
             }
-            EmbedderMsg::SetClipboardContents(_webview_id, text) => {
+            EmbedderMsg::SetClipboardText(_webview_id, text) => {
                 if let Some(c) = clipboard {
                     if let Err(e) = c.set_text(text) {
-                        log::warn!("Verso Panel failed to set clipboard contents: {}", e);
+                        log::warn!("Verso Panel failed to set clipboard text: {}", e);
                     }
                 }
             }

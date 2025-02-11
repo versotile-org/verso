@@ -322,9 +322,10 @@ impl Window {
         if let Some(tab_id) = tab_id {
             compositor.on_resize_webview_event(tab_id, content_size);
 
+            let old_tab_id = self.tab_manager.current_tab_id();
             if self.tab_manager.activate_tab(tab_id).is_some() {
                 // throttle the old tab to avoid unnecessary animation caclulations
-                if let Some(old_tab_id) = self.tab_manager.current_tab_id() {
+                if let Some(old_tab_id) = old_tab_id {
                     let _ = compositor
                         .constellation_chan
                         .send(ConstellationMsg::SetWebViewThrottled(old_tab_id, true));
@@ -332,6 +333,8 @@ impl Window {
                 let _ = compositor
                     .constellation_chan
                     .send(ConstellationMsg::SetWebViewThrottled(tab_id, false));
+
+                self.focused_webview_id = Some(tab_id);
 
                 // update painting order immediately to draw the active tab
                 compositor.send_root_pipeline_display_list(self);
