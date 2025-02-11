@@ -9,6 +9,7 @@ fn main() {
         url::Url::parse("https://example.com").unwrap(),
         VersoviewSettings {
             with_panel: true,
+            maximized: true,
             ..Default::default()
         },
     );
