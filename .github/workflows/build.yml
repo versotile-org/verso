@@ -6,7 +6,7 @@ on:
     branches:
       - main
   schedule:
-    - cron: '0 0 * * 0'
+    - cron: "0 0 * * 0"
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
@@ -56,7 +56,7 @@ jobs:
     env:
       RUSTC_WRAPPER: sccache
       CCACHE: sccache
-      SCCACHE_GHA_ENABLED: 'true'
+      SCCACHE_GHA_ENABLED: "true"
       WAYLAND_DISPLAY: wayland-1
       WLR_BACKENDS: headless
       WLR_LIBINPUT_NO_DEVICES: 1
@@ -75,10 +75,10 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y flatpak flatpak-builder
           sudo flatpak remote-add --if-not-exists flathub https://dl.flathub.org/repo/flathub.flatpakrepo
-          sudo flatpak install -y --noninteractive flathub org.freedesktop.Platform//23.08
-          sudo flatpak install -y --noninteractive flathub org.freedesktop.Sdk//23.08
-          sudo flatpak install -y --noninteractive flathub org.freedesktop.Sdk.Extension.rust-stable//23.08
-          sudo flatpak install -y --noninteractive flathub org.freedesktop.Sdk.Extension.llvm18//23.08
+          sudo flatpak install -y --noninteractive flathub org.freedesktop.Platform//24.08
+          sudo flatpak install -y --noninteractive flathub org.freedesktop.Sdk//24.08
+          sudo flatpak install -y --noninteractive flathub org.freedesktop.Sdk.Extension.rust-stable//24.08
+          sudo flatpak install -y --noninteractive flathub org.freedesktop.Sdk.Extension.llvm18//24.08
 
       - name: Set env
         run: echo "LIBCLANG_PATH=/usr/lib/llvm-14/lib" >> $GITHUB_ENV
@@ -146,7 +146,7 @@ jobs:
     runs-on: windows-latest
     env:
       CCACHE: sccache
-      SCCACHE_GHA_ENABLED: 'true'
+      SCCACHE_GHA_ENABLED: "true"
     steps:
       - name: Checkout the repository
         uses: actions/checkout@v4
@@ -157,7 +157,7 @@ jobs:
       - name: Install Python
         uses: actions/setup-python@v5
         with:
-          python-version: '3.12'
+          python-version: "3.12"
 
       - name: Install scroop
         uses: MinoruSekine/setup-scoop@v3
@@ -212,7 +212,7 @@ jobs:
     env:
       RUSTC_WRAPPER: sccache
       CCACHE: sccache
-      SCCACHE_GHA_ENABLED: 'true'
+      SCCACHE_GHA_ENABLED: "true"
     steps:
       - name: Checkout the repository
         uses: actions/checkout@v4
@@ -223,7 +223,7 @@ jobs:
       - name: Install Python
         uses: actions/setup-python@v5
         with:
-          python-version: '3.12'
+          python-version: "3.12"
 
       - name: Install dependencies
         run: |
@@ -274,7 +274,7 @@ jobs:
     name: Build Result
     runs-on: ubuntu-latest
     if: always()
-    needs: ['build-macos', 'build-windows', 'build-linux']
+    needs: ["build-macos", "build-windows", "build-linux"]
     steps:
       - name: Success
         if: ${{ !contains(needs.*.result, 'failure') && !contains(needs.*.result, 'cancelled') }}
@@ -286,7 +286,7 @@ jobs:
   release-nightly:
     if: ${{ github.event_name == 'schedule' }}
     runs-on: ubuntu-latest
-    needs: ['build-macos', 'build-windows', 'build-linux']
+    needs: ["build-macos", "build-windows", "build-linux"]
     steps:
       - uses: actions/checkout@v4
       - uses: actions/download-artifact@v4
