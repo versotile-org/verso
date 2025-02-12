@@ -525,21 +525,11 @@ impl Verso {
                             //     }
                             // }
                             EmbedderMsg::ReadyToPresent(_) => {}
-                            // TODO: Check devtools' prompt has WebViewId?
-                            // EmbedderMsg::Prompt(_, definition, origin) => match origin {
-                            //     // TODO: actually prompt the user with a dialog
-                            //     PromptOrigin::Trusted => match definition {
-                            //         PromptDefinition::YesNo(question, ipc_sender) => {
-                            //             if question == "Accept incoming devtools connection?" {
-                            //                 if let Err(err) = ipc_sender.send(PromptResult::Primary) {
-                            //                     log::error!("Failed to send prompt result back: {err}");
-                            //                 }
-                            //             }
-                            //         }
-                            //         _ => {}
-                            //     },
-                            //     _ => {}
-                            // },
+                            EmbedderMsg::RequestDevtoolsConnection(sender) => {
+                                if let Err(err) = sender.send(true) {
+                                    log::error!("Failed to send prompt result back: {err}");
+                                }
+                            }
                             e => {
                                 log::trace!("Verso Window isn't supporting handling this message yet: {e:?}")
                             }

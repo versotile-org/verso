@@ -42,6 +42,7 @@ pub struct VersoviewSettings {
     pub maximized: bool,
     pub resources_directory: Option<String>,
     pub userscripts_directory: Option<String>,
+    pub devtools_port: Option<u16>,
 }
 
 impl VersoviewController {
@@ -84,6 +85,9 @@ impl VersoviewController {
         if let Some(userscripts_directory) = settings.userscripts_directory {
             command.arg("--userscripts-directory");
             command.arg(userscripts_directory);
+        }
+        if let Some(devtools_port) = settings.devtools_port {
+            command.arg(format!("--devtools-port={devtools_port}"));
         }
 
         command.spawn().unwrap();
