@@ -13,6 +13,8 @@ type SerializedPipelineId = Vec<u8>;
 #[derive(Debug, Serialize, Deserialize)]
 #[non_exhaustive]
 pub enum ToVersoMessage {
+    /// Exit
+    Exit,
     /// Navigate to this URL
     NavigateTo(url::Url),
     /// Register a listener on versoview for getting notified on navigation starting

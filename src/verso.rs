@@ -628,6 +628,11 @@ impl Verso {
     /// Handle message came from webview controller.
     pub fn handle_incoming_webview_message(&mut self, message: ToVersoMessage) {
         match message {
+            ToVersoMessage::Exit => {
+                if let Some(compositor) = &mut self.compositor {
+                    compositor.maybe_start_shutting_down();
+                }
+            }
             ToVersoMessage::NavigateTo(to_url) => {
                 if let Some(webview_id) = self.first_webview_id() {
                     send_to_constellation(

@@ -193,6 +193,12 @@ impl VersoviewController {
         Self::create(verso_path, initial_url, settings)
     }
 
+    /// Exit
+    pub fn exit(&self) -> Result<(), Box<ipc_channel::ErrorKind>> {
+        self.sender.send(ToVersoMessage::Exit)
+    }
+
+    /// Execute script
     pub fn execute_script(&self, script: String) -> Result<(), Box<ipc_channel::ErrorKind>> {
         self.sender.send(ToVersoMessage::ExecuteScript(script))
     }
@@ -361,4 +367,10 @@ impl VersoviewController {
     // pub fn add_init_script(&self, script: String) -> Result<(), Box<ipc_channel::ErrorKind>> {
     //     self.sender.send(ToVersoMessage::AddInitScript(script))
     // }
+}
+
+impl Drop for VersoviewController {
+    fn drop(&mut self) {
+        let _ = dbg!(self.exit());
+    }
 }
