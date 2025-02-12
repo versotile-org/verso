@@ -731,6 +731,11 @@ impl Verso {
                     window.window.set_visible(visible);
                 }
             }
+            ToVersoMessage::StartDragging => {
+                if let Some((window, _)) = self.windows.values_mut().next() {
+                    let _ = dbg!(window.window.drag_window());
+                }
+            }
             ToVersoMessage::GetSize => {
                 if let Some((window, _)) = self.windows.values_mut().next() {
                     if let Err(error) = self.to_controller_sender.as_ref().unwrap().send(

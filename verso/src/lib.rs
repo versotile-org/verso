@@ -291,6 +291,12 @@ impl VersoviewController {
         Ok(())
     }
 
+    /// Moves the window with the left mouse button until the button is released
+    pub fn start_dragging(&self) -> Result<(), Box<ipc_channel::ErrorKind>> {
+        self.sender.send(ToVersoMessage::StartDragging)?;
+        Ok(())
+    }
+
     /// Get the window's size
     pub fn get_size(&self) -> Result<PhysicalSize<u32>, Box<ipc_channel::ErrorKind>> {
         self.sender.send(ToVersoMessage::GetSize)?;

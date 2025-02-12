@@ -39,6 +39,8 @@ pub enum ToVersoMessage {
     SetFullscreen(bool),
     /// Show or hide the window
     SetVisible(bool),
+    /// Moves the window with the left mouse button until the button is released
+    StartDragging,
     /// Get the window's size, need a response with [`ToControllerMessage::GetSizeResponse`]
     GetSize,
     /// Get the window's position, need a response with [`ToControllerMessage::GetPositionResponse`]
