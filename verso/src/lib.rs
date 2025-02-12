@@ -371,6 +371,6 @@ impl VersoviewController {
 
 impl Drop for VersoviewController {
     fn drop(&mut self) {
-        let _ = dbg!(self.exit());
+        let _ = self.exit();
     }
 }
