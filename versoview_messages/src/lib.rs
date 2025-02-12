@@ -1,6 +1,10 @@
-use dpi::{Position, Size};
+use dpi::{PhysicalPosition, PhysicalSize, Position, Size};
 use ipc_channel::ipc;
 use serde::{Deserialize, Serialize};
+
+// Note: the reason why we didn't send `IpcSender` in those messages is because it panics on MacOS,
+// see https://github.com/versotile-org/verso/pull/222#discussion_r1939111585,
+// the work around is let verso send back the message through the initial sender and we map them back manually
 
 // Can't use `PipelineId` directly or else we need to pull in servo as a dependency
 type SerializedPipelineId = Vec<u8>;
@@ -33,6 +37,18 @@ pub enum ToVersoMessage {
     SetFullscreen(bool),
     /// Show or hide the window
     SetVisible(bool),
+    /// Get the window's size, need a response with [`ToControllerMessage::GetSizeResponse`]
+    GetSize,
+    /// Get the window's position, need a response with [`ToControllerMessage::GetPositionResponse`]
+    GetPosition,
+    /// Get if the window is currently maximized or not, need a response with [`ToControllerMessage::GetMaximizedResponse`]
+    GetMaximized,
+    /// Get if the window is currently minimized or not, need a response with [`ToControllerMessage::GetMinimizedResponse`]
+    GetMinimized,
+    /// Get if the window is currently fullscreen or not, need a response with [`ToControllerMessage::GetFullscreenResponse`]
+    GetFullscreen,
+    /// Get the visibility of the window, need a response with [`ToControllerMessage::GetVisibleResponse`]
+    GetVisible,
 }
 
 /// Message sent from versoview to the controller
@@ -45,6 +61,18 @@ pub enum ToControllerMessage {
     OnNavigationStarting(SerializedPipelineId, url::Url),
     /// Sent on a new web resource request, need a response with [`ToVersoMessage::WebResourceRequestResponse`]
     OnWebResourceRequested(WebResourceRequest),
+    /// Response to a [`ToVersoMessage::GetSize`]
+    GetSizeResponse(PhysicalSize<u32>),
+    /// Response to a [`ToVersoMessage::GetPosition`]
+    GetPositionResponse(PhysicalPosition<i32>),
+    /// Response to a [`ToVersoMessage::GetMaximized`]
+    GetMaximizedResponse(bool),
+    /// Response to a [`ToVersoMessage::GetMinimized`]
+    GetMinimizedResponse(bool),
+    /// Response to a [`ToVersoMessage::GetFullscreen`]
+    GetFullscreenResponse(bool),
+    /// Response to a [`ToVersoMessage::GetVisible`]
+    GetVisibleResponse(bool),
 }
 
 #[derive(Debug, Serialize, Deserialize)]

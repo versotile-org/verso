@@ -21,6 +21,12 @@ struct EventListeners {
     on_navigation_starting: Arc<Mutex<Option<Box<dyn Fn(url::Url) -> bool + Send + 'static>>>>,
     on_web_resource_requested:
         Arc<Mutex<Option<Box<dyn Fn(WebResourceRequest, ResponseFunction) + Send + 'static>>>>,
+    size_response: Arc<Mutex<Option<std::sync::mpsc::Sender<PhysicalSize<u32>>>>>,
+    position_response: Arc<Mutex<Option<std::sync::mpsc::Sender<PhysicalPosition<i32>>>>>,
+    maximized_response: Arc<Mutex<Option<std::sync::mpsc::Sender<bool>>>>,
+    minimized_response: Arc<Mutex<Option<std::sync::mpsc::Sender<bool>>>>,
+    fullscreen_response: Arc<Mutex<Option<std::sync::mpsc::Sender<bool>>>>,
+    visible_response: Arc<Mutex<Option<std::sync::mpsc::Sender<bool>>>>,
 }
 
 pub struct VersoviewController {
@@ -81,9 +87,16 @@ impl VersoviewController {
         let ToControllerMessage::SetToVersoSender(sender) = message else {
             panic!("The initial message sent from versoview is not a `VersoMessage::IpcSender`")
         };
+
         let event_listeners = EventListeners::default();
         let on_navigation_starting = event_listeners.on_navigation_starting.clone();
         let on_web_resource_requested = event_listeners.on_web_resource_requested.clone();
+        let size_response = event_listeners.size_response.clone();
+        let position_response = event_listeners.position_response.clone();
+        let minimized_response = event_listeners.minimized_response.clone();
+        let maximized_response = event_listeners.maximized_response.clone();
+        let fullscreen_response = event_listeners.fullscreen_response.clone();
+        let visible_response = event_listeners.visible_response.clone();
         let send_clone = sender.clone();
         ROUTER.add_typed_route(
             receiver,
@@ -114,6 +127,36 @@ impl VersoviewController {
                                     }
                                 }),
                             );
+                        }
+                    }
+                    ToControllerMessage::GetSizeResponse(size) => {
+                        if let Some(sender) = size_response.lock().unwrap().take() {
+                            sender.send(size).unwrap();
+                        }
+                    }
+                    ToControllerMessage::GetPositionResponse(position) => {
+                        if let Some(sender) = position_response.lock().unwrap().take() {
+                            sender.send(position).unwrap();
+                        }
+                    }
+                    ToControllerMessage::GetMaximizedResponse(maximized) => {
+                        if let Some(sender) = maximized_response.lock().unwrap().take() {
+                            sender.send(maximized).unwrap();
+                        }
+                    }
+                    ToControllerMessage::GetMinimizedResponse(minimized) => {
+                        if let Some(sender) = minimized_response.lock().unwrap().take() {
+                            sender.send(minimized).unwrap();
+                        }
+                    }
+                    ToControllerMessage::GetFullscreenResponse(fullscreen) => {
+                        if let Some(sender) = fullscreen_response.lock().unwrap().take() {
+                            sender.send(fullscreen).unwrap();
+                        }
+                    }
+                    ToControllerMessage::GetVisibleResponse(visible) => {
+                        if let Some(sender) = visible_response.lock().unwrap().take() {
+                            sender.send(visible).unwrap();
                         }
                     }
                     _ => {}
@@ -233,8 +276,80 @@ impl VersoviewController {
         Ok(())
     }
 
-    /// Add init script to run on document started to load
-    pub fn add_init_script(&self, script: String) -> Result<(), Box<ipc_channel::ErrorKind>> {
-        self.sender.send(ToVersoMessage::AddInitScript(script))
+    /// Get the window's size
+    pub fn get_size(&self) -> Result<PhysicalSize<u32>, Box<ipc_channel::ErrorKind>> {
+        self.sender.send(ToVersoMessage::GetSize)?;
+        let (sender, receiver) = std::sync::mpsc::channel();
+        self.event_listeners
+            .size_response
+            .lock()
+            .unwrap()
+            .replace(sender);
+        Ok(receiver.recv().unwrap())
     }
+
+    /// Get the window's position
+    pub fn get_position(&self) -> Result<PhysicalPosition<i32>, Box<ipc_channel::ErrorKind>> {
+        self.sender.send(ToVersoMessage::GetPosition)?;
+        let (sender, receiver) = std::sync::mpsc::channel();
+        self.event_listeners
+            .position_response
+            .lock()
+            .unwrap()
+            .replace(sender);
+        Ok(receiver.recv().unwrap())
+    }
+
+    /// Get if the window is currently maximized or not
+    pub fn is_maximized(&self) -> Result<bool, Box<ipc_channel::ErrorKind>> {
+        self.sender.send(ToVersoMessage::GetPosition)?;
+        let (sender, receiver) = std::sync::mpsc::channel();
+        self.event_listeners
+            .maximized_response
+            .lock()
+            .unwrap()
+            .replace(sender);
+        Ok(receiver.recv().unwrap())
+    }
+
+    /// Get if the window is currently minimized or not
+    pub fn is_minimized(&self) -> Result<bool, Box<ipc_channel::ErrorKind>> {
+        self.sender.send(ToVersoMessage::GetMinimized)?;
+        let (sender, receiver) = std::sync::mpsc::channel();
+        self.event_listeners
+            .minimized_response
+            .lock()
+            .unwrap()
+            .replace(sender);
+        Ok(receiver.recv().unwrap())
+    }
+
+    /// Get if the window is currently fullscreen or not
+    pub fn is_fullscreen(&self) -> Result<bool, Box<ipc_channel::ErrorKind>> {
+        self.sender.send(ToVersoMessage::GetFullscreen)?;
+        let (sender, receiver) = std::sync::mpsc::channel();
+        self.event_listeners
+            .fullscreen_response
+            .lock()
+            .unwrap()
+            .replace(sender);
+        Ok(receiver.recv().unwrap())
+    }
+
+    /// Get the visibility of the window
+    pub fn is_visible(&self) -> Result<bool, Box<ipc_channel::ErrorKind>> {
+        self.sender.send(ToVersoMessage::GetVisible)?;
+        let (sender, receiver) = std::sync::mpsc::channel();
+        self.event_listeners
+            .visible_response
+            .lock()
+            .unwrap()
+            .replace(sender);
+        Ok(receiver.recv().unwrap())
+    }
+
+    // /// Add init script to run on document started to load
+    // pub fn add_init_script(&self, script: String) -> Result<(), Box<ipc_channel::ErrorKind>> {
+    //     self.sender.send(ToVersoMessage::AddInitScript(script))
+    // }
 }

@@ -736,6 +736,68 @@ impl Verso {
                     window.window.set_visible(visible);
                 }
             }
+            ToVersoMessage::GetSize => {
+                if let Some((window, _)) = self.windows.values_mut().next() {
+                    if let Err(error) = self.to_controller_sender.as_ref().unwrap().send(
+                        ToControllerMessage::GetSizeResponse(window.window.inner_size()),
+                    ) {
+                        log::error!("Verso failed to send GetSizeReponse to controller: {error}")
+                    }
+                }
+            }
+            ToVersoMessage::GetPosition => {
+                if let Some((window, _)) = self.windows.values_mut().next() {
+                    if let Err(error) = self.to_controller_sender.as_ref().unwrap().send(
+                        ToControllerMessage::GetPositionResponse(
+                            window.window.inner_position().unwrap(),
+                        ),
+                    ) {
+                        log::error!("Verso failed to send GetPosition to controller: {error}")
+                    }
+                }
+            }
+            ToVersoMessage::GetMinimized => {
+                if let Some((window, _)) = self.windows.values_mut().next() {
+                    if let Err(error) = self.to_controller_sender.as_ref().unwrap().send(
+                        ToControllerMessage::GetMinimizedResponse(
+                            window.window.is_minimized().unwrap(),
+                        ),
+                    ) {
+                        log::error!("Verso failed to send GetMinimized to controller: {error}")
+                    }
+                }
+            }
+            ToVersoMessage::GetMaximized => {
+                if let Some((window, _)) = self.windows.values_mut().next() {
+                    if let Err(error) = self.to_controller_sender.as_ref().unwrap().send(
+                        ToControllerMessage::GetMaximizedResponse(window.window.is_maximized()),
+                    ) {
+                        log::error!("Verso failed to send GetMaximized to controller: {error}")
+                    }
+                }
+            }
+            ToVersoMessage::GetFullscreen => {
+                if let Some((window, _)) = self.windows.values_mut().next() {
+                    if let Err(error) = self.to_controller_sender.as_ref().unwrap().send(
+                        ToControllerMessage::GetFullscreenResponse(
+                            window.window.fullscreen().is_some(),
+                        ),
+                    ) {
+                        log::error!("Verso failed to send GetFullscreen to controller: {error}")
+                    }
+                }
+            }
+            ToVersoMessage::GetVisible => {
+                if let Some((window, _)) = self.windows.values_mut().next() {
+                    if let Err(error) = self.to_controller_sender.as_ref().unwrap().send(
+                        ToControllerMessage::GetVisibleResponse(
+                            window.window.is_visible().unwrap_or(true),
+                        ),
+                    ) {
+                        log::error!("Verso failed to send GetVisible to controller: {error}")
+                    }
+                }
+            }
             _ => {}
         }
     }
