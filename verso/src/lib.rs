@@ -40,6 +40,7 @@ pub struct VersoviewSettings {
     pub size: Option<PhysicalSize<u32>>,
     pub position: Option<PhysicalPosition<i32>>,
     pub maximized: bool,
+    pub resources_directory: Option<String>,
     pub userscripts_directory: Option<String>,
 }
 
@@ -76,6 +77,10 @@ impl VersoviewController {
             command.arg("--no-maximized");
         }
 
+        if let Some(resources_directory) = settings.resources_directory {
+            command.arg("--resources");
+            command.arg(resources_directory);
+        }
         if let Some(userscripts_directory) = settings.userscripts_directory {
             command.arg("--userscripts-directory");
             command.arg(userscripts_directory);
