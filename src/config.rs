@@ -200,7 +200,9 @@ fn parse_cli_args() -> Result<CliArgs, getopts::Fail> {
     // set min inner size
     // should be at least able to show the whole control panel
     // FIXME: url input has weird behavior that will expand lager when having long text
-    window_attributes = window_attributes.with_min_inner_size(dpi::LogicalSize::new(480, 72));
+    if !no_panel {
+        window_attributes = window_attributes.with_min_inner_size(dpi::LogicalSize::new(480, 72));
+    }
 
     let width = matches.opt_get::<u32>("width").unwrap_or_else(|e| {
         log::error!("Failed to parse width command line argument: {e}");
