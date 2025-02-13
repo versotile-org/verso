@@ -753,7 +753,7 @@ impl Verso {
             }
             ToVersoMessage::StartDragging => {
                 if let Some((window, _)) = self.windows.values_mut().next() {
-                    let _ = dbg!(window.window.drag_window());
+                    let _ = window.window.drag_window();
                 }
             }
             ToVersoMessage::GetSize => {
