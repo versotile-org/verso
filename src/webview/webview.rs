@@ -3,8 +3,7 @@ use base::id::WebViewId;
 use compositing_traits::ConstellationMsg;
 use crossbeam_channel::Sender;
 use embedder_traits::{
-    CompositorEventVariant, EmbedderMsg, LoadStatus, PermissionPrompt, PermissionRequest,
-    PromptCredentialsInput, PromptDefinition, PromptResult, TraversalDirection,
+    AllowOrDeny, EmbedderMsg, LoadStatus, PromptDefinition, PromptResult, TraversalDirection,
 };
 use ipc_channel::ipc;
 use script_traits::webdriver_msg::{WebDriverJSResult, WebDriverScriptCommand};
@@ -82,6 +81,7 @@ impl Window {
             }
             EmbedderMsg::WebViewBlurred => {
                 self.focused_webview_id = None;
+                self.close_context_menu(sender);
             }
             EmbedderMsg::WebViewFocused(w) => {
                 self.focused_webview_id = Some(webview_id);
@@ -218,11 +218,6 @@ impl Window {
                     );
                 }
             }
-            EmbedderMsg::EventDelivered(_webview_id, event) => {
-                if let CompositorEventVariant::MouseButtonEvent = event {
-                    send_to_constellation(sender, ConstellationMsg::FocusWebView(webview_id));
-                }
-            }
             EmbedderMsg::ShowContextMenu(_webview_id, _sender, _title, _options) => {
                 // TODO: Implement context menu
             }
@@ -240,9 +235,6 @@ impl Window {
                         PromptDefinition::Input(message, default_value, prompt_sender) => {
                             prompt.input(sender, rect, message, Some(default_value), prompt_sender);
                         }
-                        PromptDefinition::Credentials(prompt_sender) => {
-                            prompt.http_basic_auth(sender, rect, prompt_sender);
-                        }
                     }
 
                     // save prompt in window to keep prompt_sender alive
@@ -252,30 +244,30 @@ impl Window {
                     log::error!("Failed to get WebView {webview_id:?} in this window.");
                 }
             }
-            EmbedderMsg::PromptPermission(_webview_id, prompt, prompt_sender) => {
+            EmbedderMsg::PromptPermission(_webview_id, feature, prompt_sender) => {
                 if let Some(tab) = self.tab_manager.tab(webview_id) {
-                    let message = match prompt {
-                        PermissionPrompt::Request(permission_name) => {
-                            format!(
-                                "This website would like to request permission for {:?}.",
-                                permission_name
-                            )
-                        }
-                        PermissionPrompt::Insecure(permission_name) => {
-                            format!(
-                                "This website would like to request permission for {:?}. However current connection is not secure. Do you want to proceed?",
-                                permission_name
-                            )
-                        }
-                    };
+                    let message = format!(
+                        "This website would like to request permission for {:?}.",
+                        feature
+                    );
 
                     let mut prompt = PromptDialog::new();
-                    prompt.yes_no(
+                    prompt.allow_deny(
                         sender,
                         tab.webview().rect,
                         message,
-                        PromptSender::PermissionSender(prompt_sender),
+                        PromptSender::AllowDenySender(prompt_sender),
                     );
+                    self.tab_manager.set_prompt(webview_id, prompt);
+                } else {
+                    log::error!("Failed to get WebView {webview_id:?} in this window.");
+                }
+            }
+            EmbedderMsg::RequestAuthentication(_webview_id, _url, _proxy, response_sender) => {
+                if let Some(tab) = self.tab_manager.tab(webview_id) {
+                    let mut prompt = PromptDialog::new();
+                    let rect = tab.webview().rect;
+                    prompt.http_basic_auth(sender, rect, response_sender);
                     self.tab_manager.set_prompt(webview_id, prompt);
                 } else {
                     log::error!("Failed to get WebView {webview_id:?} in this window.");
@@ -304,6 +296,7 @@ impl Window {
             }
             EmbedderMsg::WebViewBlurred => {
                 self.focused_webview_id = None;
+                self.close_context_menu(sender);
             }
             EmbedderMsg::WebViewFocused(webview_id) => {
                 self.focused_webview_id = Some(webview_id);
@@ -487,11 +480,6 @@ impl Window {
                     }
                 }
             }
-            EmbedderMsg::EventDelivered(_webview_id, event) => {
-                if let CompositorEventVariant::MouseButtonEvent = event {
-                    send_to_constellation(sender, ConstellationMsg::FocusWebView(panel_id));
-                }
-            }
             e => {
                 log::trace!("Verso Panel isn't supporting this message yet: {e:?}")
             }
@@ -600,40 +588,35 @@ impl Window {
                                 let _ = sender.send(None);
                             }
                         }
-                        PromptSender::PermissionSender(sender) => {
-                            let result: PermissionRequest = match msg.as_str() {
-                                "ok" | "yes" => PermissionRequest::Granted,
-                                "cancel" | "no" => PermissionRequest::Denied,
+                        PromptSender::AllowDenySender(sender) => {
+                            let result: AllowOrDeny = match msg.as_str() {
+                                "ok" | "yes" => AllowOrDeny::Allow,
+                                "cancel" | "no" => AllowOrDeny::Deny,
                                 _ => {
                                     log::error!("prompt result message invalid: {msg}");
-                                    PermissionRequest::Denied
+                                    AllowOrDeny::Deny
                                 }
                             };
                             let _ = sender.send(result);
                         }
                         PromptSender::HttpBasicAuthSender(sender) => {
-                            let canceled_auth = PromptCredentialsInput {
-                                username: None,
-                                password: None,
-                            };
-
                             if let Ok(HttpBasicAuthInputResult { action, auth }) =
                                 serde_json::from_str::<HttpBasicAuthInputResult>(&msg)
                             {
                                 match action.as_str() {
                                     "signin" => {
-                                        let _ = sender.send(auth);
+                                        let _ = sender.send(Some(auth));
                                     }
                                     "cancel" => {
-                                        let _ = sender.send(canceled_auth);
+                                        let _ = sender.send(None);
                                     }
                                     _ => {
-                                        let _ = sender.send(canceled_auth);
+                                        let _ = sender.send(None);
                                     }
                                 };
                             } else {
                                 log::error!("prompt result message invalid: {msg}");
-                                let _ = sender.send(canceled_auth);
+                                let _ = sender.send(None);
                             }
                         }
                     }

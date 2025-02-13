@@ -539,7 +539,6 @@ impl Verso {
                             //         window.0.set_cursor_icon(cursor);
                             //     }
                             // }
-                            EmbedderMsg::ReadyToPresent(_) => {}
                             EmbedderMsg::RequestDevtoolsConnection(sender) => {
                                 if let Err(err) = sender.send(true) {
                                     log::error!("Failed to send RequestDevtoolsConnection response back: {err}");
@@ -593,6 +592,7 @@ impl Verso {
             EmbedderMsg::MoveTo(webview_id, _) => Some(webview_id),
             EmbedderMsg::ResizeTo(webview_id, _) => Some(webview_id),
             EmbedderMsg::Prompt(webview_id, _, _) => Some(webview_id),
+            EmbedderMsg::RequestAuthentication(webview_id, ..) => Some(webview_id),
             EmbedderMsg::ShowContextMenu(webview_id, _, _, _) => Some(webview_id),
             EmbedderMsg::AllowNavigationRequest(webview_id, _, _) => Some(webview_id),
             EmbedderMsg::AllowOpeningWebView(webview_id, _) => Some(webview_id),
@@ -621,8 +621,6 @@ impl Verso {
             EmbedderMsg::MediaSessionEvent(webview_id, _) => Some(webview_id),
             EmbedderMsg::OnDevtoolsStarted(_, _) => None,
             EmbedderMsg::RequestDevtoolsConnection(_) => None,
-            EmbedderMsg::ReadyToPresent(_) => None, // TODO: check if we need dispatch this message to each window
-            EmbedderMsg::EventDelivered(webview_id, _) => Some(webview_id),
             EmbedderMsg::PlayGamepadHapticEffect(webview_id, _, _, _) => Some(webview_id),
             EmbedderMsg::StopGamepadHapticEffect(webview_id, _, _) => Some(webview_id),
         }

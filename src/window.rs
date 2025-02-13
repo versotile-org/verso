@@ -4,8 +4,8 @@ use base::id::WebViewId;
 use compositing_traits::ConstellationMsg;
 use crossbeam_channel::Sender;
 use embedder_traits::{
-    Cursor, EmbedderMsg, MouseButton, PermissionRequest, PromptCredentialsInput, PromptResult,
-    TouchEventType, TraversalDirection, WebResourceResponseMsg, WheelDelta, WheelMode,
+    AllowOrDeny, Cursor, EmbedderMsg, InputEvent, MouseButton, MouseButtonAction, MouseButtonEvent,
+    MouseMoveEvent, PromptResult, TouchEventAction, TraversalDirection, WebResourceResponseMsg, WheelMode,
 };
 use euclid::{Point2D, Size2D};
 use glutin::{
@@ -37,7 +37,7 @@ use winit::{
 };
 
 use crate::{
-    compositor::{IOCompositor, MouseWindowEvent},
+    compositor::IOCompositor,
     keyboard::keyboard_event_from_winit,
     rendering::{gl_config_picker, RenderingContext},
     tab::TabManager,
@@ -388,9 +388,13 @@ impl Window {
                 self.mouse_position.set(None);
             }
             WindowEvent::CursorMoved { position, .. } => {
-                let cursor: DevicePoint = DevicePoint::new(position.x as f32, position.y as f32);
+                let point: DevicePoint = DevicePoint::new(position.x as f32, position.y as f32);
                 self.mouse_position.set(Some(*position));
-                compositor.on_mouse_window_move_event_class(cursor);
+                forward_input_event(
+                    compositor,
+                    sender,
+                    InputEvent::MouseMove(MouseMoveEvent { point }),
+                );
 
                 // handle Windows and Linux non-decoration window resize cursor
                 #[cfg(any(linux, target_os = "windows"))]
@@ -402,8 +406,8 @@ impl Window {
                 }
             }
             WindowEvent::MouseInput { state, button, .. } => {
-                let position = match self.mouse_position.get() {
-                    Some(position) => Point2D::new(position.x as f32, position.y as f32),
+                let point = match self.mouse_position.get() {
+                    Some(point) => Point2D::new(point.x as f32, point.y as f32),
                     None => {
                         log::trace!("Mouse position is None, skipping MouseInput event.");
                         return;
@@ -448,11 +452,11 @@ impl Window {
                 /* handle Windows and Linux non-decoration window resize */
                 #[cfg(any(linux, target_os = "windows"))]
                 {
-                    if *state == ElementState::Pressed && *button == winit::event::MouseButton::Left
+                    if *state == ElementState::Pressed
+                        && *button == winit::event::MouseButton::Left
+                        && self.is_resizable()
                     {
-                        if self.is_resizable() {
-                            self.drag_resize_window();
-                        }
+                        self.drag_resize_window();
                     }
                 }
 
@@ -470,27 +474,39 @@ impl Window {
                     }
                 };
 
-                let event: MouseWindowEvent = match state {
-                    ElementState::Pressed => MouseWindowEvent::MouseDown(button, position),
+                let event: MouseButtonEvent = match state {
+                    ElementState::Pressed => MouseButtonEvent {
+                        point,
+                        action: MouseButtonAction::Down,
+                        button,
+                    },
                     ElementState::Released => {
                         self.resizing = false;
-                        MouseWindowEvent::MouseUp(button, position)
+                        MouseButtonEvent {
+                            point,
+                            action: MouseButtonAction::Up,
+                            button,
+                        }
                     }
                 };
-                compositor.on_mouse_window_event_class(event);
+                forward_input_event(compositor, sender, InputEvent::MouseButton(event));
 
                 // Winit didn't send click event, so we send it after mouse up
                 if *state == ElementState::Released {
-                    let event: MouseWindowEvent = MouseWindowEvent::Click(button, position);
-                    compositor.on_mouse_window_event_class(event);
+                    let event: MouseButtonEvent = MouseButtonEvent {
+                        point,
+                        action: MouseButtonAction::Click,
+                        button,
+                    };
+                    forward_input_event(compositor, sender, InputEvent::MouseButton(event));
                 }
             }
             WindowEvent::PinchGesture { delta, .. } => {
                 compositor.on_zoom_window_event(1.0 + *delta as f32, self);
             }
             WindowEvent::MouseWheel { delta, phase, .. } => {
-                let position = match self.mouse_position.get() {
-                    Some(position) => position,
+                let point = match self.mouse_position.get() {
+                    Some(point) => point,
                     None => {
                         log::trace!("Mouse position is None, skipping MouseWheel event.");
                         return;
@@ -500,7 +516,7 @@ impl Window {
                 // FIXME: Pixels per line, should be configurable (from browser setting?) and vary by zoom level.
                 const LINE_HEIGHT: f32 = 38.0;
 
-                let (mut x, mut y, mode) = match delta {
+                let (mut x, mut y, _mode) = match delta {
                     winit::event::MouseScrollDelta::LineDelta(x, y) => {
                         (*x as f64, (*y * LINE_HEIGHT) as f64, WheelMode::DeltaLine)
                     }
@@ -510,12 +526,6 @@ impl Window {
                     }
                 };
 
-                // Wheel Event
-                compositor.on_wheel_event(
-                    WheelDelta { x, y, z: 0.0, mode },
-                    DevicePoint::new(position.x as f32, position.y as f32),
-                );
-
                 // Scroll Event
                 // Do one axis at a time.
                 if y.abs() >= x.abs() {
@@ -524,16 +534,16 @@ impl Window {
                     y = 0.0;
                 }
 
-                let phase: TouchEventType = match phase {
-                    TouchPhase::Started => TouchEventType::Down,
-                    TouchPhase::Moved => TouchEventType::Move,
-                    TouchPhase::Ended => TouchEventType::Up,
-                    TouchPhase::Cancelled => TouchEventType::Cancel,
+                let phase: TouchEventAction = match phase {
+                    TouchPhase::Started => TouchEventAction::Down,
+                    TouchPhase::Moved => TouchEventAction::Move,
+                    TouchPhase::Ended => TouchEventAction::Up,
+                    TouchPhase::Cancelled => TouchEventAction::Cancel,
                 };
 
                 compositor.on_scroll_event(
                     ScrollLocation::Delta(LayoutVector2D::new(x as f32, y as f32)),
-                    DeviceIntPoint::new(position.x as i32, position.y as i32),
+                    DeviceIntPoint::new(point.x as i32, point.y as i32),
                     phase,
                 );
             }
@@ -561,8 +571,7 @@ impl Window {
                 if self.handle_keyboard_shortcut(compositor, &event) {
                     return;
                 }
-                let msg = ConstellationMsg::Keyboard(webview_id, event);
-                send_to_constellation(sender, msg);
+                forward_input_event(compositor, sender, InputEvent::Keyboard(event));
             }
             e => log::trace!("Verso Window isn't supporting this window event yet: {e:?}"),
         }
@@ -957,14 +966,11 @@ impl Window {
                 PromptSender::InputSender(sender) => {
                     let _ = sender.send(None);
                 }
-                PromptSender::PermissionSender(sender) => {
-                    let _ = sender.send(PermissionRequest::Denied);
+                PromptSender::AllowDenySender(sender) => {
+                    let _ = sender.send(AllowOrDeny::Deny);
                 }
                 PromptSender::HttpBasicAuthSender(sender) => {
-                    let _ = sender.send(PromptCredentialsInput {
-                        username: None,
-                        password: None,
-                    });
+                    let _ = sender.send(None);
                 }
             }
         }
@@ -1087,4 +1093,21 @@ pub unsafe fn decorate_window(view: *mut AnyObject, _position: LogicalPosition<f
             | NSWindowStyleMask::Resizable
             | NSWindowStyleMask::Miniaturizable,
     );
+}
+
+/// Forward input event to compositor or constellation.
+fn forward_input_event(
+    compositor: &mut IOCompositor,
+    constellation_proxy: &Sender<ConstellationMsg>,
+    event: InputEvent,
+) {
+    // Events with a `point` first go to the compositor for hit testing.
+    if event.point().is_some() {
+        compositor.on_input_event(event);
+        return;
+    }
+
+    let _ = constellation_proxy.send(ConstellationMsg::ForwardInputEvent(
+        event, None, /* hit_test */
+    ));
 }
