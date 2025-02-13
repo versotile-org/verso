@@ -1,6 +1,6 @@
 id: org.versotile.verso
 runtime: org.freedesktop.Platform
-runtime-version: '23.08'
+runtime-version: '24.08'
 sdk: org.freedesktop.Sdk
 sdk-extensions:
   - org.freedesktop.Sdk.Extension.rust-stable
@@ -48,8 +48,8 @@ modules:
         path: .
       - type: file
         # Update the link whenever mozjs-sys is updated
-        url: https://github.com/servo/mozjs/releases/download/mozjs-sys-v0.128.3-5/libmozjs-x86_64-unknown-linux-gnu.tar.gz
-        sha256: c196c1078dbe8c3953a5368c2c99f20043e0b626706adb24a452ffbda6196bfb
+        url: https://github.com/servo/mozjs/releases/download/mozjs-sys-v0.128.6-1/libmozjs-x86_64-unknown-linux-gnu.tar.gz
+        sha256: 024e90c6b8573aaa57b2685dc9c4da16b0bbce98147806b85c09c6fd1e134a5d
         only-arches:
           - x86_64
 
