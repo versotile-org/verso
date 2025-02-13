@@ -542,7 +542,7 @@ impl Verso {
                             EmbedderMsg::ReadyToPresent(_) => {}
                             EmbedderMsg::RequestDevtoolsConnection(sender) => {
                                 if let Err(err) = sender.send(true) {
-                                    log::error!("Failed to send RequestDevtoolsConnection respond back: {err}");
+                                    log::error!("Failed to send RequestDevtoolsConnection response back: {err}");
                                 }
                             }
                             e => {
