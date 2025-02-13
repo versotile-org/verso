@@ -1,7 +1,7 @@
 use base::id::WebViewId;
 use compositing_traits::ConstellationMsg;
 use crossbeam_channel::Sender;
-use embedder_traits::{PermissionRequest, PromptCredentialsInput, PromptResult};
+use embedder_traits::{AllowOrDeny, AuthenticationResponse, PromptResult};
 use ipc_channel::ipc::IpcSender;
 use serde::{Deserialize, Serialize};
 use servo_url::ServoUrl;
@@ -20,10 +20,10 @@ enum PromptType {
     ///
     /// <https://developer.mozilla.org/en-US/docs/Web/API/Window/confirm>
     OkCancel(String),
-    /// Confirm dialog, Yes/No
+    /// Confirm dialog, Allow/Deny
     ///
     /// <https://developer.mozilla.org/en-US/docs/Web/API/Window/confirm>
-    YesNo(String),
+    AllowDeny(String),
     /// Input dialog
     ///
     /// <https://developer.mozilla.org/en-US/docs/Web/API/Window/prompt>
@@ -43,10 +43,10 @@ pub enum PromptSender {
     ConfirmSender(IpcSender<PromptResult>),
     /// Input sender
     InputSender(IpcSender<Option<String>>),
-    /// Yes/No Permission sender
-    PermissionSender(IpcSender<PermissionRequest>),
+    /// Allow/Deny Permission sender
+    AllowDenySender(IpcSender<AllowOrDeny>),
     /// HTTP basic authentication sender
-    HttpBasicAuthSender(IpcSender<PromptCredentialsInput>),
+    HttpBasicAuthSender(IpcSender<Option<AuthenticationResponse>>),
 }
 
 /// Prompt input result send from prompt dialog to backend
@@ -78,7 +78,7 @@ pub struct HttpBasicAuthInputResult {
     /// User action: "signin" / "cancel"
     pub action: String,
     /// User input value
-    pub auth: PromptCredentialsInput,
+    pub auth: AuthenticationResponse,
 }
 
 /// Prompt Dialog
@@ -177,12 +177,12 @@ impl PromptDialog {
     ///
     /// ```rust
     /// let mut prompt = PromptDialog::new();
-    /// prompt.yes_no(sender, rect, message, prompt_sender);
-    /// if let Some(PromptSender::PermissionSender(sender)) = prompt.sender() {
-    ///     let _ = sender.send(PermissionRequest::Granted);
+    /// prompt.allow_deny(sender, rect, message, prompt_sender);
+    /// if let Some(PromptSender::AllowDenySender(sender)) = prompt.sender() {
+    ///     let _ = sender.send(AllowOrDeny::Allow);
     /// }
     /// ```
-    pub fn yes_no(
+    pub fn allow_deny(
         &mut self,
         sender: &Sender<ConstellationMsg>,
         rect: DeviceIntRect,
@@ -190,7 +190,7 @@ impl PromptDialog {
         prompt_sender: PromptSender,
     ) {
         self.prompt_sender = Some(prompt_sender);
-        self.show(sender, rect, PromptType::YesNo(message));
+        self.show(sender, rect, PromptType::AllowDeny(message));
     }
 
     /// Show input prompt
@@ -226,7 +226,7 @@ impl PromptDialog {
     ///
     /// ```rust
     /// if let Some(PromptSender::HttpBasicAuthSender(sender)) = prompt.sender() {
-    ///     let _ = sender.send(PromptCredentialsInput {
+    ///     let _ = sender.send(AuthenticationResponse {
     ///         username: "user".to_string(),
     ///         password: "password".to_string(),
     ///     });
@@ -236,7 +236,7 @@ impl PromptDialog {
         &mut self,
         sender: &Sender<ConstellationMsg>,
         rect: DeviceIntRect,
-        prompt_sender: IpcSender<PromptCredentialsInput>,
+        prompt_sender: IpcSender<Option<AuthenticationResponse>>,
     ) {
         self.prompt_sender = Some(PromptSender::HttpBasicAuthSender(prompt_sender));
         self.show(sender, rect, PromptType::HttpBasicAuth);
@@ -263,7 +263,7 @@ impl PromptDialog {
             PromptType::OkCancel(msg) => {
                 format!("verso://resources/components/prompt/ok_cancel.html?msg={msg}")
             }
-            PromptType::YesNo(msg) => {
+            PromptType::AllowDeny(msg) => {
                 format!("verso://resources/components/prompt/yes_no.html?msg={msg}")
             }
             PromptType::Input(msg, default_value) => {
