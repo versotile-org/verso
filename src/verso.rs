@@ -14,7 +14,7 @@ use constellation::{Constellation, FromCompositorLogger, InitialConstellationSta
 use crossbeam_channel::{unbounded, Receiver, Sender};
 use devtools;
 use embedder_traits::{
-    EmbedderMsg, EmbedderProxy, EventLoopWaker, HttpBodyData, WebResourceResponse,
+    AllowOrDeny, EmbedderMsg, EmbedderProxy, EventLoopWaker, HttpBodyData, WebResourceResponse,
     WebResourceResponseMsg,
 };
 use euclid::Scale;
@@ -540,7 +540,7 @@ impl Verso {
                             //     }
                             // }
                             EmbedderMsg::RequestDevtoolsConnection(sender) => {
-                                if let Err(err) = sender.send(true) {
+                                if let Err(err) = sender.send(AllowOrDeny::Allow) {
                                     log::error!("Failed to send RequestDevtoolsConnection response back: {err}");
                                 }
                             }
