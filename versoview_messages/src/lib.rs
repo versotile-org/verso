@@ -15,9 +15,13 @@ type SerializedPipelineId = Vec<u8>;
 pub enum ToVersoMessage {
     /// Exit
     Exit,
+    /// Register a listener on versoview for getting notified on close requested from the OS,
+    /// veroview will send a [`ToControllerMessage::OnCloseRequested`] when that happens
+    ListenToOnCloseRequested,
     /// Navigate to this URL
     NavigateTo(url::Url),
-    /// Register a listener on versoview for getting notified on navigation starting
+    /// Register a listener on versoview for getting notified on navigation starting,
+    /// veroview will send a [`ToControllerMessage::OnNavigationStarting`] when that happens
     ListenToOnNavigationStarting,
     /// Response to a [`ToControllerMessage::OnNavigationStarting`] message from versoview
     OnNavigationStartingResponse(SerializedPipelineId, bool),
@@ -77,6 +81,8 @@ pub enum ToControllerMessage {
     GetFullscreenResponse(bool),
     /// Response to a [`ToVersoMessage::GetVisible`]
     GetVisibleResponse(bool),
+    /// Verso have recieved a close request from the OS
+    OnCloseRequested,
 }
 
 #[derive(Debug, Serialize, Deserialize)]

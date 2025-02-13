@@ -9,7 +9,7 @@ url = { version = "2.5.2", features = ["serde"] }
 log = "0.4"
 headers = "0.4"
 http = "1"
-uuid = { version = "1", features = ["v4"] }
+uuid = { version = "1", features = ["v4", "serde"] }
 dpi = { version = "0.1", features = ["serde"] }
 
 [package]

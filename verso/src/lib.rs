@@ -3,7 +3,7 @@ use log::error;
 use std::{
     path::Path,
     process::Command,
-    sync::{Arc, Mutex},
+    sync::{mpsc::Sender as MpscSender, Arc, Mutex},
 };
 use versoview_messages::{
     ToControllerMessage, ToVersoMessage, WebResourceRequest, WebResourceRequestResponse,
@@ -15,18 +15,20 @@ use ipc_channel::{
 };
 
 type ResponseFunction = Box<dyn FnOnce(Option<http::Response<Vec<u8>>>) + Send>;
+type Listener<T> = Arc<Mutex<Option<T>>>;
 
 #[derive(Default)]
 struct EventListeners {
-    on_navigation_starting: Arc<Mutex<Option<Box<dyn Fn(url::Url) -> bool + Send + 'static>>>>,
+    on_close_requested: Listener<Box<dyn Fn() + Send + 'static>>,
+    on_navigation_starting: Listener<Box<dyn Fn(url::Url) -> bool + Send + 'static>>,
     on_web_resource_requested:
-        Arc<Mutex<Option<Box<dyn Fn(WebResourceRequest, ResponseFunction) + Send + 'static>>>>,
-    size_response: Arc<Mutex<Option<std::sync::mpsc::Sender<PhysicalSize<u32>>>>>,
-    position_response: Arc<Mutex<Option<std::sync::mpsc::Sender<PhysicalPosition<i32>>>>>,
-    maximized_response: Arc<Mutex<Option<std::sync::mpsc::Sender<bool>>>>,
-    minimized_response: Arc<Mutex<Option<std::sync::mpsc::Sender<bool>>>>,
-    fullscreen_response: Arc<Mutex<Option<std::sync::mpsc::Sender<bool>>>>,
-    visible_response: Arc<Mutex<Option<std::sync::mpsc::Sender<bool>>>>,
+        Listener<Box<dyn Fn(WebResourceRequest, ResponseFunction) + Send + 'static>>,
+    size_response: Listener<MpscSender<PhysicalSize<u32>>>,
+    position_response: Listener<MpscSender<PhysicalPosition<i32>>>,
+    maximized_response: Listener<MpscSender<bool>>,
+    minimized_response: Listener<MpscSender<bool>>,
+    fullscreen_response: Listener<MpscSender<bool>>,
+    visible_response: Listener<MpscSender<bool>>,
 }
 
 pub struct VersoviewController {
@@ -98,6 +100,7 @@ impl VersoviewController {
         };
 
         let event_listeners = EventListeners::default();
+        let on_close_requested = event_listeners.on_close_requested.clone();
         let on_navigation_starting = event_listeners.on_navigation_starting.clone();
         let on_web_resource_requested = event_listeners.on_web_resource_requested.clone();
         let size_response = event_listeners.size_response.clone();
@@ -111,6 +114,11 @@ impl VersoviewController {
             receiver,
             Box::new(move |message| match message {
                 Ok(message) => match message {
+                    ToControllerMessage::OnCloseRequested => {
+                        if let Some(ref callback) = *on_close_requested.lock().unwrap() {
+                            callback();
+                        }
+                    }
                     ToControllerMessage::OnNavigationStarting(id, url) => {
                         if let Some(ref callback) = *on_navigation_starting.lock().unwrap() {
                             if let Err(error) = send_clone.send(
@@ -196,6 +204,27 @@ impl VersoviewController {
     /// Exit
     pub fn exit(&self) -> Result<(), Box<ipc_channel::ErrorKind>> {
         self.sender.send(ToVersoMessage::Exit)
+    }
+
+    /// Listen on close requested from the OS,
+    /// if you decide to use it, verso will not close the window by itself anymore,
+    /// so make sure you handle it properly by either do your own logic or call [`Self::exit`] as a fallback
+    pub fn on_close_requested(
+        &self,
+        callback: impl Fn() + Send + 'static,
+    ) -> Result<(), Box<ipc_channel::ErrorKind>> {
+        if self
+            .event_listeners
+            .on_close_requested
+            .lock()
+            .unwrap()
+            .replace(Box::new(callback))
+            .is_some()
+        {
+            return Ok(());
+        }
+        self.sender.send(ToVersoMessage::ListenToOnCloseRequested)?;
+        Ok(())
     }
 
     /// Execute script

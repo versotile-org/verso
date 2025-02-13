@@ -63,6 +63,8 @@ pub(crate) struct EventListeners {
     /// A id to request response sender map if the controller wants to get and handle web resource requests
     pub(crate) on_web_resource_requested:
         Option<HashMap<uuid::Uuid, (ServoUrl, IpcSender<WebResourceResponseMsg>)>>,
+    /// This is `true` if the controller wants to get and handle WindowEvent::CloseRequested
+    pub(crate) on_close_requested: bool,
 }
 
 /// A Verso window is a Winit window containing several web views.

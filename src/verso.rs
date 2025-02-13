@@ -452,14 +452,29 @@ impl Verso {
     fn handle_winit_window_event(&mut self, window_id: WindowId, event: WindowEvent) -> bool {
         log::trace!("Verso is handling Winit event: {event:?}");
         if let Some(compositor) = &mut self.compositor {
-            if let WindowEvent::CloseRequested = event {
-                // self.windows.remove(&window_id);
-                compositor.maybe_start_shutting_down();
-            } else if let Some(window) = self.windows.get_mut(&window_id) {
-                window
-                    .0
-                    .handle_winit_window_event(&self.constellation_sender, compositor, &event);
-                return window.0.resizing;
+            if let Some((window, _)) = self.windows.get_mut(&window_id) {
+                if let WindowEvent::CloseRequested = event {
+                    if let Some(to_controller_sender) = &self.to_controller_sender {
+                        if window.event_listeners.on_close_requested {
+                            if let Err(error) =
+                                to_controller_sender.send(ToControllerMessage::OnCloseRequested)
+                            {
+                                log::error!("Verso failed to send WebResourceRequested to controller: {error}")
+                            } else {
+                                return false;
+                            }
+                        }
+                    }
+                    // self.windows.remove(&window_id);
+                    compositor.maybe_start_shutting_down();
+                } else {
+                    window.handle_winit_window_event(
+                        &self.constellation_sender,
+                        compositor,
+                        &event,
+                    );
+                    return window.resizing;
+                }
             }
         }
 
@@ -631,6 +646,11 @@ impl Verso {
             ToVersoMessage::Exit => {
                 if let Some(compositor) = &mut self.compositor {
                     compositor.maybe_start_shutting_down();
+                }
+            }
+            ToVersoMessage::ListenToOnCloseRequested => {
+                if let Some((window, _)) = self.windows.values_mut().next() {
+                    window.event_listeners.on_close_requested = true;
                 }
             }
             ToVersoMessage::NavigateTo(to_url) => {
