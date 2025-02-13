@@ -772,7 +772,9 @@ impl Verso {
                             window.window.inner_position().unwrap(),
                         ),
                     ) {
-                        log::error!("Verso failed to send GetPosition to controller: {error}")
+                        log::error!(
+                            "Verso failed to send GetPositionResponse to controller: {error}"
+                        )
                     }
                 }
             }
@@ -783,7 +785,9 @@ impl Verso {
                             window.window.is_minimized().unwrap(),
                         ),
                     ) {
-                        log::error!("Verso failed to send GetMinimized to controller: {error}")
+                        log::error!(
+                            "Verso failed to send GetMinimizedResponse to controller: {error}"
+                        )
                     }
                 }
             }
@@ -792,7 +796,9 @@ impl Verso {
                     if let Err(error) = self.to_controller_sender.as_ref().unwrap().send(
                         ToControllerMessage::GetMaximizedResponse(window.window.is_maximized()),
                     ) {
-                        log::error!("Verso failed to send GetMaximized to controller: {error}")
+                        log::error!(
+                            "Verso failed to send GetMaximizedResponse to controller: {error}"
+                        )
                     }
                 }
             }
@@ -803,7 +809,9 @@ impl Verso {
                             window.window.fullscreen().is_some(),
                         ),
                     ) {
-                        log::error!("Verso failed to send GetFullscreen to controller: {error}")
+                        log::error!(
+                            "Verso failed to send GetFullscreenResponse to controller: {error}"
+                        )
                     }
                 }
             }
@@ -814,7 +822,20 @@ impl Verso {
                             window.window.is_visible().unwrap_or(true),
                         ),
                     ) {
-                        log::error!("Verso failed to send GetVisible to controller: {error}")
+                        log::error!(
+                            "Verso failed to send GetVisibleResponse to controller: {error}"
+                        )
+                    }
+                }
+            }
+            ToVersoMessage::GetScaleFactor => {
+                if let Some((window, _)) = self.windows.values_mut().next() {
+                    if let Err(error) = self.to_controller_sender.as_ref().unwrap().send(
+                        ToControllerMessage::GetScaleFactorResponse(window.window.scale_factor()),
+                    ) {
+                        log::error!(
+                            "Verso failed to send GetScaleFactorResponse to controller: {error}"
+                        )
                     }
                 }
             }

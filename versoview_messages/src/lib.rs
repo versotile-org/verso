@@ -57,6 +57,8 @@ pub enum ToVersoMessage {
     GetFullscreen,
     /// Get the visibility of the window, need a response with [`ToControllerMessage::GetVisibleResponse`]
     GetVisible,
+    /// Get the scale factor of the window, need a response with [`ToControllerMessage::GetScaleFactorResponse`]
+    GetScaleFactor,
 }
 
 /// Message sent from versoview to the controller
@@ -81,6 +83,8 @@ pub enum ToControllerMessage {
     GetFullscreenResponse(bool),
     /// Response to a [`ToVersoMessage::GetVisible`]
     GetVisibleResponse(bool),
+    /// Response to a [`ToVersoMessage::GetScaleFactor`]
+    GetScaleFactorResponse(f64),
     /// Verso have recieved a close request from the OS
     OnCloseRequested,
 }

@@ -29,6 +29,7 @@ struct EventListeners {
     minimized_response: Listener<MpscSender<bool>>,
     fullscreen_response: Listener<MpscSender<bool>>,
     visible_response: Listener<MpscSender<bool>>,
+    scale_factor_response: Listener<MpscSender<f64>>,
 }
 
 pub struct VersoviewController {
@@ -109,6 +110,7 @@ impl VersoviewController {
         let maximized_response = event_listeners.maximized_response.clone();
         let fullscreen_response = event_listeners.fullscreen_response.clone();
         let visible_response = event_listeners.visible_response.clone();
+        let scale_factor_response = event_listeners.scale_factor_response.clone();
         let send_clone = sender.clone();
         ROUTER.add_typed_route(
             receiver,
@@ -174,6 +176,11 @@ impl VersoviewController {
                     ToControllerMessage::GetVisibleResponse(visible) => {
                         if let Some(sender) = visible_response.lock().unwrap().take() {
                             sender.send(visible).unwrap();
+                        }
+                    }
+                    ToControllerMessage::GetScaleFactorResponse(scale_factor) => {
+                        if let Some(sender) = scale_factor_response.lock().unwrap().take() {
+                            sender.send(scale_factor).unwrap();
                         }
                     }
                     _ => {}
@@ -392,6 +399,18 @@ impl VersoviewController {
         let (sender, receiver) = std::sync::mpsc::channel();
         self.event_listeners
             .visible_response
+            .lock()
+            .unwrap()
+            .replace(sender);
+        Ok(receiver.recv().unwrap())
+    }
+
+    /// Get the scale factor of the window
+    pub fn get_scale_factor(&self) -> Result<f64, Box<ipc_channel::ErrorKind>> {
+        self.sender.send(ToVersoMessage::GetScaleFactor)?;
+        let (sender, receiver) = std::sync::mpsc::channel();
+        self.event_listeners
+            .scale_factor_response
             .lock()
             .unwrap()
             .replace(sender);
