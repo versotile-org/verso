@@ -220,6 +220,7 @@ impl Window {
             }
             EmbedderMsg::ShowContextMenu(_webview_id, _sender, _title, _options) => {
                 // TODO: Implement context menu
+                let _ = _sender.send(embedder_traits::ContextMenuResult::Dismissed);
             }
             EmbedderMsg::Prompt(_webview_id, prompt_type, _origin) => {
                 if let Some(tab) = self.tab_manager.tab(webview_id) {
@@ -296,7 +297,6 @@ impl Window {
             }
             EmbedderMsg::WebViewBlurred => {
                 self.focused_webview_id = None;
-                self.close_context_menu(sender);
             }
             EmbedderMsg::WebViewFocused(webview_id) => {
                 self.focused_webview_id = Some(webview_id);
@@ -360,8 +360,7 @@ impl Window {
                             let size = self.size();
                             let rect = DeviceIntRect::from_size(size);
                             let content_size = self.get_content_size(rect, true);
-                            let mut webview = WebView::new(webview_id, rect);
-                            webview.set_size(content_size);
+                            let webview = WebView::new(webview_id, content_size);
 
                             self.tab_manager.append_tab(webview, true);
 
@@ -518,6 +517,10 @@ impl Window {
                 }
                 _ => log::trace!("Verso context menu isn't supporting this prompt yet"),
             },
+            EmbedderMsg::ShowContextMenu(_webview_id, _sender, _title, _options) => {
+                // TODO: Implement context menu
+                let _ = _sender.send(embedder_traits::ContextMenuResult::Dismissed);
+            }
             e => {
                 log::trace!("Verso context menu isn't supporting this message yet: {e:?}")
             }

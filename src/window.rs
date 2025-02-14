@@ -337,6 +337,9 @@ impl Window {
                     .send(ConstellationMsg::SetWebViewThrottled(tab_id, false));
 
                 self.focused_webview_id = Some(tab_id);
+                let _ = compositor
+                    .constellation_chan
+                    .send(ConstellationMsg::FocusWebView(tab_id));
 
                 // update painting order immediately to draw the active tab
                 compositor.send_root_pipeline_display_list(self);
@@ -672,6 +675,12 @@ impl Window {
         Size2D::new(size.width as i32, size.height as i32)
     }
 
+    /// Size of the window, including the window decorations.
+    pub fn outer_size(&self) -> DeviceIntSize {
+        let size = self.window.outer_size();
+        Size2D::new(size.width as i32, size.height as i32)
+    }
+
     /// Get Winit window ID of the window.
     pub fn id(&self) -> WindowId {
         self.window.id()
@@ -875,11 +884,11 @@ impl Window {
     }
 
     /// Close window's context menu
-    pub(crate) fn close_context_menu(&self, _sender: &Sender<ConstellationMsg>) {
+    pub(crate) fn close_context_menu(&self, sender: &Sender<ConstellationMsg>) {
         #[cfg(linux)]
         if let Some(context_menu) = &self.context_menu {
             send_to_constellation(
-                _sender,
+                sender,
                 ConstellationMsg::CloseWebView(context_menu.webview().webview_id),
             );
         }
@@ -922,28 +931,33 @@ impl Window {
         event: crate::webview::context_menu::ContextMenuResult,
     ) {
         self.close_context_menu(sender);
-        if let Some(tab_id) = self.tab_manager.current_tab_id() {
-            match event.id.as_str() {
-                "back" => {
-                    send_to_constellation(
-                        sender,
-                        ConstellationMsg::TraverseHistory(tab_id, TraversalDirection::Back(1)),
-                    );
+        if let Some(id) = event.id {
+            if let Some(tab_id) = self.tab_manager.current_tab_id() {
+                match id.as_str() {
+                    "back" => {
+                        send_to_constellation(
+                            sender,
+                            ConstellationMsg::TraverseHistory(tab_id, TraversalDirection::Back(1)),
+                        );
+                    }
+                    "forward" => {
+                        send_to_constellation(
+                            sender,
+                            ConstellationMsg::TraverseHistory(
+                                tab_id,
+                                TraversalDirection::Forward(1),
+                            ),
+                        );
+                    }
+                    "reload" => {
+                        send_to_constellation(sender, ConstellationMsg::Reload(tab_id));
+                    }
+                    _ => {}
                 }
-                "forward" => {
-                    send_to_constellation(
-                        sender,
-                        ConstellationMsg::TraverseHistory(tab_id, TraversalDirection::Forward(1)),
-                    );
-                }
-                "reload" => {
-                    send_to_constellation(sender, ConstellationMsg::Reload(tab_id));
-                }
-                _ => {}
+            } else {
+                log::error!("No active webview to handle context menu event");
             }
-        } else {
-            log::error!("No active webview to handle context menu event");
-        }
+        };
     }
 }
 

@@ -14,15 +14,13 @@ use compositing_traits::ConstellationMsg;
 #[cfg(linux)]
 use crossbeam_channel::Sender;
 #[cfg(linux)]
-use euclid::{Point2D, Size2D};
-#[cfg(linux)]
 use serde::{Deserialize, Serialize};
 #[cfg(linux)]
 use servo_url::ServoUrl;
 #[cfg(linux)]
 use webrender_api::units::DeviceIntRect;
 #[cfg(linux)]
-use winit::dpi::PhysicalPosition;
+use winit::dpi::{LogicalPosition, PhysicalPosition};
 
 /// Basic menu type building block
 #[cfg(any(target_os = "macos", target_os = "windows"))]
@@ -47,7 +45,10 @@ pub struct ContextMenu {
     menu_items: Vec<MenuItem>,
     /// The webview that the context menu is attached to
     #[cfg(linux)]
-    webview: WebView,
+    pub(crate) webview: WebView,
+    /// Menu position, used for positioning the context menu by CSS
+    #[cfg(linux)]
+    position: LogicalPosition<f64>,
 }
 
 impl ContextMenu {
@@ -69,6 +70,7 @@ impl ContextMenu {
             Self {
                 menu_items: menu.0,
                 webview,
+                position: LogicalPosition::new(0.0, 0.0),
             }
         }
     }
@@ -114,8 +116,8 @@ impl ContextMenu {
         window: &mut Window,
         position: PhysicalPosition<f64>,
     ) {
-        let scale_factor = window.scale_factor();
-        self.set_position(window, position, scale_factor);
+        self.position = position.to_logical(window.scale_factor());
+        self.webview.rect = DeviceIntRect::from_size(window.outer_size());
 
         send_to_constellation(
             sender,
@@ -132,59 +134,10 @@ impl ContextMenu {
     fn resource_url(&self) -> ServoUrl {
         let items_json: String = self.to_items_json();
         let url_str = format!(
-            "verso://resources/components/context_menu.html?items={}",
-            items_json
+            "verso://resources/components/context_menu.html?items={}&pos_x={}&pos_y={}",
+            items_json, self.position.x, self.position.y
         );
         ServoUrl::parse(&url_str).unwrap()
-    }
-
-    /// Set the position of the context menu
-    fn set_position(
-        &mut self,
-        window: &Window,
-        position: PhysicalPosition<f64>,
-        scale_factor: f64,
-    ) {
-        // Calculate menu size
-        // Each menu item is 30px height
-        // Menu has 10px padding top and bottom
-        let height = (self.menu_items.len() * 30 + 20) as f64 * scale_factor;
-        let width = 200.0 * scale_factor;
-        let menu_size = Size2D::new(width as i32, height as i32);
-
-        // Translate position to origin
-        let mut origin = Point2D::new(position.x as i32, position.y as i32);
-
-        // Avoid overflow to the window, adjust position if necessary
-        let window_size = window.size();
-        let x_overflow: i32 = origin.x + menu_size.width - window_size.width;
-        let y_overflow: i32 = origin.y + menu_size.height - window_size.height;
-
-        if x_overflow >= 0 {
-            // check if the menu can be shown on left side of the cursor
-            if (origin.x - menu_size.width) >= 0 {
-                origin.x = i32::max(0, origin.x - menu_size.width);
-            } else {
-                // if menu can't fit to left side of the cursor,
-                // shift left the menu, but not less than zero.
-                // TODO: if still smaller than screen, should show scroller
-                origin.x = i32::max(0, origin.x - x_overflow);
-            }
-        }
-        if y_overflow >= 0 {
-            // check if the menu can be shown above the cursor
-            if (origin.y - menu_size.height) >= 0 {
-                origin.y = i32::max(0, origin.y - menu_size.height);
-            } else {
-                // if menu can't fit to top of the cursor
-                // shift up the menu, but not less than zero.
-                // TODO: if still smaller than screen, should show scroller
-                origin.y = i32::max(0, origin.y - y_overflow);
-            }
-        }
-
-        self.webview
-            .set_size(DeviceIntRect::from_origin_and_size(origin, menu_size));
     }
 
     /// get item json
@@ -227,7 +180,7 @@ impl MenuItem {
 
 pub struct ContextMenuResult {
     /// The id of the menu item
-    pub id: String,
+    pub id: Option<String>,
     /// Close the context menu
     pub close: bool,
 }
