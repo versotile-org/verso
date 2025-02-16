@@ -59,6 +59,8 @@ pub enum ToVersoMessage {
     GetVisible,
     /// Get the scale factor of the window, need a response with [`ToControllerMessage::GetScaleFactorResponse`]
     GetScaleFactor,
+    /// Get the current URL of the webview, need a response with [`ToControllerMessage::GetCurrentUrlResponse`]
+    GetCurrentUrl,
 }
 
 /// Message sent from versoview to the controller
@@ -85,6 +87,8 @@ pub enum ToControllerMessage {
     GetVisibleResponse(bool),
     /// Response to a [`ToVersoMessage::GetScaleFactor`]
     GetScaleFactorResponse(f64),
+    /// Response to a [`ToVersoMessage::GetCurrentUrl`]
+    GetCurrentUrlResponse(url::Url),
     /// Verso have recieved a close request from the OS
     OnCloseRequested,
 }

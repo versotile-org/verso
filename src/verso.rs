@@ -837,6 +837,21 @@ impl Verso {
                     }
                 }
             }
+            ToVersoMessage::GetCurrentUrl => {
+                if let Some((window, _)) = self.windows.values_mut().next() {
+                    let tab = window.tab_manager.current_tab().unwrap();
+                    let history = tab.history();
+                    if let Err(error) = self.to_controller_sender.as_ref().unwrap().send(
+                        ToControllerMessage::GetCurrentUrlResponse(
+                            history.list[history.current_idx].as_url().clone(),
+                        ),
+                    ) {
+                        log::error!(
+                            "Verso failed to send GetScaleFactorResponse to controller: {error}"
+                        )
+                    }
+                }
+            }
             _ => {}
         }
     }

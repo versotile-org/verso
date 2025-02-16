@@ -30,6 +30,7 @@ struct EventListeners {
     fullscreen_response: Listener<MpscSender<bool>>,
     visible_response: Listener<MpscSender<bool>>,
     scale_factor_response: Listener<MpscSender<f64>>,
+    get_url_response: Listener<MpscSender<url::Url>>,
 }
 
 pub struct VersoviewController {
@@ -111,6 +112,7 @@ impl VersoviewController {
         let fullscreen_response = event_listeners.fullscreen_response.clone();
         let visible_response = event_listeners.visible_response.clone();
         let scale_factor_response = event_listeners.scale_factor_response.clone();
+        let get_url_response = event_listeners.get_url_response.clone();
         let send_clone = sender.clone();
         ROUTER.add_typed_route(
             receiver,
@@ -181,6 +183,11 @@ impl VersoviewController {
                     ToControllerMessage::GetScaleFactorResponse(scale_factor) => {
                         if let Some(sender) = scale_factor_response.lock().unwrap().take() {
                             sender.send(scale_factor).unwrap();
+                        }
+                    }
+                    ToControllerMessage::GetCurrentUrlResponse(url) => {
+                        if let Some(sender) = get_url_response.lock().unwrap().take() {
+                            sender.send(url).unwrap();
                         }
                     }
                     _ => {}
@@ -411,6 +418,18 @@ impl VersoviewController {
         let (sender, receiver) = std::sync::mpsc::channel();
         self.event_listeners
             .scale_factor_response
+            .lock()
+            .unwrap()
+            .replace(sender);
+        Ok(receiver.recv().unwrap())
+    }
+
+    /// Get the URL of the webview
+    pub fn get_current_url(&self) -> Result<url::Url, Box<ipc_channel::ErrorKind>> {
+        self.sender.send(ToVersoMessage::GetCurrentUrl)?;
+        let (sender, receiver) = std::sync::mpsc::channel();
+        self.event_listeners
+            .get_url_response
             .lock()
             .unwrap()
             .replace(sender);
