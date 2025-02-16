@@ -1,3 +1,5 @@
+use embedder_traits::ContextMenuResult;
+use ipc_channel::ipc::IpcSender;
 /* macOS, Windows Native Implementation */
 #[cfg(any(target_os = "macos", target_os = "windows"))]
 use muda::{ContextMenu as MudaContextMenu, Menu as MudaMenu};
@@ -39,6 +41,8 @@ pub struct Menu(pub Vec<MenuItem>);
 ///   webview implementation.
 #[derive(Clone)]
 pub struct ContextMenu {
+    /// IpcSender to send the context menu result to the Servo
+    servo_result_sender: Option<IpcSender<ContextMenuResult>>, // None if sender already sent
     #[cfg(any(target_os = "macos", target_os = "windows"))]
     menu: MudaMenu,
     #[cfg(linux)]
@@ -57,10 +61,13 @@ impl ContextMenu {
     /// **Platform Specific**
     /// - macOS / Windows: Creates a context menu by muda crate with natvie OS support
     /// - Wayland: Creates a context menu with webview implementation
-    pub fn new_with_menu(menu: Menu) -> Self {
+    pub fn new_with_menu(servo_result_sender: IpcSender<ContextMenuResult>, menu: Menu) -> Self {
         #[cfg(any(target_os = "macos", target_os = "windows"))]
         {
-            Self { menu: menu.0 }
+            Self {
+                servo_result_sender: Some(servo_result_sender),
+                menu: menu.0,
+            }
         }
         #[cfg(linux)]
         {
@@ -68,11 +75,25 @@ impl ContextMenu {
             let webview = WebView::new(webview_id, DeviceIntRect::zero());
 
             Self {
+                servo_result_sender: Some(servo_result_sender),
                 menu_items: menu.0,
                 webview,
                 position: LogicalPosition::new(0.0, 0.0),
             }
         }
+    }
+
+    /// Send the context menu result back to the Servo. Can only be sent once.
+    pub fn send_result_to_servo(&mut self, result: ContextMenuResult) {
+        if let Some(sender) = self.servo_result_sender.take() {
+            let _ = sender.send(result);
+        }
+    }
+}
+
+impl Drop for ContextMenu {
+    fn drop(&mut self) {
+        self.send_result_to_servo(ContextMenuResult::Dismissed);
     }
 }
 
@@ -178,7 +199,7 @@ impl MenuItem {
 #[cfg(linux)]
 #[derive(Debug, Clone, Serialize, Deserialize)]
 
-pub struct ContextMenuResult {
+pub struct ContextMenuUIResponse {
     /// The id of the menu item
     pub id: Option<String>,
     /// Close the context menu

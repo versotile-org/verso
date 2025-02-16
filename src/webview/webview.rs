@@ -21,7 +21,7 @@ use crate::{
 };
 
 #[cfg(linux)]
-use crate::webview::context_menu::ContextMenuResult;
+use crate::webview::context_menu::ContextMenuUIResponse;
 
 /// A web view is an area to display web browsing context. It's what user will treat as a "web page".
 #[derive(Debug, Clone)]
@@ -218,9 +218,21 @@ impl Window {
                     );
                 }
             }
-            EmbedderMsg::ShowContextMenu(_webview_id, _sender, _title, _options) => {
-                // TODO: Implement context menu
-                let _ = _sender.send(embedder_traits::ContextMenuResult::Dismissed);
+            EmbedderMsg::ShowContextMenu(_webview_id, servo_sender, _title, _options) => {
+                #[cfg(linux)]
+                if self.context_menu.is_none() {
+                    self.context_menu = Some(self.show_context_menu(sender, servo_sender));
+                } else {
+                    let _ = servo_sender.send(embedder_traits::ContextMenuResult::Ignored);
+                }
+                #[cfg(any(target_os = "windows", target_os = "macos"))]
+                {
+                    let context_menu = self.show_context_menu(servo_sender);
+                    // FIXME: there's chance to lose the event since the channel is async.
+                    if let Ok(event) = self.menu_event_receiver.try_recv() {
+                        self.handle_context_menu_event(context_menu, sender, event);
+                    }
+                }
             }
             EmbedderMsg::Prompt(_webview_id, prompt_type, _origin) => {
                 if let Some(tab) = self.tab_manager.tab(webview_id) {
@@ -479,6 +491,22 @@ impl Window {
                     }
                 }
             }
+            EmbedderMsg::ShowContextMenu(_, servo_sender, _, _) => {
+                #[cfg(linux)]
+                if self.context_menu.is_none() {
+                    self.context_menu = Some(self.show_context_menu(sender, servo_sender));
+                } else {
+                    let _ = servo_sender.send(embedder_traits::ContextMenuResult::Ignored);
+                }
+                #[cfg(any(target_os = "windows", target_os = "macos"))]
+                {
+                    let context_menu = self.show_context_menu(servo_sender);
+                    // FIXME: there's chance to lose the event since the channel is async.
+                    if let Ok(event) = self.menu_event_receiver.try_recv() {
+                        self.handle_context_menu_event(context_menu, sender, event);
+                    }
+                }
+            }
             e => {
                 log::trace!("Verso Panel isn't supporting this message yet: {e:?}")
             }
@@ -510,16 +538,19 @@ impl Window {
                     if msg.starts_with("CONTEXT_MENU:") {
                         let json_str_msg = msg.strip_prefix("CONTEXT_MENU:").unwrap();
                         let result =
-                            serde_json::from_str::<ContextMenuResult>(json_str_msg).unwrap();
+                            serde_json::from_str::<ContextMenuUIResponse>(json_str_msg).unwrap();
 
                         self.handle_context_menu_event(sender, result);
                     }
                 }
                 _ => log::trace!("Verso context menu isn't supporting this prompt yet"),
             },
-            EmbedderMsg::ShowContextMenu(_webview_id, _sender, _title, _options) => {
-                // TODO: Implement context menu
-                let _ = _sender.send(embedder_traits::ContextMenuResult::Dismissed);
+            EmbedderMsg::ShowContextMenu(_webview_id, servo_sender, _title, _options) => {
+                if self.context_menu.is_none() {
+                    self.context_menu = Some(self.show_context_menu(sender, servo_sender));
+                } else {
+                    let _ = servo_sender.send(embedder_traits::ContextMenuResult::Ignored);
+                }
             }
             e => {
                 log::trace!("Verso context menu isn't supporting this message yet: {e:?}")
@@ -630,6 +661,9 @@ impl Window {
                     log::trace!("Verso WebView isn't supporting this prompt yet")
                 }
             },
+            EmbedderMsg::ShowContextMenu(_, sender, _, _) => {
+                let _ = sender.send(embedder_traits::ContextMenuResult::Ignored);
+            }
             e => {
                 log::trace!("Verso Dialog isn't supporting this message yet: {e:?}")
             }

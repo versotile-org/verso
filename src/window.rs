@@ -4,8 +4,9 @@ use base::id::WebViewId;
 use compositing_traits::ConstellationMsg;
 use crossbeam_channel::Sender;
 use embedder_traits::{
-    AllowOrDeny, Cursor, EmbedderMsg, InputEvent, MouseButton, MouseButtonAction, MouseButtonEvent,
-    MouseMoveEvent, PromptResult, TouchEventAction, TraversalDirection, WebResourceResponseMsg, WheelMode,
+    AllowOrDeny, ContextMenuResult, Cursor, EmbedderMsg, InputEvent, MouseButton,
+    MouseButtonAction, MouseButtonEvent, MouseMoveEvent, PromptResult, TouchEventAction,
+    TraversalDirection, WebResourceResponseMsg, WheelMode,
 };
 use euclid::{Point2D, Size2D};
 use glutin::{
@@ -93,7 +94,7 @@ pub struct Window {
     pub(crate) context_menu: Option<ContextMenu>,
     /// Global menu event receiver for muda crate
     #[cfg(any(target_os = "macos", target_os = "windows"))]
-    menu_event_receiver: MenuEventReceiver,
+    pub(crate) menu_event_receiver: MenuEventReceiver,
     /// Window tabs manager
     pub(crate) tab_manager: TabManager,
     pub(crate) focused_webview_id: Option<WebViewId>,
@@ -418,38 +419,11 @@ impl Window {
                 };
 
                 /* handle context menu */
-                // TODO(context-menu): should create on ShowContextMenu event
-                let prompt = self.tab_manager.current_prompt();
-                match (state, button) {
-                    #[cfg(any(target_os = "macos", target_os = "windows"))]
-                    (ElementState::Pressed, winit::event::MouseButton::Right) => {
-                        if prompt.is_some() {
-                            return;
-                        }
-                        self.show_context_menu();
-                        // FIXME: there's chance to lose the event since the channel is async.
-                        if let Ok(event) = self.menu_event_receiver.try_recv() {
-                            self.handle_context_menu_event(sender, event);
-                        }
+                if let (ElementState::Pressed, winit::event::MouseButton::Right) = (state, button) {
+                    let prompt = self.tab_manager.current_prompt();
+                    if prompt.is_some() {
+                        return;
                     }
-                    #[cfg(linux)]
-                    (ElementState::Pressed, winit::event::MouseButton::Right) => {
-                        if prompt.is_some() {
-                            return;
-                        }
-                        if self.context_menu.is_none() {
-                            self.context_menu = Some(self.show_context_menu(sender));
-                            return;
-                        }
-                    }
-                    #[cfg(linux)]
-                    // TODO(context-menu): ignore first release event after context menu open or close to prevent click on background element
-                    (ElementState::Released, winit::event::MouseButton::Right) => {
-                        if self.context_menu.is_some() {
-                            return;
-                        }
-                    }
-                    _ => {}
                 }
 
                 /* handle Windows and Linux non-decoration window resize */
@@ -836,7 +810,10 @@ impl Window {
 // Context Menu methods
 impl Window {
     #[cfg(any(target_os = "macos", target_os = "windows"))]
-    pub(crate) fn show_context_menu(&self) {
+    pub(crate) fn show_context_menu(
+        &self,
+        servo_sender: IpcSender<ContextMenuResult>,
+    ) -> ContextMenu {
         let tab = self.tab_manager.current_tab().unwrap();
         let history = tab.history();
         let history_len = history.list.len();
@@ -854,12 +831,18 @@ impl Window {
         let menu = MudaMenu::new();
         let _ = menu.append_items(&[&back, &forward, &reload]);
 
-        let context_menu = ContextMenu::new_with_menu(Menu(menu));
+        let context_menu = ContextMenu::new_with_menu(servo_sender, Menu(menu));
         context_menu.show(self.window.window_handle().unwrap());
+
+        context_menu
     }
 
     #[cfg(linux)]
-    pub(crate) fn show_context_menu(&mut self, sender: &Sender<ConstellationMsg>) -> ContextMenu {
+    pub(crate) fn show_context_menu(
+        &mut self,
+        sender: &Sender<ConstellationMsg>,
+        servo_sender: IpcSender<ContextMenuResult>,
+    ) -> ContextMenu {
         use crate::webview::context_menu::MenuItem;
 
         let tab = self.tab_manager.current_tab().unwrap();
@@ -875,7 +858,8 @@ impl Window {
         );
         let reload = MenuItem::new(Some("reload"), "Reload", true);
 
-        let mut context_menu = ContextMenu::new_with_menu(Menu(vec![back, forward, reload]));
+        let mut context_menu =
+            ContextMenu::new_with_menu(servo_sender, Menu(vec![back, forward, reload]));
 
         let position = self.mouse_position.get().unwrap();
         context_menu.show(sender, self, position);
@@ -883,19 +867,14 @@ impl Window {
         context_menu
     }
 
-    /// Close window's context menu
-    pub(crate) fn close_context_menu(&self, sender: &Sender<ConstellationMsg>) {
-        #[cfg(linux)]
-        if let Some(context_menu) = &self.context_menu {
-            send_to_constellation(
-                sender,
-                ConstellationMsg::CloseWebView(context_menu.webview().webview_id),
-            );
-        }
-    }
-
     #[cfg(any(target_os = "macos", target_os = "windows"))]
-    fn handle_context_menu_event(&self, sender: &Sender<ConstellationMsg>, event: MenuEvent) {
+    pub(crate) fn handle_context_menu_event(
+        &self,
+        mut context_menu: ContextMenu,
+        sender: &Sender<ConstellationMsg>,
+        event: MenuEvent,
+    ) {
+        context_menu.send_result_to_servo(ContextMenuResult::Dismissed);
         // TODO: should be more flexible to handle different menu items
         let active_tab = self.tab_manager.current_tab().unwrap();
         match event.id().0.as_str() {
@@ -928,7 +907,7 @@ impl Window {
     pub(crate) fn handle_context_menu_event(
         &mut self,
         sender: &Sender<ConstellationMsg>,
-        event: crate::webview::context_menu::ContextMenuResult,
+        event: crate::webview::context_menu::ContextMenuUIResponse,
     ) {
         self.close_context_menu(sender);
         if let Some(id) = event.id {
@@ -958,6 +937,18 @@ impl Window {
                 log::error!("No active webview to handle context menu event");
             }
         };
+    }
+
+    /// Close window's context menu
+    pub(crate) fn close_context_menu(&mut self, _sender: &Sender<ConstellationMsg>) {
+        #[cfg(linux)]
+        if let Some(context_menu) = &mut self.context_menu {
+            context_menu.send_result_to_servo(ContextMenuResult::Dismissed);
+            send_to_constellation(
+                _sender,
+                ConstellationMsg::CloseWebView(context_menu.webview().webview_id),
+            );
+        }
     }
 }
 
