@@ -1,6 +1,7 @@
 name: Continuous Integration
 
 on:
+  workflow_dispatch:
   merge_group:
   pull_request:
     branches:
@@ -70,7 +71,7 @@ jobs:
         uses: dsherret/rust-toolchain-file@v1
 
       - name: Install flatpak dependencies
-        if: ${{ github.event_name == 'schedule' }}
+        if: ${{ github.event_name == 'schedule' || github.event_name == 'workflow_dispatch' }}
         run: |
           sudo apt-get update
           sudo apt-get install -y flatpak flatpak-builder
@@ -87,7 +88,7 @@ jobs:
         uses: Mozilla-Actions/sccache-action@v0.0.4
 
       - name: Install dependencies for merge group test
-        if: ${{ github.event_name != 'schedule' }}
+        if: ${{ github.event_name != 'schedule' && github.event_name != 'workflow_dispatch' }}
         run: |
           sudo apt-get update
           sudo apt install build-essential python3-pip ccache clang cmake curl \
@@ -104,7 +105,7 @@ jobs:
             python3-mako
 
       - name: Check for merge group test
-        if: ${{ github.event_name != 'schedule' }}
+        if: ${{ github.event_name != 'schedule' && github.event_name != 'workflow_dispatch' }}
         run: |
           cargo check
 
@@ -115,18 +116,18 @@ jobs:
       #     cargo test --release
 
       - name: Fetch Verso version
-        if: ${{ github.event_name == 'schedule' }}
+        if: ${{ github.event_name == 'schedule' || github.event_name == 'workflow_dispatch' }}
         run: |
           echo "VERSO_VERSION=$(cargo metadata --format-version=1 --no-deps | jq -r '.packages[] | select(.name == "versoview") | .version')" >> $GITHUB_ENV
 
       - name: Generate flatpak cargo sources
-        if: ${{ github.event_name == 'schedule' }}
+        if: ${{ github.event_name == 'schedule' || github.event_name == 'workflow_dispatch' }}
         run: |
           pip3 install aiohttp toml
           python3 ./flatpak-cargo-generator.py ./Cargo.lock -o cargo-sources.json
 
       - name: Build and bundle flatpak
-        if: ${{ github.event_name == 'schedule' }}
+        if: ${{ github.event_name == 'schedule' || github.event_name == 'workflow_dispatch' }}
         uses: flatpak/flatpak-github-actions/flatpak-builder@v6
         with:
           bundle: verso_${{ env.VERSO_VERSION }}_x64.flatpak
@@ -134,7 +135,7 @@ jobs:
           cache-key: flatpak-builder-${{ github.sha }}
 
       - name: Upload artifact
-        if: ${{ github.event_name == 'schedule' }}
+        if: ${{ github.event_name == 'schedule' || github.event_name == 'workflow_dispatch' }}
         uses: actions/upload-artifact@v4
         with:
           name: verso_${{ env.VERSO_VERSION }}_x64_flatpak
@@ -171,7 +172,7 @@ jobs:
         uses: Mozilla-Actions/sccache-action@v0.0.4
 
       - name: Install Cargo Packager
-        if: ${{ github.event_name == 'schedule' }}
+        if: ${{ github.event_name == 'schedule' || github.event_name == 'workflow_dispatch' }}
         run: cargo install cargo-packager
 
       - name: Build
@@ -183,17 +184,17 @@ jobs:
       #     cargo test --release
 
       - name: Bundle
-        if: ${{ github.event_name == 'schedule' }}
+        if: ${{ github.event_name == 'schedule' || github.event_name == 'workflow_dispatch' }}
         run: |
           cargo packager --release
 
       - name: Fetch Verso version
-        if: ${{ github.event_name == 'schedule' }}
+        if: ${{ github.event_name == 'schedule' || github.event_name == 'workflow_dispatch' }}
         run: |
           echo "VERSO_VERSION=$(cargo metadata --format-version=1 --no-deps | jq -r '.packages[] | select(.name == "versoview") | .version')" >> $Env:GITHUB_ENV
 
       - name: Upload artifact
-        if: ${{ github.event_name == 'schedule' }}
+        if: ${{ github.event_name == 'schedule' || github.event_name == 'workflow_dispatch' }}
         uses: actions/upload-artifact@v4
         with:
           name: versoview_${{ env.VERSO_VERSION }}_x64_nsis
@@ -238,7 +239,7 @@ jobs:
         uses: Mozilla-Actions/sccache-action@v0.0.4
 
       - name: Install Cargo Packager
-        if: ${{ github.event_name == 'schedule' }}
+        if: ${{ github.event_name == 'schedule' || github.event_name == 'workflow_dispatch' }}
         run: cargo install cargo-packager
 
       - name: Build
@@ -252,19 +253,19 @@ jobs:
       #     cargo test --release
 
       - name: Bundle
-        if: ${{ github.event_name == 'schedule' }}
+        if: ${{ github.event_name == 'schedule' || github.event_name == 'workflow_dispatch' }}
         run: |
           export PATH="/Library/Frameworks/GStreamer.framework/Versions/1.0/bin${PATH:+:$PATH}"
           export DYLD_LIBRARY_PATH="/Library/Frameworks/GStreamer.framework/Versions/1.0/lib${DYLD_LIBRARY_PATH:+:$DYLD_LIBRARY_PATH}"
           cargo packager --release
 
       - name: Fetch Verso version
-        if: ${{ github.event_name == 'schedule' }}
+        if: ${{ github.event_name == 'schedule' || github.event_name == 'workflow_dispatch' }}
         run: |
           echo "VERSO_VERSION=$(cargo metadata --format-version=1 --no-deps | jq -r '.packages[] | select(.name == "versoview") | .version')" >> $GITHUB_ENV
 
       - name: Upload artifact
-        if: ${{ github.event_name == 'schedule' }}
+        if: ${{ github.event_name == 'schedule' || github.event_name == 'workflow_dispatch' }}
         uses: actions/upload-artifact@v4
         with:
           name: verso_${{ env.VERSO_VERSION }}_${{ matrix.platform.arch }}_dmg
@@ -284,7 +285,7 @@ jobs:
         run: exit 1
 
   release-nightly:
-    if: ${{ github.event_name == 'schedule' }}
+    if: ${{ github.event_name == 'schedule' || github.event_name == 'workflow_dispatch' }}
     runs-on: ubuntu-latest
     needs: ["build-macos", "build-windows", "build-linux"]
     steps:
