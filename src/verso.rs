@@ -608,7 +608,7 @@ impl Verso {
             EmbedderMsg::SetCursor(webview_id, _) => Some(webview_id),
             EmbedderMsg::NewFavicon(webview_id, _) => Some(webview_id),
             EmbedderMsg::HistoryChanged(webview_id, _, _) => Some(webview_id),
-            EmbedderMsg::SetFullscreenState(webview_id, _) => Some(webview_id),
+            EmbedderMsg::NotifyFullscreenStateChanged(webview_id, _) => Some(webview_id),
             EmbedderMsg::NotifyLoadStatusChanged(webview_id, _) => Some(webview_id),
             EmbedderMsg::WebResourceRequested(opt_webview_id, _, _) => opt_webview_id.as_ref(),
             EmbedderMsg::Panic(webview_id, _, _) => Some(webview_id),
