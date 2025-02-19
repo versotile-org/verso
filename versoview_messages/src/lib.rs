@@ -76,7 +76,7 @@ pub enum ToControllerMessage {
     /// Response to a [`ToVersoMessage::GetSize`]
     GetSizeResponse(PhysicalSize<u32>),
     /// Response to a [`ToVersoMessage::GetPosition`]
-    GetPositionResponse(PhysicalPosition<i32>),
+    GetPositionResponse(Option<PhysicalPosition<i32>>),
     /// Response to a [`ToVersoMessage::GetMaximized`]
     GetMaximizedResponse(bool),
     /// Response to a [`ToVersoMessage::GetMinimized`]

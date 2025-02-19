@@ -24,7 +24,7 @@ struct EventListeners {
     on_web_resource_requested:
         Listener<Box<dyn Fn(WebResourceRequest, ResponseFunction) + Send + 'static>>,
     size_response: Listener<MpscSender<PhysicalSize<u32>>>,
-    position_response: Listener<MpscSender<PhysicalPosition<i32>>>,
+    position_response: Listener<MpscSender<Option<PhysicalPosition<i32>>>>,
     maximized_response: Listener<MpscSender<bool>>,
     minimized_response: Listener<MpscSender<bool>>,
     fullscreen_response: Listener<MpscSender<bool>>,
@@ -346,8 +346,11 @@ impl VersoviewController {
         Ok(receiver.recv().unwrap())
     }
 
-    /// Get the window's position
-    pub fn get_position(&self) -> Result<PhysicalPosition<i32>, Box<ipc_channel::ErrorKind>> {
+    /// Get the window's position,
+    /// returns [`None`] on unsupported platforms (currently only Wayland)
+    pub fn get_position(
+        &self,
+    ) -> Result<Option<PhysicalPosition<i32>>, Box<ipc_channel::ErrorKind>> {
         self.sender.send(ToVersoMessage::GetPosition)?;
         let (sender, receiver) = std::sync::mpsc::channel();
         self.event_listeners
