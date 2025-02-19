@@ -227,17 +227,15 @@ impl VersoviewController {
         &self,
         callback: impl Fn() + Send + 'static,
     ) -> Result<(), Box<ipc_channel::ErrorKind>> {
-        if self
+        let old_listener = self
             .event_listeners
             .on_close_requested
             .lock()
             .unwrap()
-            .replace(Box::new(callback))
-            .is_some()
-        {
-            return Ok(());
+            .replace(Box::new(callback));
+        if old_listener.is_none() {
+            self.sender.send(ToVersoMessage::ListenToOnCloseRequested)?;
         }
-        self.sender.send(ToVersoMessage::ListenToOnCloseRequested)?;
         Ok(())
     }
 
@@ -257,18 +255,16 @@ impl VersoviewController {
         &self,
         callback: impl Fn(url::Url) -> bool + Send + 'static,
     ) -> Result<(), Box<ipc_channel::ErrorKind>> {
-        if self
+        let old_listener = self
             .event_listeners
             .on_navigation_starting
             .lock()
             .unwrap()
-            .replace(Box::new(callback))
-            .is_some()
-        {
-            return Ok(());
+            .replace(Box::new(callback));
+        if old_listener.is_none() {
+            self.sender
+                .send(ToVersoMessage::ListenToOnNavigationStarting)?;
         }
-        self.sender
-            .send(ToVersoMessage::ListenToOnNavigationStarting)?;
         Ok(())
     }
 
@@ -278,18 +274,16 @@ impl VersoviewController {
         &self,
         callback: impl Fn(WebResourceRequest, ResponseFunction) + Send + 'static,
     ) -> Result<(), Box<ipc_channel::ErrorKind>> {
-        if self
+        let old_listener = self
             .event_listeners
             .on_web_resource_requested
             .lock()
             .unwrap()
-            .replace(Box::new(callback))
-            .is_some()
-        {
-            return Ok(());
+            .replace(Box::new(callback));
+        if old_listener.is_none() {
+            self.sender
+                .send(ToVersoMessage::ListenToWebResourceRequests)?;
         }
-        self.sender
-            .send(ToVersoMessage::ListenToWebResourceRequests)?;
         Ok(())
     }
 
