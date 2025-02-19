@@ -451,31 +451,33 @@ impl Verso {
     /// Handle Winit window events
     fn handle_winit_window_event(&mut self, window_id: WindowId, event: WindowEvent) -> bool {
         log::trace!("Verso is handling Winit event: {event:?}");
-        if let Some(compositor) = &mut self.compositor {
-            if let Some((window, _)) = self.windows.get_mut(&window_id) {
-                if let WindowEvent::CloseRequested = event {
-                    if let Some(to_controller_sender) = &self.to_controller_sender {
-                        if window.event_listeners.on_close_requested {
-                            if let Err(error) =
-                                to_controller_sender.send(ToControllerMessage::OnCloseRequested)
-                            {
-                                log::error!("Verso failed to send WebResourceRequested to controller: {error}")
-                            } else {
-                                return false;
-                            }
-                        }
+
+        let Some(compositor) = &mut self.compositor else {
+            return false;
+        };
+        let Some((window, _)) = self.windows.get_mut(&window_id) else {
+            return false;
+        };
+
+        if let WindowEvent::CloseRequested = event {
+            if let Some(to_controller_sender) = &self.to_controller_sender {
+                if window.event_listeners.on_close_requested {
+                    if let Err(error) =
+                        to_controller_sender.send(ToControllerMessage::OnCloseRequested)
+                    {
+                        log::error!(
+                            "Verso failed to send WebResourceRequested to controller: {error}"
+                        )
+                    } else {
+                        return false;
                     }
-                    // self.windows.remove(&window_id);
-                    compositor.maybe_start_shutting_down();
-                } else {
-                    window.handle_winit_window_event(
-                        &self.constellation_sender,
-                        compositor,
-                        &event,
-                    );
-                    return window.resizing;
                 }
             }
+            // self.windows.remove(&window_id);
+            compositor.maybe_start_shutting_down();
+        } else {
+            window.handle_winit_window_event(&self.constellation_sender, compositor, &event);
+            return window.resizing;
         }
 
         false
