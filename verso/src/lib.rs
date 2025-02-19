@@ -113,7 +113,7 @@ impl VersoviewController {
         let visible_response = event_listeners.visible_response.clone();
         let scale_factor_response = event_listeners.scale_factor_response.clone();
         let get_url_response = event_listeners.get_url_response.clone();
-        let send_clone = sender.clone();
+        let to_verso_sender = sender.clone();
         ROUTER.add_typed_route(
             receiver,
             Box::new(move |message| match message {
@@ -125,7 +125,7 @@ impl VersoviewController {
                     }
                     ToControllerMessage::OnNavigationStarting(id, url) => {
                         if let Some(ref callback) = *on_navigation_starting.lock().unwrap() {
-                            if let Err(error) = send_clone.send(
+                            if let Err(error) = to_verso_sender.send(
                                 ToVersoMessage::OnNavigationStartingResponse(id, callback(url)),
                             ) {
                                 error!(
@@ -136,7 +136,7 @@ impl VersoviewController {
                     }
                     ToControllerMessage::OnWebResourceRequested(request) => {
                         if let Some(ref callback) = *on_web_resource_requested.lock().unwrap() {
-                            let sender_clone = send_clone.clone();
+                            let sender_clone = to_verso_sender.clone();
                             let id = request.id;
                             callback(
                                 request,
