@@ -153,23 +153,24 @@ impl Window {
                         for (key, value) in request.headers.iter() {
                             builder = builder.header(key, value);
                         }
-                        if let Err(error) =
-                            to_controller_sender.send(ToControllerMessage::OnWebResourceRequested(
+                        match to_controller_sender.send(
+                            ToControllerMessage::OnWebResourceRequested(
                                 versoview_messages::WebResourceRequest {
                                     id,
                                     // TODO: Actually send the body
                                     request: builder.body(Vec::new()).unwrap(),
                                 },
-                            ))
-                        {
-                            log::error!(
-                                "Verso failed to send WebResourceRequested to controller: {error}"
-                            )
-                        } else {
-                            request_map.insert(id, (request.url, sender));
-                            // We will handle a ToVersoMessage::WebResourceRequestResponse
-                            // and send the response through this sender there if the call succeed
-                            return;
+                            ),
+                        ) {
+                            Ok(_) => {
+                                request_map.insert(id, (request.url, sender));
+                                // We will handle a ToVersoMessage::WebResourceRequestResponse
+                                // and send the response through this sender there if the call succeed
+                                return;
+                            }
+                            Err(error) => {
+                                log::error!("Verso failed to send WebResourceRequested to controller: {error}")
+                            }
                         }
                     }
                 }
