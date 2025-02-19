@@ -649,7 +649,7 @@ impl Verso {
                 }
             }
             ToVersoMessage::ListenToOnCloseRequested => {
-                if let Some((window, _)) = self.windows.values_mut().next() {
+                if let Some(window) = self.first_window_mut() {
                     window.event_listeners.on_close_requested = true;
                 }
             }
@@ -662,7 +662,7 @@ impl Verso {
                 }
             }
             ToVersoMessage::ListenToOnNavigationStarting => {
-                if let Some((window, _)) = self.windows.values_mut().next() {
+                if let Some(window) = self.first_window_mut() {
                     window.event_listeners.on_navigation_starting = true;
                 }
             }
@@ -681,7 +681,7 @@ impl Verso {
                 }
             }
             ToVersoMessage::ListenToWebResourceRequests => {
-                if let Some((window, _)) = self.windows.values_mut().next() {
+                if let Some(window) = self.first_window_mut() {
                     window
                         .event_listeners
                         .on_web_resource_requested
@@ -689,7 +689,7 @@ impl Verso {
                 }
             }
             ToVersoMessage::WebResourceRequestResponse(response) => {
-                if let Some((window, _)) = self.windows.values_mut().next() {
+                if let Some(window) = self.first_window_mut() {
                     if let Some((url, sender)) = window
                         .event_listeners
                         .on_web_resource_requested
@@ -718,27 +718,27 @@ impl Verso {
                 }
             }
             ToVersoMessage::SetSize(size) => {
-                if let Some((window, _)) = self.windows.values_mut().next() {
+                if let Some(window) = self.first_window() {
                     let _ = window.window.request_inner_size(size);
                 }
             }
             ToVersoMessage::SetPosition(position) => {
-                if let Some((window, _)) = self.windows.values_mut().next() {
+                if let Some(window) = self.first_window() {
                     window.window.set_outer_position(position);
                 }
             }
             ToVersoMessage::SetMaximized(maximized) => {
-                if let Some((window, _)) = self.windows.values_mut().next() {
+                if let Some(window) = self.first_window() {
                     window.window.set_maximized(maximized);
                 }
             }
             ToVersoMessage::SetMinimized(minimized) => {
-                if let Some((window, _)) = self.windows.values_mut().next() {
+                if let Some(window) = self.first_window() {
                     window.window.set_minimized(minimized);
                 }
             }
             ToVersoMessage::SetFullscreen(fullscreen) => {
-                if let Some((window, _)) = self.windows.values_mut().next() {
+                if let Some(window) = self.first_window() {
                     window.window.set_fullscreen(if fullscreen {
                         Some(winit::window::Fullscreen::Borderless(None))
                     } else {
@@ -747,17 +747,17 @@ impl Verso {
                 }
             }
             ToVersoMessage::SetVisible(visible) => {
-                if let Some((window, _)) = self.windows.values_mut().next() {
+                if let Some(window) = self.first_window() {
                     window.window.set_visible(visible);
                 }
             }
             ToVersoMessage::StartDragging => {
-                if let Some((window, _)) = self.windows.values_mut().next() {
+                if let Some(window) = self.first_window() {
                     let _ = window.window.drag_window();
                 }
             }
             ToVersoMessage::GetSize => {
-                if let Some((window, _)) = self.windows.values_mut().next() {
+                if let Some(window) = self.first_window() {
                     if let Err(error) = self.to_controller_sender.as_ref().unwrap().send(
                         ToControllerMessage::GetSizeResponse(window.window.inner_size()),
                     ) {
@@ -766,7 +766,7 @@ impl Verso {
                 }
             }
             ToVersoMessage::GetPosition => {
-                if let Some((window, _)) = self.windows.values_mut().next() {
+                if let Some(window) = self.first_window() {
                     if let Err(error) = self.to_controller_sender.as_ref().unwrap().send(
                         ToControllerMessage::GetPositionResponse(
                             window.window.inner_position().unwrap(),
@@ -779,7 +779,7 @@ impl Verso {
                 }
             }
             ToVersoMessage::GetMinimized => {
-                if let Some((window, _)) = self.windows.values_mut().next() {
+                if let Some(window) = self.first_window() {
                     if let Err(error) = self.to_controller_sender.as_ref().unwrap().send(
                         ToControllerMessage::GetMinimizedResponse(
                             window.window.is_minimized().unwrap(),
@@ -792,7 +792,7 @@ impl Verso {
                 }
             }
             ToVersoMessage::GetMaximized => {
-                if let Some((window, _)) = self.windows.values_mut().next() {
+                if let Some(window) = self.first_window() {
                     if let Err(error) = self.to_controller_sender.as_ref().unwrap().send(
                         ToControllerMessage::GetMaximizedResponse(window.window.is_maximized()),
                     ) {
@@ -803,7 +803,7 @@ impl Verso {
                 }
             }
             ToVersoMessage::GetFullscreen => {
-                if let Some((window, _)) = self.windows.values_mut().next() {
+                if let Some(window) = self.first_window() {
                     if let Err(error) = self.to_controller_sender.as_ref().unwrap().send(
                         ToControllerMessage::GetFullscreenResponse(
                             window.window.fullscreen().is_some(),
@@ -816,7 +816,7 @@ impl Verso {
                 }
             }
             ToVersoMessage::GetVisible => {
-                if let Some((window, _)) = self.windows.values_mut().next() {
+                if let Some(window) = self.first_window() {
                     if let Err(error) = self.to_controller_sender.as_ref().unwrap().send(
                         ToControllerMessage::GetVisibleResponse(
                             window.window.is_visible().unwrap_or(true),
@@ -829,7 +829,7 @@ impl Verso {
                 }
             }
             ToVersoMessage::GetScaleFactor => {
-                if let Some((window, _)) = self.windows.values_mut().next() {
+                if let Some(window) = self.first_window() {
                     if let Err(error) = self.to_controller_sender.as_ref().unwrap().send(
                         ToControllerMessage::GetScaleFactorResponse(window.window.scale_factor()),
                     ) {
@@ -840,7 +840,7 @@ impl Verso {
                 }
             }
             ToVersoMessage::GetCurrentUrl => {
-                if let Some((window, _)) = self.windows.values_mut().next() {
+                if let Some(window) = self.first_window() {
                     let tab = window.tab_manager.current_tab().unwrap();
                     let history = tab.history();
                     if let Err(error) = self.to_controller_sender.as_ref().unwrap().send(
@@ -856,6 +856,14 @@ impl Verso {
             }
             _ => {}
         }
+    }
+
+    fn first_window(&self) -> Option<&Window> {
+        self.windows.values().next().map(|(window, _)| window)
+    }
+
+    fn first_window_mut(&mut self) -> Option<&mut Window> {
+        self.windows.values_mut().next().map(|(window, _)| window)
     }
 
     fn first_webview_id(&self) -> Option<TopLevelBrowsingContextId> {
