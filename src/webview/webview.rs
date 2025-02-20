@@ -3,7 +3,8 @@ use base::id::WebViewId;
 use compositing_traits::ConstellationMsg;
 use crossbeam_channel::Sender;
 use embedder_traits::{
-    AllowOrDeny, EmbedderMsg, LoadStatus, PromptDefinition, PromptResult, TraversalDirection,
+    AllowOrDeny, ContextMenuResult, EmbedderMsg, LoadStatus, PromptDefinition, PromptResult,
+    TraversalDirection,
 };
 use ipc_channel::ipc;
 use script_traits::webdriver_msg::{WebDriverJSResult, WebDriverScriptCommand};
@@ -192,7 +193,7 @@ impl Window {
                 if self.context_menu.is_none() {
                     self.context_menu = Some(self.show_context_menu(sender, servo_sender));
                 } else {
-                    let _ = servo_sender.send(embedder_traits::ContextMenuResult::Ignored);
+                    let _ = servo_sender.send(ContextMenuResult::Ignored);
                 }
                 #[cfg(any(target_os = "windows", target_os = "macos"))]
                 {
@@ -465,7 +466,7 @@ impl Window {
                 if self.context_menu.is_none() {
                     self.context_menu = Some(self.show_context_menu(sender, servo_sender));
                 } else {
-                    let _ = servo_sender.send(embedder_traits::ContextMenuResult::Ignored);
+                    let _ = servo_sender.send(ContextMenuResult::Ignored);
                 }
                 #[cfg(any(target_os = "windows", target_os = "macos"))]
                 {
@@ -518,7 +519,7 @@ impl Window {
                 if self.context_menu.is_none() {
                     self.context_menu = Some(self.show_context_menu(sender, servo_sender));
                 } else {
-                    let _ = servo_sender.send(embedder_traits::ContextMenuResult::Ignored);
+                    let _ = servo_sender.send(ContextMenuResult::Ignored);
                 }
             }
             e => {
@@ -546,25 +547,25 @@ impl Window {
                 self.focused_webview_id = Some(webview_id);
             }
             EmbedderMsg::Prompt(_webview_id, prompt, _origin) => match prompt {
-                PromptDefinition::Alert(msg, ignored_prompt_sender) => {
-                    let prompt = self.tab_manager.prompt_by_prompt_id(webview_id);
-                    if prompt.is_none() {
-                        log::error!("Prompt not found for WebView {webview_id:?}");
-                        return false;
-                    }
-                    let prompt = prompt.unwrap();
-                    let prompt_sender = prompt.sender().unwrap();
+                PromptDefinition::Alert(msg, dummy_sender) => {
+                    let _ = dummy_sender.send(());
 
-                    match prompt_sender {
+                    let Some(prompt) = self.tab_manager.prompt_by_prompt_id(webview_id) else {
+                        log::error!("Prompt not found. WebView: {webview_id:?}");
+                        return false;
+                    };
+
+                    let servo_sender = prompt.sender().unwrap();
+                    match servo_sender {
                         PromptSender::AlertSender(sender) => {
                             let _ = sender.send(());
                         }
                         PromptSender::ConfirmSender(sender) => {
                             let result: PromptResult = match msg.as_str() {
-                                "ok" | "yes" => PromptResult::Primary,
-                                "cancel" | "no" => PromptResult::Secondary,
+                                "ok" => PromptResult::Primary,
+                                "cancel" => PromptResult::Secondary,
                                 _ => {
-                                    log::error!("prompt result message invalid: {msg}");
+                                    log::error!("Invalid prompt action: {msg}");
                                     PromptResult::Dismissed
                                 }
                             };
@@ -582,21 +583,21 @@ impl Window {
                                         let _ = sender.send(None);
                                     }
                                     _ => {
-                                        log::error!("prompt result message invalid: {msg}");
+                                        log::error!("Invalid prompt action: {msg}");
                                         let _ = sender.send(None);
                                     }
                                 }
                             } else {
-                                log::error!("prompt result message invalid: {msg}");
+                                log::error!("Invalid prompt action: {msg}");
                                 let _ = sender.send(None);
                             }
                         }
                         PromptSender::AllowDenySender(sender) => {
                             let result: AllowOrDeny = match msg.as_str() {
-                                "ok" | "yes" => AllowOrDeny::Allow,
-                                "cancel" | "no" => AllowOrDeny::Deny,
+                                "allow" => AllowOrDeny::Allow,
+                                "deny" => AllowOrDeny::Deny,
                                 _ => {
-                                    log::error!("prompt result message invalid: {msg}");
+                                    log::error!("Invalid prompt action: {msg}");
                                     AllowOrDeny::Deny
                                 }
                             };
@@ -618,20 +619,18 @@ impl Window {
                                     }
                                 };
                             } else {
-                                log::error!("prompt result message invalid: {msg}");
+                                log::error!("Invalid prompt action: {msg}");
                                 let _ = sender.send(None);
                             }
                         }
                     }
-
-                    let _ = ignored_prompt_sender.send(());
                 }
                 _ => {
-                    log::trace!("Verso WebView isn't supporting this prompt yet")
+                    log::trace!("Unsupported prompt type");
                 }
             },
             EmbedderMsg::ShowContextMenu(_, sender, _, _) => {
-                let _ = sender.send(embedder_traits::ContextMenuResult::Ignored);
+                let _ = sender.send(ContextMenuResult::Ignored);
             }
             e => {
                 log::trace!("Verso Dialog isn't supporting this message yet: {e:?}")

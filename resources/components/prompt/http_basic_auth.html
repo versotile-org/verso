@@ -57,13 +57,13 @@
 
     function sendToVersoAndClose(action) {
       const auth = {
-        username: null,
-        password: null,
+        username: '',
+        password: '',
       };
 
       if (action === 'signin') {
-        auth.username = usernameEl.value;
-        auth.password = passwordEl.value;
+        auth.username = usernameEl.value ?? '';
+        auth.password = passwordEl.value ?? '';
       }
 
       // Use as an IPC between Verso and WebView

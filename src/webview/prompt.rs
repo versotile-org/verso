@@ -170,7 +170,7 @@ impl PromptDialog {
 
     /// Show Yes/No confirm prompt
     ///
-    /// After you call `yes_no(..)`, you must call `sender()` to get prompt sender,
+    /// After you call `allow_deny(..)`, you must call `sender()` to get prompt sender,
     /// then send user interaction result back to caller.
     ///
     /// ## Example
@@ -264,7 +264,7 @@ impl PromptDialog {
                 format!("verso://resources/components/prompt/ok_cancel.html?msg={msg}")
             }
             PromptType::AllowDeny(msg) => {
-                format!("verso://resources/components/prompt/yes_no.html?msg={msg}")
+                format!("verso://resources/components/prompt/allow_deny.html?msg={msg}")
             }
             PromptType::Input(msg, default_value) => {
                 let mut url = format!("verso://resources/components/prompt/prompt.html?msg={msg}");
