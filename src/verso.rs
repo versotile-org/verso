@@ -782,7 +782,7 @@ impl Verso {
                 if let Some(window) = self.first_window() {
                     if let Err(error) = self.to_controller_sender.as_ref().unwrap().send(
                         ToControllerMessage::GetMinimizedResponse(
-                            window.window.is_minimized().unwrap(),
+                            window.window.is_minimized().unwrap_or_default(),
                         ),
                     ) {
                         log::error!(
