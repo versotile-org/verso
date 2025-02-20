@@ -5,7 +5,7 @@ use std::{
 };
 
 use arboard::Clipboard;
-use base::id::{PipelineNamespace, PipelineNamespaceId, WebViewId};
+use base::id::{PipelineNamespace, PipelineNamespaceId, TopLevelBrowsingContextId, WebViewId};
 use bluetooth::BluetoothThreadFactory;
 use bluetooth_traits::BluetoothRequest;
 use canvas::canvas_paint_thread::CanvasPaintThread;
@@ -13,7 +13,10 @@ use compositing_traits::{CompositorMsg, CompositorProxy, CompositorReceiver, Con
 use constellation::{Constellation, FromCompositorLogger, InitialConstellationState};
 use crossbeam_channel::{unbounded, Receiver, Sender};
 use devtools;
-use embedder_traits::{EmbedderMsg, EmbedderProxy, EventLoopWaker};
+use embedder_traits::{
+    AllowOrDeny, EmbedderMsg, EmbedderProxy, EventLoopWaker, HttpBodyData, WebResourceResponse,
+    WebResourceResponseMsg,
+};
 use euclid::Scale;
 use fonts::SystemFontService;
 use ipc_channel::ipc::{self, IpcSender};
@@ -42,6 +45,7 @@ use winit::{
 use crate::{
     compositor::{IOCompositor, InitialCompositorState, ShutdownState},
     config::Config,
+    webview::execute_script,
     window::Window,
 };
 
@@ -447,16 +451,33 @@ impl Verso {
     /// Handle Winit window events
     fn handle_winit_window_event(&mut self, window_id: WindowId, event: WindowEvent) -> bool {
         log::trace!("Verso is handling Winit event: {event:?}");
-        if let Some(compositor) = &mut self.compositor {
-            if let WindowEvent::CloseRequested = event {
-                // self.windows.remove(&window_id);
-                compositor.maybe_start_shutting_down();
-            } else if let Some(window) = self.windows.get_mut(&window_id) {
-                window
-                    .0
-                    .handle_winit_window_event(&self.constellation_sender, compositor, &event);
-                return window.0.resizing;
+
+        let Some(compositor) = &mut self.compositor else {
+            return false;
+        };
+        let Some((window, _)) = self.windows.get_mut(&window_id) else {
+            return false;
+        };
+
+        if let WindowEvent::CloseRequested = event {
+            if let Some(to_controller_sender) = &self.to_controller_sender {
+                if window.event_listeners.on_close_requested {
+                    if let Err(error) =
+                        to_controller_sender.send(ToControllerMessage::OnCloseRequested)
+                    {
+                        log::error!(
+                            "Verso failed to send WebResourceRequested to controller: {error}"
+                        )
+                    } else {
+                        return false;
+                    }
+                }
             }
+            // self.windows.remove(&window_id);
+            compositor.maybe_start_shutting_down();
+        } else {
+            window.handle_winit_window_event(&self.constellation_sender, compositor, &event);
+            return window.resizing;
         }
 
         false
@@ -520,21 +541,11 @@ impl Verso {
                             //         window.0.set_cursor_icon(cursor);
                             //     }
                             // }
-                            // TODO: Check devtools' prompt has WebViewId?
-                            // EmbedderMsg::Prompt(_, definition, origin) => match origin {
-                            //     // TODO: actually prompt the user with a dialog
-                            //     PromptOrigin::Trusted => match definition {
-                            //         PromptDefinition::YesNo(question, ipc_sender) => {
-                            //             if question == "Accept incoming devtools connection?" {
-                            //                 if let Err(err) = ipc_sender.send(PromptResult::Primary) {
-                            //                     log::error!("Failed to send prompt result back: {err}");
-                            //                 }
-                            //             }
-                            //         }
-                            //         _ => {}
-                            //     },
-                            //     _ => {}
-                            // },
+                            EmbedderMsg::RequestDevtoolsConnection(sender) => {
+                                if let Err(err) = sender.send(AllowOrDeny::Allow) {
+                                    log::error!("Failed to send RequestDevtoolsConnection response back: {err}");
+                                }
+                            }
                             e => {
                                 log::trace!("Verso Window isn't supporting handling this message yet: {e:?}")
                             }
@@ -632,12 +643,18 @@ impl Verso {
     /// Handle message came from webview controller.
     pub fn handle_incoming_webview_message(&mut self, message: ToVersoMessage) {
         match message {
+            ToVersoMessage::Exit => {
+                if let Some(compositor) = &mut self.compositor {
+                    compositor.maybe_start_shutting_down();
+                }
+            }
+            ToVersoMessage::ListenToOnCloseRequested => {
+                if let Some(window) = self.first_window_mut() {
+                    window.event_listeners.on_close_requested = true;
+                }
+            }
             ToVersoMessage::NavigateTo(to_url) => {
-                if let Some(webview_id) =
-                    self.windows.values().next().and_then(|(window, _)| {
-                        window.tab_manager.current_tab().map(|tab| tab.id())
-                    })
-                {
+                if let Some(webview_id) = self.first_webview_id() {
                     send_to_constellation(
                         &self.constellation_sender,
                         ConstellationMsg::LoadUrl(webview_id, ServoUrl::from_url(to_url)),
@@ -645,7 +662,7 @@ impl Verso {
                 }
             }
             ToVersoMessage::ListenToOnNavigationStarting => {
-                if let Some((window, _)) = self.windows.values_mut().next() {
+                if let Some(window) = self.first_window_mut() {
                     window.event_listeners.on_navigation_starting = true;
                 }
             }
@@ -658,8 +675,202 @@ impl Verso {
                     ),
                 );
             }
+            ToVersoMessage::ExecuteScript(js) => {
+                if let Some(webview_id) = self.first_webview_id() {
+                    let _ = execute_script(&self.constellation_sender, &webview_id, js);
+                }
+            }
+            ToVersoMessage::ListenToWebResourceRequests => {
+                if let Some(window) = self.first_window_mut() {
+                    window
+                        .event_listeners
+                        .on_web_resource_requested
+                        .replace(HashMap::new());
+                }
+            }
+            ToVersoMessage::WebResourceRequestResponse(response) => {
+                if let Some(window) = self.first_window_mut() {
+                    if let Some((url, sender)) = window
+                        .event_listeners
+                        .on_web_resource_requested
+                        .as_mut()
+                        .and_then(|senders| senders.remove(&response.id))
+                    {
+                        if let Some(response) = response.response {
+                            let _ = sender
+                                .send(WebResourceResponseMsg::Start(
+                                    WebResourceResponse::new(url)
+                                        .headers(response.headers().clone())
+                                        .status_code(response.status()),
+                                ))
+                                .and_then(|_| {
+                                    sender.send(WebResourceResponseMsg::Body(HttpBodyData::Chunk(
+                                        response.body().to_vec(),
+                                    )))
+                                })
+                                .and_then(|_| {
+                                    sender.send(WebResourceResponseMsg::Body(HttpBodyData::Done))
+                                });
+                        } else {
+                            let _ = sender.send(WebResourceResponseMsg::None);
+                        }
+                    }
+                }
+            }
+            ToVersoMessage::SetSize(size) => {
+                if let Some(window) = self.first_window() {
+                    let _ = window.window.request_inner_size(size);
+                }
+            }
+            ToVersoMessage::SetPosition(position) => {
+                if let Some(window) = self.first_window() {
+                    window.window.set_outer_position(position);
+                }
+            }
+            ToVersoMessage::SetMaximized(maximized) => {
+                if let Some(window) = self.first_window() {
+                    window.window.set_maximized(maximized);
+                }
+            }
+            ToVersoMessage::SetMinimized(minimized) => {
+                if let Some(window) = self.first_window() {
+                    window.window.set_minimized(minimized);
+                }
+            }
+            ToVersoMessage::SetFullscreen(fullscreen) => {
+                if let Some(window) = self.first_window() {
+                    window.window.set_fullscreen(if fullscreen {
+                        Some(winit::window::Fullscreen::Borderless(None))
+                    } else {
+                        None
+                    });
+                }
+            }
+            ToVersoMessage::SetVisible(visible) => {
+                if let Some(window) = self.first_window() {
+                    window.window.set_visible(visible);
+                }
+            }
+            ToVersoMessage::StartDragging => {
+                if let Some(window) = self.first_window() {
+                    let _ = window.window.drag_window();
+                }
+            }
+            ToVersoMessage::GetSize => {
+                if let Some(window) = self.first_window() {
+                    if let Err(error) = self.to_controller_sender.as_ref().unwrap().send(
+                        ToControllerMessage::GetSizeResponse(window.window.inner_size()),
+                    ) {
+                        log::error!("Verso failed to send GetSizeReponse to controller: {error}")
+                    }
+                }
+            }
+            ToVersoMessage::GetPosition => {
+                if let Some(window) = self.first_window() {
+                    if let Err(error) = self.to_controller_sender.as_ref().unwrap().send(
+                        ToControllerMessage::GetPositionResponse(
+                            window.window.inner_position().ok(),
+                        ),
+                    ) {
+                        log::error!(
+                            "Verso failed to send GetPositionResponse to controller: {error}"
+                        )
+                    }
+                }
+            }
+            ToVersoMessage::GetMinimized => {
+                if let Some(window) = self.first_window() {
+                    if let Err(error) = self.to_controller_sender.as_ref().unwrap().send(
+                        ToControllerMessage::GetMinimizedResponse(
+                            window.window.is_minimized().unwrap_or_default(),
+                        ),
+                    ) {
+                        log::error!(
+                            "Verso failed to send GetMinimizedResponse to controller: {error}"
+                        )
+                    }
+                }
+            }
+            ToVersoMessage::GetMaximized => {
+                if let Some(window) = self.first_window() {
+                    if let Err(error) = self.to_controller_sender.as_ref().unwrap().send(
+                        ToControllerMessage::GetMaximizedResponse(window.window.is_maximized()),
+                    ) {
+                        log::error!(
+                            "Verso failed to send GetMaximizedResponse to controller: {error}"
+                        )
+                    }
+                }
+            }
+            ToVersoMessage::GetFullscreen => {
+                if let Some(window) = self.first_window() {
+                    if let Err(error) = self.to_controller_sender.as_ref().unwrap().send(
+                        ToControllerMessage::GetFullscreenResponse(
+                            window.window.fullscreen().is_some(),
+                        ),
+                    ) {
+                        log::error!(
+                            "Verso failed to send GetFullscreenResponse to controller: {error}"
+                        )
+                    }
+                }
+            }
+            ToVersoMessage::GetVisible => {
+                if let Some(window) = self.first_window() {
+                    if let Err(error) = self.to_controller_sender.as_ref().unwrap().send(
+                        ToControllerMessage::GetVisibleResponse(
+                            window.window.is_visible().unwrap_or(true),
+                        ),
+                    ) {
+                        log::error!(
+                            "Verso failed to send GetVisibleResponse to controller: {error}"
+                        )
+                    }
+                }
+            }
+            ToVersoMessage::GetScaleFactor => {
+                if let Some(window) = self.first_window() {
+                    if let Err(error) = self.to_controller_sender.as_ref().unwrap().send(
+                        ToControllerMessage::GetScaleFactorResponse(window.window.scale_factor()),
+                    ) {
+                        log::error!(
+                            "Verso failed to send GetScaleFactorResponse to controller: {error}"
+                        )
+                    }
+                }
+            }
+            ToVersoMessage::GetCurrentUrl => {
+                if let Some(window) = self.first_window() {
+                    let tab = window.tab_manager.current_tab().unwrap();
+                    let history = tab.history();
+                    if let Err(error) = self.to_controller_sender.as_ref().unwrap().send(
+                        ToControllerMessage::GetCurrentUrlResponse(
+                            history.list[history.current_idx].as_url().clone(),
+                        ),
+                    ) {
+                        log::error!(
+                            "Verso failed to send GetScaleFactorResponse to controller: {error}"
+                        )
+                    }
+                }
+            }
             _ => {}
         }
+    }
+
+    fn first_window(&self) -> Option<&Window> {
+        self.windows.values().next().map(|(window, _)| window)
+    }
+
+    fn first_window_mut(&mut self) -> Option<&mut Window> {
+        self.windows.values_mut().next().map(|(window, _)| window)
+    }
+
+    fn first_webview_id(&self) -> Option<TopLevelBrowsingContextId> {
+        self.windows
+            .values()
+            .next()
+            .and_then(|(window, _)| window.tab_manager.current_tab().map(|tab| tab.id()))
     }
 
     /// Return true if one of the Verso windows is animating.

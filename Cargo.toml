@@ -7,6 +7,10 @@ ipc-channel = "0.19"
 bincode = "1"
 url = { version = "2.5.2", features = ["serde"] }
 log = "0.4"
+headers = "0.4"
+http = "1"
+uuid = { version = "1", features = ["v4", "serde"] }
+dpi = { version = "0.1", features = ["serde"] }
 
 [package]
 name = "versoview"
@@ -109,12 +113,14 @@ cargo-packager-resource-resolver = { version = "0.1.1", features = [
   "auto-detect-format",
 ], optional = true }
 url = { workspace = true }
-headers = "0.4"
+headers = { workspace = true }
+http = { workspace = true }
 versoview_messages = { path = "./versoview_messages" }
 serde = { workspace = true }
 serde_json = "1.0"
 bincode = { workspace = true }
 mime = "0.3"
+uuid = { workspace = true }
 
 [target.'cfg(any(target_os = "macos", target_os = "windows"))'.dependencies]
 muda = "0.15"
