@@ -336,13 +336,11 @@ impl VersoviewController {
 
     /// Get the window's size
     pub fn get_size(&self) -> Result<PhysicalSize<u32>, Box<ipc_channel::ErrorKind>> {
+        let mut size_response = self.event_listeners.size_response.lock().unwrap();
         self.sender.send(ToVersoMessage::GetSize)?;
         let (sender, receiver) = std::sync::mpsc::channel();
-        self.event_listeners
-            .size_response
-            .lock()
-            .unwrap()
-            .replace(sender);
+        size_response.replace(sender);
+        drop(size_response);
         Ok(receiver.recv().unwrap())
     }
 
@@ -351,85 +349,71 @@ impl VersoviewController {
     pub fn get_position(
         &self,
     ) -> Result<Option<PhysicalPosition<i32>>, Box<ipc_channel::ErrorKind>> {
+        let mut position_response = self.event_listeners.position_response.lock().unwrap();
         self.sender.send(ToVersoMessage::GetPosition)?;
         let (sender, receiver) = std::sync::mpsc::channel();
-        self.event_listeners
-            .position_response
-            .lock()
-            .unwrap()
-            .replace(sender);
+        position_response.replace(sender);
+        drop(position_response);
         Ok(receiver.recv().unwrap())
     }
 
     /// Get if the window is currently maximized or not
     pub fn is_maximized(&self) -> Result<bool, Box<ipc_channel::ErrorKind>> {
-        self.sender.send(ToVersoMessage::GetPosition)?;
+        let mut maximized_response = self.event_listeners.maximized_response.lock().unwrap();
+        self.sender.send(ToVersoMessage::GetMaximized)?;
         let (sender, receiver) = std::sync::mpsc::channel();
-        self.event_listeners
-            .maximized_response
-            .lock()
-            .unwrap()
-            .replace(sender);
+        maximized_response.replace(sender);
+        drop(maximized_response);
         Ok(receiver.recv().unwrap())
     }
 
     /// Get if the window is currently minimized or not
     pub fn is_minimized(&self) -> Result<bool, Box<ipc_channel::ErrorKind>> {
+        let mut minimized_response = self.event_listeners.minimized_response.lock().unwrap();
         self.sender.send(ToVersoMessage::GetMinimized)?;
         let (sender, receiver) = std::sync::mpsc::channel();
-        self.event_listeners
-            .minimized_response
-            .lock()
-            .unwrap()
-            .replace(sender);
+        minimized_response.replace(sender);
+        drop(minimized_response);
         Ok(receiver.recv().unwrap())
     }
 
     /// Get if the window is currently fullscreen or not
     pub fn is_fullscreen(&self) -> Result<bool, Box<ipc_channel::ErrorKind>> {
+        let mut fullscreen_response = self.event_listeners.fullscreen_response.lock().unwrap();
         self.sender.send(ToVersoMessage::GetFullscreen)?;
         let (sender, receiver) = std::sync::mpsc::channel();
-        self.event_listeners
-            .fullscreen_response
-            .lock()
-            .unwrap()
-            .replace(sender);
+        fullscreen_response.replace(sender);
+        drop(fullscreen_response);
         Ok(receiver.recv().unwrap())
     }
 
     /// Get the visibility of the window
     pub fn is_visible(&self) -> Result<bool, Box<ipc_channel::ErrorKind>> {
+        let mut visible_response = self.event_listeners.visible_response.lock().unwrap();
         self.sender.send(ToVersoMessage::GetVisible)?;
         let (sender, receiver) = std::sync::mpsc::channel();
-        self.event_listeners
-            .visible_response
-            .lock()
-            .unwrap()
-            .replace(sender);
+        visible_response.replace(sender);
+        drop(visible_response);
         Ok(receiver.recv().unwrap())
     }
 
     /// Get the scale factor of the window
     pub fn get_scale_factor(&self) -> Result<f64, Box<ipc_channel::ErrorKind>> {
+        let mut scale_factor_response = self.event_listeners.scale_factor_response.lock().unwrap();
         self.sender.send(ToVersoMessage::GetScaleFactor)?;
         let (sender, receiver) = std::sync::mpsc::channel();
-        self.event_listeners
-            .scale_factor_response
-            .lock()
-            .unwrap()
-            .replace(sender);
+        scale_factor_response.replace(sender);
+        drop(scale_factor_response);
         Ok(receiver.recv().unwrap())
     }
 
     /// Get the URL of the webview
     pub fn get_current_url(&self) -> Result<url::Url, Box<ipc_channel::ErrorKind>> {
+        let mut get_url_response = self.event_listeners.get_url_response.lock().unwrap();
         self.sender.send(ToVersoMessage::GetCurrentUrl)?;
         let (sender, receiver) = std::sync::mpsc::channel();
-        self.event_listeners
-            .get_url_response
-            .lock()
-            .unwrap()
-            .replace(sender);
+        get_url_response.replace(sender);
+        drop(get_url_response);
         Ok(receiver.recv().unwrap())
     }
 
