@@ -4,7 +4,7 @@ use base::id::WebViewId;
 use compositing_traits::ConstellationMsg;
 use crossbeam_channel::Sender;
 use embedder_traits::{
-    AllowOrDeny, ContextMenuResult, Cursor, EmbedderMsg, InputEvent, MouseButton,
+    AllowOrDeny, ContextMenuResult, Cursor, EmbedderMsg, ImeEvent, InputEvent, MouseButton,
     MouseButtonAction, MouseButtonEvent, MouseMoveEvent, PromptResult, TouchEventType,
     TraversalDirection, WebResourceResponseMsg, WheelMode,
 };
@@ -15,7 +15,9 @@ use glutin::{
 };
 use glutin_winit::DisplayBuilder;
 use ipc_channel::ipc::IpcSender;
-use keyboard_types::{Code, CompositionEvent, CompositionState, KeyState, KeyboardEvent, Modifiers};
+use keyboard_types::{
+    Code, CompositionEvent, CompositionState, KeyState, KeyboardEvent, Modifiers,
+};
 #[cfg(any(target_os = "macos", target_os = "windows"))]
 use muda::{Menu as MudaMenu, MenuEvent, MenuEventReceiver, MenuItem};
 #[cfg(any(target_os = "macos", target_os = "windows"))]
@@ -875,8 +877,13 @@ impl Window {
         position: euclid::Box2D<i32, webrender_api::units::DevicePixel>,
     ) {
         self.window.set_ime_allowed(true);
+        let height: f64 = if self.tab_manager.count() > 1 {
+            PANEL_HEIGHT + TAB_HEIGHT + PANEL_PADDING
+        } else {
+            PANEL_HEIGHT + PANEL_PADDING
+        };
         self.window.set_ime_cursor_area(
-            LogicalPosition::new(position.min.x, position.min.y),
+            LogicalPosition::new(position.min.x, position.min.y + height as i32),
             LogicalSize::new(
                 position.max.x - position.min.x,
                 position.max.y - position.min.y,
