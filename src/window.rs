@@ -5,7 +5,7 @@ use compositing_traits::ConstellationMsg;
 use crossbeam_channel::Sender;
 use embedder_traits::{
     AllowOrDeny, ContextMenuResult, Cursor, EmbedderMsg, InputEvent, MouseButton,
-    MouseButtonAction, MouseButtonEvent, MouseMoveEvent, PromptResult, TouchEventAction,
+    MouseButtonAction, MouseButtonEvent, MouseMoveEvent, PromptResult, TouchEventType,
     TraversalDirection, WebResourceResponseMsg, WheelMode,
 };
 use euclid::{Point2D, Size2D};
@@ -511,11 +511,11 @@ impl Window {
                     y = 0.0;
                 }
 
-                let phase: TouchEventAction = match phase {
-                    TouchPhase::Started => TouchEventAction::Down,
-                    TouchPhase::Moved => TouchEventAction::Move,
-                    TouchPhase::Ended => TouchEventAction::Up,
-                    TouchPhase::Cancelled => TouchEventAction::Cancel,
+                let phase: TouchEventType = match phase {
+                    TouchPhase::Started => TouchEventType::Down,
+                    TouchPhase::Moved => TouchEventType::Move,
+                    TouchPhase::Ended => TouchEventType::Up,
+                    TouchPhase::Cancelled => TouchEventType::Cancel,
                 };
 
                 compositor.on_scroll_event(

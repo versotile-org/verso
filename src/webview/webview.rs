@@ -164,7 +164,7 @@ impl Window {
                             ),
                         ) {
                             Ok(_) => {
-                                request_map.insert(id, (request.url, sender));
+                                request_map.insert(id, (ServoUrl::from_url(request.url), sender));
                                 // We will handle a ToVersoMessage::WebResourceRequestResponse
                                 // and send the response through this sender there if the call succeed
                                 return;

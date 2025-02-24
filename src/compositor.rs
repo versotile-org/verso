@@ -14,7 +14,7 @@ use compositing_traits::{
 use crossbeam_channel::Sender;
 use embedder_traits::{
     Cursor, InputEvent, MouseButton, MouseButtonAction, MouseButtonEvent, MouseMoveEvent,
-    TouchEvent, TouchEventAction, TouchId,
+    TouchEvent, TouchEventType, TouchId,
 };
 use euclid::{vec2, Point2D, Scale, Size2D, Transform3D, Vector2D};
 use gleam::gl;
@@ -198,7 +198,7 @@ pub struct IOCompositor {
     cursor_pos: DevicePoint,
 
     /// True to exit after page load ('-x').
-    exit_after_load: bool,
+    wait_for_stable_image: bool,
 
     /// True to translate mouse input into touch events.
     convert_mouse_to_touch: bool,
@@ -344,7 +344,7 @@ impl IOCompositor {
         viewport: DeviceIntSize,
         scale_factor: Scale<f32, DeviceIndependentPixel, DevicePixel>,
         state: InitialCompositorState,
-        exit_after_load: bool,
+        wait_for_stable_image: bool,
         convert_mouse_to_touch: bool,
     ) -> Self {
         let compositor = IOCompositor {
@@ -376,7 +376,7 @@ impl IOCompositor {
             pending_paint_metrics: HashMap::new(),
             cursor: Cursor::None,
             cursor_pos: DevicePoint::new(0.0, 0.0),
-            exit_after_load,
+            wait_for_stable_image,
             convert_mouse_to_touch,
             pending_frames: 0,
             last_animation_tick: Instant::now(),
@@ -436,6 +436,7 @@ impl IOCompositor {
         }
 
         self.shutdown_state = ShutdownState::ShuttingDown;
+        self.finish_shutting_down();
     }
 
     fn finish_shutting_down(&mut self) {
@@ -472,12 +473,6 @@ impl IOCompositor {
         }
 
         match msg {
-            CompositorMsg::ShutdownComplete => {
-                warn!("Received `ShutdownComplete` while not shutting down.");
-                self.finish_shutting_down();
-                return false;
-            }
-
             CompositorMsg::ChangeRunningAnimationsState(pipeline_id, animation_state) => {
                 self.change_running_animations_state(pipeline_id, animation_state);
             }
@@ -542,7 +537,7 @@ impl IOCompositor {
 
             CompositorMsg::LoadComplete(_) => {
                 // If we're painting in headless mode, schedule a recomposite.
-                if self.exit_after_load {
+                if self.wait_for_stable_image {
                     self.composite_if_necessary(CompositingReason::Headless);
                 }
             }
@@ -807,10 +802,6 @@ impl IOCompositor {
     /// compositor no longer does any WebRender frame generation.
     fn handle_browser_message_while_shutting_down(&mut self, msg: CompositorMsg) -> bool {
         match msg {
-            CompositorMsg::ShutdownComplete => {
-                self.finish_shutting_down();
-                return false;
-            }
             CompositorMsg::PipelineExited(pipeline_id, sender) => {
                 debug!("Compositor got pipeline exited: {:?}", pipeline_id);
                 self.remove_pipeline_root_layer(pipeline_id);
@@ -1310,13 +1301,28 @@ impl IOCompositor {
                 InputEvent::MouseButton(event) => {
                     match event.action {
                         MouseButtonAction::Click => {}
-                        MouseButtonAction::Down => self.on_touch_down(TouchId(0), event.point),
-                        MouseButtonAction::Up => self.on_touch_up(TouchId(0), event.point),
+                        MouseButtonAction::Down => self.on_touch_down(TouchEvent {
+                            event_type: TouchEventType::Down,
+                            id: TouchId(0),
+                            point: event.point,
+                            action: embedder_traits::TouchAction::NoAction,
+                        }),
+                        MouseButtonAction::Up => self.on_touch_up(TouchEvent {
+                            event_type: TouchEventType::Up,
+                            id: TouchId(0),
+                            point: event.point,
+                            action: embedder_traits::TouchAction::NoAction,
+                        }),
                     }
                     return;
                 }
                 InputEvent::MouseMove(event) => {
-                    self.on_touch_move(TouchId(0), event.point);
+                    self.on_touch_move(TouchEvent {
+                        event_type: TouchEventType::Move,
+                        id: TouchId(0),
+                        point: event.point,
+                        action: embedder_traits::TouchAction::NoAction,
+                    });
                     return;
                 }
                 _ => {}
@@ -1394,28 +1400,24 @@ impl IOCompositor {
             return;
         }
 
-        match event.action {
-            TouchEventAction::Down => self.on_touch_down(event.id, event.point),
-            TouchEventAction::Move => self.on_touch_move(event.id, event.point),
-            TouchEventAction::Up => self.on_touch_up(event.id, event.point),
-            TouchEventAction::Cancel => self.on_touch_cancel(event.id, event.point),
+        match event.event_type {
+            TouchEventType::Down => self.on_touch_down(event),
+            TouchEventType::Move => self.on_touch_move(event),
+            TouchEventType::Up => self.on_touch_up(event),
+            TouchEventType::Cancel => self.on_touch_cancel(event),
         }
     }
 
-    fn on_touch_down(&mut self, id: TouchId, point: DevicePoint) {
-        self.touch_handler.on_touch_down(id, point);
-        self.send_touch_event(TouchEvent {
-            action: TouchEventAction::Down,
-            id,
-            point,
-        })
+    fn on_touch_down(&mut self, event: TouchEvent) {
+        self.touch_handler.on_touch_down(event.id, event.point);
+        self.send_touch_event(event);
     }
 
-    fn on_touch_move(&mut self, id: TouchId, point: DevicePoint) {
-        match self.touch_handler.on_touch_move(id, point) {
+    fn on_touch_move(&mut self, event: TouchEvent) {
+        match self.touch_handler.on_touch_move(event.id, event.point) {
             TouchAction::Scroll(delta) => self.on_scroll_window_event(
                 ScrollLocation::Delta(LayoutVector2D::from_untyped(delta.to_untyped())),
-                point.cast(),
+                event.point.cast(),
             ),
             TouchAction::Zoom(magnification, scroll_delta) => {
                 let cursor = Point2D::new(-1, -1); // Make sure this hits the base layer.
@@ -1434,35 +1436,23 @@ impl IOCompositor {
                         event_count: 1,
                     }));
             }
-            TouchAction::DispatchEvent => self.send_touch_event(TouchEvent {
-                action: TouchEventAction::Move,
-                id,
-                point,
-            }),
+            TouchAction::DispatchEvent => self.send_touch_event(event),
             _ => {}
         }
     }
 
-    fn on_touch_up(&mut self, id: TouchId, point: DevicePoint) {
-        self.send_touch_event(TouchEvent {
-            action: TouchEventAction::Up,
-            id,
-            point,
-        });
+    fn on_touch_up(&mut self, event: TouchEvent) {
+        self.send_touch_event(event);
 
-        if let TouchAction::Click = self.touch_handler.on_touch_up(id, point) {
-            self.simulate_mouse_click(point);
+        if let TouchAction::Click = self.touch_handler.on_touch_up(event.id, event.point) {
+            self.simulate_mouse_click(event.point);
         }
     }
 
-    fn on_touch_cancel(&mut self, id: TouchId, point: DevicePoint) {
+    fn on_touch_cancel(&mut self, event: TouchEvent) {
         // Send the event to script.
-        self.touch_handler.on_touch_cancel(id, point);
-        self.send_touch_event(TouchEvent {
-            action: TouchEventAction::Cancel,
-            id,
-            point,
-        })
+        self.touch_handler.on_touch_cancel(event.id, event.point);
+        self.send_touch_event(event);
     }
 
     /// <http://w3c.github.io/touch-events/#mouse-events>
@@ -1491,18 +1481,18 @@ impl IOCompositor {
         &mut self,
         scroll_location: ScrollLocation,
         cursor: DeviceIntPoint,
-        action: TouchEventAction,
+        action: TouchEventType,
     ) {
         if self.shutdown_state != ShutdownState::NotShuttingDown {
             return;
         }
 
         match action {
-            TouchEventAction::Move => self.on_scroll_window_event(scroll_location, cursor),
-            TouchEventAction::Up | TouchEventAction::Cancel => {
+            TouchEventType::Move => self.on_scroll_window_event(scroll_location, cursor),
+            TouchEventType::Up | TouchEventType::Cancel => {
                 self.on_scroll_window_event(scroll_location, cursor);
             }
-            TouchEventAction::Down => {
+            TouchEventType::Down => {
                 self.on_scroll_window_event(scroll_location, cursor);
             }
         }
@@ -1856,7 +1846,7 @@ impl IOCompositor {
     pub fn composite(&mut self, window: &Window) {
         match self.composite_specific_target(window) {
             Ok(_) => {
-                if self.exit_after_load {
+                if self.wait_for_stable_image {
                     println!("Shutting down the Constellation after generating an output file or exit flag specified");
                     self.start_shutting_down();
                 }
@@ -1881,7 +1871,7 @@ impl IOCompositor {
             webrender.update();
         }
 
-        let wait_for_stable_image = self.exit_after_load;
+        let wait_for_stable_image = self.wait_for_stable_image;
 
         if wait_for_stable_image {
             // The current image may be ready to output. However, if there are animations active,
