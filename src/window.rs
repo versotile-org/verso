@@ -30,7 +30,7 @@ use webrender_api::{
 #[cfg(any(linux, target_os = "windows"))]
 use winit::window::ResizeDirection;
 use winit::{
-    dpi::PhysicalPosition,
+    dpi::{LogicalPosition, LogicalSize, PhysicalPosition},
     event::{ElementState, Ime, TouchPhase, WindowEvent},
     event_loop::ActiveEventLoop,
     keyboard::ModifiersState,
@@ -552,7 +552,7 @@ impl Window {
                                 data: text,
                             })),
                         );
-                    },
+                    }
                     Ime::Enabled => {
                         forward_input_event(
                             compositor,
@@ -572,7 +572,7 @@ impl Window {
                                 data: text.to_string(),
                             })),
                         );
-                    },
+                    }
                     Ime::Disabled => {
                         forward_input_event(
                             compositor,
@@ -864,6 +864,30 @@ impl Window {
         };
         self.window.set_cursor(winit_cursor);
     }
+
+    /// This method enables IME and set the IME cursor area of the window.
+    /// The position is in logical position so it'll scale according to screen scaling factor.
+    pub fn show_ime(
+        &self,
+        _input_method_typee: embedder_traits::InputMethodType,
+        _text: Option<(String, i32)>,
+        _multilinee: bool,
+        position: euclid::Box2D<i32, webrender_api::units::DevicePixel>,
+    ) {
+        self.window.set_ime_allowed(true);
+        self.window.set_ime_cursor_area(
+            LogicalPosition::new(position.min.x, position.min.y),
+            LogicalSize::new(
+                position.max.x - position.min.x,
+                position.max.y - position.min.y,
+            ),
+        );
+    }
+
+    /// This method disables IME of the window.
+    pub fn hide_ime(&self) {
+        self.window.set_ime_allowed(false);
+    }
 }
 
 // Context Menu methods
@@ -1135,8 +1159,6 @@ impl Window {
 use objc2::runtime::AnyObject;
 #[cfg(macos)]
 use raw_window_handle::{AppKitWindowHandle, RawWindowHandle};
-#[cfg(macos)]
-use winit::dpi::LogicalPosition;
 
 /// Window decoration for macOS.
 #[cfg(macos)]
