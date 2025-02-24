@@ -14,7 +14,7 @@ use constellation::{Constellation, FromCompositorLogger, InitialConstellationSta
 use crossbeam_channel::{unbounded, Receiver, Sender};
 use devtools;
 use embedder_traits::{
-    AllowOrDeny, EmbedderMsg, EmbedderProxy, EventLoopWaker, HttpBodyData, WebResourceResponse,
+    AllowOrDeny, EmbedderMsg, EmbedderProxy, EventLoopWaker, WebResourceResponse,
     WebResourceResponseMsg,
 };
 use euclid::Scale;
@@ -273,14 +273,6 @@ impl Verso {
             WebrenderImageHandlerType::WebGPU,
         );
 
-        // TODO enable gl media player
-        let glplayer_context = WindowGLContext {
-            gl_context: GlContext::Unknown,
-            gl_api: GlApi::None,
-            native_display: NativeDisplay::Unknown,
-            glplayer_chan: None,
-        };
-
         webrender.set_external_image_handler(external_image_handlers);
 
         // Create bluetooth thread
@@ -330,8 +322,6 @@ impl Verso {
             webrender_api_sender,
             webxr_registry: None,
             webgl_threads: None,
-            glplayer_threads: None,
-            player_context: glplayer_context,
             user_agent,
             webrender_external_images: external_images,
             wgpu_image_map,
@@ -380,7 +370,7 @@ impl Verso {
                 rendering_context,
                 webrender_gl,
             },
-            opts.exit_after_load,
+            opts.wait_for_stable_image,
             opts.debug.convert_mouse_to_touch,
         );
 
@@ -625,6 +615,7 @@ impl Verso {
             EmbedderMsg::RequestDevtoolsConnection(_) => None,
             EmbedderMsg::PlayGamepadHapticEffect(webview_id, _, _, _) => Some(webview_id),
             EmbedderMsg::StopGamepadHapticEffect(webview_id, _, _) => Some(webview_id),
+            EmbedderMsg::ShutdownComplete => None,
         }
     }
 
@@ -699,20 +690,20 @@ impl Verso {
                         if let Some(response) = response.response {
                             let _ = sender
                                 .send(WebResourceResponseMsg::Start(
-                                    WebResourceResponse::new(url)
+                                    WebResourceResponse::new(url.into_url())
                                         .headers(response.headers().clone())
                                         .status_code(response.status()),
                                 ))
                                 .and_then(|_| {
-                                    sender.send(WebResourceResponseMsg::Body(HttpBodyData::Chunk(
+                                    sender.send(WebResourceResponseMsg::SendBodyData(
                                         response.body().to_vec(),
-                                    )))
+                                    ))
                                 })
                                 .and_then(|_| {
-                                    sender.send(WebResourceResponseMsg::Body(HttpBodyData::Done))
+                                    sender.send(WebResourceResponseMsg::SendBodyData(Vec::new()))
                                 });
                         } else {
-                            let _ = sender.send(WebResourceResponseMsg::None);
+                            let _ = sender.send(WebResourceResponseMsg::DoNotIntercept);
                         }
                     }
                 }
