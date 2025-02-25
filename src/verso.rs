@@ -23,7 +23,6 @@ use ipc_channel::ipc::{self, IpcSender};
 use ipc_channel::router::ROUTER;
 use layout_thread_2020;
 use log::{Log, Metadata, Record};
-use media::{GlApi, GlContext, NativeDisplay, WindowGLContext};
 use net::resource_thread;
 use profile;
 use script::{self, JSEngineSetup};
@@ -457,7 +456,7 @@ impl Verso {
                     {
                         log::error!(
                             "Verso failed to send WebResourceRequested to controller: {error}"
-                        )
+                        );
                     } else {
                         return false;
                     }
@@ -690,18 +689,16 @@ impl Verso {
                         if let Some(response) = response.response {
                             let _ = sender
                                 .send(WebResourceResponseMsg::Start(
-                                    WebResourceResponse::new(url.into_url())
+                                    WebResourceResponse::new(url)
                                         .headers(response.headers().clone())
                                         .status_code(response.status()),
                                 ))
                                 .and_then(|_| {
                                     sender.send(WebResourceResponseMsg::SendBodyData(
-                                        response.body().to_vec(),
+                                        response.into_body(),
                                     ))
                                 })
-                                .and_then(|_| {
-                                    sender.send(WebResourceResponseMsg::SendBodyData(Vec::new()))
-                                });
+                                .and_then(|_| sender.send(WebResourceResponseMsg::FinishLoad));
                         } else {
                             let _ = sender.send(WebResourceResponseMsg::DoNotIntercept);
                         }
