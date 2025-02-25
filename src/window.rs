@@ -885,7 +885,7 @@ impl Window {
         self.window.set_ime_cursor_area(
             LogicalPosition::new(position.min.x, position.min.y + height as i32),
             LogicalSize::new(
-                position.max.x - position.min.x,
+                0,
                 position.max.y - position.min.y,
             ),
         );
