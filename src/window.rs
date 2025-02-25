@@ -63,7 +63,7 @@ pub(crate) struct EventListeners {
     pub(crate) on_navigation_starting: bool,
     /// A id to request response sender map if the controller wants to get and handle web resource requests
     pub(crate) on_web_resource_requested:
-        Option<HashMap<uuid::Uuid, (ServoUrl, IpcSender<WebResourceResponseMsg>)>>,
+        Option<HashMap<uuid::Uuid, (url::Url, IpcSender<WebResourceResponseMsg>)>>,
     /// This is `true` if the controller wants to get and handle WindowEvent::CloseRequested
     pub(crate) on_close_requested: bool,
 }
