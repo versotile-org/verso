@@ -3,7 +3,7 @@
 
 use std::process::ExitCode;
 
-use versoview::config::Config;
+use versoview::config::{ArgError, Config};
 use versoview::verso::EventLoopProxyMessage;
 use versoview::Verso;
 use winit::application::ApplicationHandler;
@@ -73,9 +73,15 @@ fn run() -> versoview::errors::Result<()> {
 
 fn main() -> ExitCode {
     run().map_or_else(
-        |e| {
-            print!("{e}");
-            ExitCode::FAILURE
+        |e| match e {
+            versoview::Error::ArgError(ArgError::Help(message)) => {
+                println!("{message}");
+                ExitCode::SUCCESS
+            }
+            e => {
+                eprintln!("{e}");
+                ExitCode::FAILURE
+            }
         },
         |()| ExitCode::SUCCESS,
     )
