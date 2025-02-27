@@ -103,8 +103,8 @@ impl Verso {
                 receiver,
                 Box::new(move |message| match message {
                     Ok(message) => {
-                        if let Err(e) =
-                            proxy_clone.send_event(EventLoopProxyMessage::IpcMessage(message))
+                        if let Err(e) = proxy_clone
+                            .send_event(EventLoopProxyMessage::IpcMessage(Box::new(message)))
                         {
                             log::error!("Failed to send controller message to Verso: {e}");
                         }
@@ -901,7 +901,7 @@ pub enum EventLoopProxyMessage {
     /// Wake
     Wake,
     /// Message coming from the webview controller
-    IpcMessage(ToVersoMessage),
+    IpcMessage(Box<ToVersoMessage>),
 }
 
 #[derive(Debug, Clone)]
