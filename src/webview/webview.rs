@@ -298,21 +298,29 @@ impl Window {
                     rfd::FileDialog::new()
                         .pick_files()
                         .map(|files| {
-                            ipc_sender.send(Some(files)).unwrap();
+                            if let Err(e) = ipc_sender.send(Some(files)) {
+                                log::warn!("Verso Panel failed to send files: {}", e);
+                            }
                         })
                         .unwrap_or_else(|| {
                             log::error!("Failed to open file dialog.");
-                            ipc_sender.send(None).unwrap();
+                            if let Err(e) = ipc_sender.send(None) {
+                                log::warn!("Verso Panel failed to send files: {}", e);
+                            }
                         });
                 } else {
                     rfd::FileDialog::new()
                         .pick_file()
                         .map(|file| {
-                            ipc_sender.send(Some(vec![file])).unwrap();
+                            if let Err(e) = ipc_sender.send(Some(vec![file])) {
+                                log::warn!("Verso Panel failed to send files: {}", e);
+                            }
                         })
                         .unwrap_or_else(|| {
                             log::error!("Failed to open file dialog.");
-                            ipc_sender.send(None).unwrap();
+                            if let Err(e) = ipc_sender.send(None) {
+                                log::warn!("Verso Panel failed to send files: {}", e);
+                            }
                         });
                 }
             }
