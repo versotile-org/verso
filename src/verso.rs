@@ -80,8 +80,11 @@ impl Verso {
     /// - Canvas: Enabled
     /// - Constellation: Enabled
     /// - Image Cache: Enabled
-    pub fn new(evl: &ActiveEventLoop, proxy: EventLoopProxy<EventLoopProxyMessage>) -> Self {
-        let config = Config::new();
+    pub fn new(
+        config: Config,
+        evl: &ActiveEventLoop,
+        proxy: EventLoopProxy<EventLoopProxyMessage>,
+    ) -> Self {
         let to_controller_sender = if let Some(ipc_channel) = &config.args.ipc_channel {
             let sender =
                 IpcSender::<ToControllerMessage>::connect(ipc_channel.to_string()).unwrap();

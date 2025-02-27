@@ -52,6 +52,18 @@ pub struct CliArgs {
     pub zoom_level: Option<f32>,
 }
 
+/// Reason to abort running Verso.
+#[non_exhaustive]
+#[derive(thiserror::Error, Debug)]
+pub enum ArgError {
+    /// Failed to parse command line arguments
+    #[error("Failed to parse command line arguments: {0}\n  try \"--help\"")]
+    ParseError(#[from] getopts::Fail),
+    /// `--help` was used. Print help and exit.
+    #[error("{0}")]
+    Help(String),
+}
+
 /// Configuration of Verso instance.
 #[derive(Clone, Debug)]
 pub struct Config {
@@ -64,7 +76,7 @@ pub struct Config {
     pub resource_dir: PathBuf,
 }
 
-fn parse_cli_args() -> Result<CliArgs, getopts::Fail> {
+fn parse_cli_args() -> Result<CliArgs, ArgError> {
     let args: Vec<String> = std::env::args().collect();
 
     let mut opts = getopts::Options::new();
@@ -153,7 +165,12 @@ fn parse_cli_args() -> Result<CliArgs, getopts::Fail> {
 
     opts.optopt("", "zoom", "Initial window's zoom level", "1.5");
 
+    opts.optflag("", "help", "Display this help message");
+
     let matches: getopts::Matches = opts.parse(&args[1..])?;
+    if matches.opt_present("help") {
+        return Err(ArgError::Help(opts.usage(&opts.short_usage(&args[0]))));
+    }
     let url = matches
         .opt_str("url")
         .and_then(|url| match url::Url::parse(&url) {
@@ -273,9 +290,9 @@ fn parse_cli_args() -> Result<CliArgs, getopts::Fail> {
 
 impl Config {
     /// Create a new configuration for creating Verso instance.
-    pub fn new() -> Self {
+    pub fn new() -> Result<Self, ArgError> {
+        let args = parse_cli_args()?;
         let mut opts = Opts::default();
-        let args = parse_cli_args().unwrap_or_default();
 
         let (devtools_server_enabled, devtools_port) =
             if let Some(devtools_port) = args.devtools_port {
@@ -301,11 +318,11 @@ impl Config {
 
         let resource_dir = args.resource_dir.clone().unwrap_or(resources_dir_path());
 
-        Self {
+        Ok(Self {
             opts,
             args,
             resource_dir,
-        }
+        })
     }
 
     /// Register URL scheme protocols

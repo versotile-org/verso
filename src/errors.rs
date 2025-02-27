@@ -17,4 +17,7 @@ pub enum Error {
     /// IPC errors.
     #[error(transparent)]
     IpcError(#[from] ipc_channel::ipc::IpcError),
+    /// Error parsing arguments (or `--help` was invoked).
+    #[error(transparent)]
+    ArgError(#[from] crate::config::ArgError),
 }
