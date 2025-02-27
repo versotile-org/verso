@@ -43,7 +43,7 @@ use winit::{
 
 use crate::{
     compositor::{IOCompositor, InitialCompositorState, ShutdownState},
-    config::Config,
+    config::{parse_cli_args, Config},
     webview::execute_script,
     window::Window,
 };
@@ -61,6 +61,7 @@ pub struct Verso {
     _js_engine_setup: Option<JSEngineSetup>,
     /// FIXME: It's None on wayland in Flatpak. Find a way to support this.
     clipboard: Option<Clipboard>,
+    config: Config,
 }
 
 impl Verso {
@@ -81,14 +82,22 @@ impl Verso {
     /// - Constellation: Enabled
     /// - Image Cache: Enabled
     pub fn new(evl: &ActiveEventLoop, proxy: EventLoopProxy<EventLoopProxyMessage>) -> Self {
-        let config = Config::new();
-        let to_controller_sender = if let Some(ipc_channel) = &config.args.ipc_channel {
+        let cli_args = parse_cli_args().unwrap_or_default();
+        let (to_controller_sender, initial_settings) = if let Some(ipc_channel) =
+            &cli_args.ipc_channel
+        {
             let sender =
                 IpcSender::<ToControllerMessage>::connect(ipc_channel.to_string()).unwrap();
             let (to_verso_sender, receiver) = ipc::channel::<ToVersoMessage>().unwrap();
             sender
                 .send(ToControllerMessage::SetToVersoSender(to_verso_sender))
                 .unwrap();
+            let ToVersoMessage::SetConfig(initial_settings) = receiver
+                .recv()
+                .expect("Failed to recieve the initial settings from controller")
+            else {
+                panic!("The initial message sent from versoview is not a `ToVersoMessage::SetInitialSettings`")
+            };
             let proxy_clone = proxy.clone();
             ROUTER.add_typed_route(
                 receiver,
@@ -103,24 +112,24 @@ impl Verso {
                     Err(e) => log::error!("Failed to receive controller message: {e}"),
                 }),
             );
-            Some(sender)
+            (Some(sender), Some(initial_settings))
         } else {
-            None
+            (None, None)
+        };
+        let config = if let Some(initial_settings) = initial_settings {
+            Config::from_config(initial_settings)
+        } else {
+            Config::from_cli_args(cli_args)
         };
 
         // Initialize configurations and Verso window
         let protocols = config.create_protocols();
-        let initial_url = config.args.url.clone();
-        let with_panel = !config.args.no_panel;
-        let window_settings = config.args.window_attributes.clone();
-        let user_agent: Cow<'static, str> = config
-            .args
-            .user_agent
-            .clone()
-            .unwrap_or_else(|| default_user_agent_string().to_string())
-            .into();
-        let init_script = config.args.init_script.clone();
-        let zoom_level = config.args.zoom_level;
+        let initial_url = config.url.clone();
+        let with_panel = config.with_panel;
+        let window_settings = config.window_attributes.clone();
+        let user_agent: Cow<'static, str> = config.user_agent.clone().into();
+        let init_script = config.init_script.clone();
+        let zoom_level = config.zoom_level;
 
         config.init();
         // Reserving a namespace to create TopLevelBrowsingContextId.
@@ -378,7 +387,7 @@ impl Verso {
 
         if with_panel {
             window.create_panel(&constellation_sender, initial_url);
-        } else if let Some(initial_url) = initial_url {
+        } else {
             window.create_tab(&constellation_sender, initial_url.into());
         }
 
@@ -396,6 +405,7 @@ impl Verso {
             embedder_receiver,
             _js_engine_setup: js_engine_setup,
             clipboard: Clipboard::new().ok(),
+            config,
         };
 
         verso.setup_logging();
@@ -511,7 +521,10 @@ impl Verso {
                                     compositor,
                                 ) {
                                     let mut window = Window::new_with_compositor(evl, compositor);
-                                    window.create_panel(&self.constellation_sender, None);
+                                    window.create_panel(
+                                        &self.constellation_sender,
+                                        self.config.url.clone(),
+                                    );
                                     let webrender_document = *document;
                                     self.windows
                                         .insert(window.id(), (window, webrender_document));
@@ -904,24 +917,6 @@ impl EventLoopWaker for Waker {
             log::error!("Servo failed to send wake up event to Verso: {e}");
         }
     }
-}
-
-fn default_user_agent_string() -> &'static str {
-    #[cfg(macos)]
-    const UA_STRING: &str =
-        "Mozilla/5.0 (Macintosh; Intel Mac OS X 10.15; rv:109.0) Servo/1.0 Firefox/111.0";
-    #[cfg(ios)]
-    const UA_STRING: &str =
-        "Mozilla/5.0 (iPhone; CPU iPhone OS 16_4 like Mac OS X; rv:109.0) Servo/1.0 Firefox/111.0";
-    #[cfg(android)]
-    const UA_STRING: &str = "Mozilla/5.0 (Android; Mobile; rv:109.0) Servo/1.0 Firefox/111.0";
-    #[cfg(linux)]
-    const UA_STRING: &str = "Mozilla/5.0 (X11; Linux x86_64; rv:109.0) Servo/1.0 Firefox/111.0";
-    #[cfg(windows)]
-    const UA_STRING: &str =
-        "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:109.0) Servo/1.0 Firefox/111.0";
-
-    UA_STRING
 }
 
 #[derive(Clone)]

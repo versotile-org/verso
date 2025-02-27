@@ -1,3 +1,5 @@
+use std::path::PathBuf;
+
 use dpi::{PhysicalPosition, PhysicalSize, Position, Size};
 use ipc_channel::ipc;
 use serde::{Deserialize, Serialize};
@@ -13,6 +15,9 @@ type SerializedPipelineId = Vec<u8>;
 #[derive(Debug, Serialize, Deserialize)]
 #[non_exhaustive]
 pub enum ToVersoMessage {
+    /// Initial configs for versoview
+    /// this will be the first message sent to Verso once we received the sender from [`ToControllerMessage::SetToVersoSender`]
+    SetConfig(ConfigFromController),
     /// Exit
     Exit,
     /// Register a listener on versoview for getting notified on close requested from the OS,
@@ -67,7 +72,8 @@ pub enum ToVersoMessage {
 #[derive(Debug, Serialize, Deserialize)]
 #[non_exhaustive]
 pub enum ToControllerMessage {
-    /// IPC sender for the controller to send commands to versoview
+    /// IPC sender for the controller to send commands to versoview,
+    /// this will be the first message sent to the controller once connected
     SetToVersoSender(ipc::IpcSender<ToVersoMessage>),
     /// Sent on a new navigation starting, need a response with [`ToVersoMessage::OnNavigationStartingResponse`]
     OnNavigationStarting(SerializedPipelineId, url::Url),
@@ -91,6 +97,53 @@ pub enum ToControllerMessage {
     GetCurrentUrlResponse(url::Url),
     /// Verso have recieved a close request from the OS
     OnCloseRequested,
+}
+
+/// Configuration of Verso instance.
+#[derive(Clone, Debug, Default, Serialize, Deserialize)]
+pub struct ConfigFromController {
+    /// URL to load initially.
+    pub url: Option<url::Url>,
+    /// Should launch without or without control panel
+    pub with_panel: bool,
+    /// Window size for the initial winit window
+    pub size: Option<Size>,
+    /// Window position for the initial winit window
+    pub position: Option<Position>,
+    /// Window position for the initial winit window
+    pub maximized: bool,
+    /// Port number to start a server to listen to remote Firefox devtools connections. 0 for random port.
+    pub devtools_port: Option<u16>,
+    /// Servo time profile settings
+    pub profiler_settings: Option<ProfilerSettings>,
+    /// Override the user agent
+    pub user_agent: Option<String>,
+    /// Script to run on document started to load
+    pub init_script: Option<String>,
+    /// The directory to load userscripts from
+    pub userscripts_directory: Option<String>,
+    /// Initial window's zoom level
+    pub zoom_level: Option<f32>,
+    /// Path to resource directory. If None, Verso will try to get default directory. And if that
+    /// still doesn't exist, all resource configuration will set to default values.
+    pub resource_dir: Option<PathBuf>,
+}
+
+/// Servo time profile settings
+#[derive(Clone, Debug, Deserialize, Serialize)]
+pub struct ProfilerSettings {
+    /// Servo time profile settings
+    pub output_options: OutputOptions,
+    /// When servo profiler is enabled, this is an optional path to dump a self-contained HTML file
+    /// visualizing the traces as a timeline.
+    pub trace_path: Option<String>,
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize)]
+pub enum OutputOptions {
+    /// Database connection config (hostname, name, user, pass)
+    FileName(String),
+    Stdout(f64),
 }
 
 #[derive(Debug, Serialize, Deserialize)]
