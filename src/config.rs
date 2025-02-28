@@ -294,7 +294,7 @@ impl Config {
             init_script: cli_args.init_script,
             userscripts_directory: cli_args.userscripts_directory,
             zoom_level: cli_args.zoom_level,
-            resource_dir: cli_args.resource_dir,
+            resources_directory: cli_args.resource_dir,
             maximized: !cli_args.no_maximized,
             position: cli_args.position.map(Into::into),
             size: cli_args.size.map(Into::into),
@@ -303,7 +303,7 @@ impl Config {
 
     /// Create a new configuration for creating Verso instance from the controller config.
     pub fn from_config(config: ConfigFromController) -> Self {
-        let resource_dir = config.resource_dir.unwrap_or_else(resources_dir_path);
+        let resource_dir = config.resources_directory.unwrap_or_else(resources_dir_path);
         let with_panel = config.with_panel;
         let user_agent = config
             .user_agent

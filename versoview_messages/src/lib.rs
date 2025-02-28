@@ -126,7 +126,7 @@ pub struct ConfigFromController {
     pub zoom_level: Option<f32>,
     /// Path to resource directory. If None, Verso will try to get default directory. And if that
     /// still doesn't exist, all resource configuration will set to default values.
-    pub resource_dir: Option<PathBuf>,
+    pub resources_directory: Option<PathBuf>,
 }
 
 /// Servo time profile settings
