@@ -57,7 +57,7 @@ impl VersoviewController {
         let (receiver, message) = server.accept().unwrap();
         let ToControllerMessage::SetToVersoSender(sender) = message else {
             panic!(
-                "The initial message sent from versoview is not a `ToControllerMessage::IpcSender`"
+                "The initial message sent from versoview is not a `ToControllerMessage::SetToVersoSender`"
             )
         };
 

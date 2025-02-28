@@ -83,39 +83,40 @@ impl Verso {
     /// - Image Cache: Enabled
     pub fn new(evl: &ActiveEventLoop, proxy: EventLoopProxy<EventLoopProxyMessage>) -> Self {
         let cli_args = parse_cli_args().unwrap_or_default();
-        let (to_controller_sender, initial_settings) = if let Some(ipc_channel) =
-            &cli_args.ipc_channel
-        {
-            let sender =
-                IpcSender::<ToControllerMessage>::connect(ipc_channel.to_string()).unwrap();
-            let (to_verso_sender, receiver) = ipc::channel::<ToVersoMessage>().unwrap();
-            sender
-                .send(ToControllerMessage::SetToVersoSender(to_verso_sender))
-                .unwrap();
-            let ToVersoMessage::SetConfig(initial_settings) = receiver
-                .recv()
-                .expect("Failed to recieve the initial settings from controller")
-            else {
-                panic!("The initial message sent from versoview is not a `ToVersoMessage::SetInitialSettings`")
-            };
-            let proxy_clone = proxy.clone();
-            ROUTER.add_typed_route(
-                receiver,
-                Box::new(move |message| match message {
-                    Ok(message) => {
-                        if let Err(e) = proxy_clone
-                            .send_event(EventLoopProxyMessage::IpcMessage(Box::new(message)))
-                        {
-                            log::error!("Failed to send controller message to Verso: {e}");
+        let (to_controller_sender, initial_settings) =
+            if let Some(ipc_channel) = &cli_args.ipc_channel {
+                let sender =
+                    IpcSender::<ToControllerMessage>::connect(ipc_channel.to_string()).unwrap();
+                let (to_verso_sender, receiver) = ipc::channel::<ToVersoMessage>().unwrap();
+                sender
+                    .send(ToControllerMessage::SetToVersoSender(to_verso_sender))
+                    .unwrap();
+                let ToVersoMessage::SetConfig(initial_settings) = receiver
+                    .recv()
+                    .expect("Failed to recieve the initial settings from controller")
+                else {
+                    panic!(
+                    "The initial message sent from versoview is not a `ToVersoMessage::SetConfig`"
+                )
+                };
+                let proxy_clone = proxy.clone();
+                ROUTER.add_typed_route(
+                    receiver,
+                    Box::new(move |message| match message {
+                        Ok(message) => {
+                            if let Err(e) = proxy_clone
+                                .send_event(EventLoopProxyMessage::IpcMessage(Box::new(message)))
+                            {
+                                log::error!("Failed to send controller message to Verso: {e}");
+                            }
                         }
-                    }
-                    Err(e) => log::error!("Failed to receive controller message: {e}"),
-                }),
-            );
-            (Some(sender), Some(initial_settings))
-        } else {
-            (None, None)
-        };
+                        Err(e) => log::error!("Failed to receive controller message: {e}"),
+                    }),
+                );
+                (Some(sender), Some(initial_settings))
+            } else {
+                (None, None)
+            };
         let config = if let Some(initial_settings) = initial_settings {
             Config::from_config(initial_settings)
         } else {
