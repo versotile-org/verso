@@ -473,7 +473,11 @@ impl IOCompositor {
         }
 
         match msg {
-            CompositorMsg::ChangeRunningAnimationsState(pipeline_id, animation_state) => {
+            CompositorMsg::ChangeRunningAnimationsState(
+                _top_level_browsing_context_id,
+                pipeline_id,
+                animation_state,
+            ) => {
                 self.change_running_animations_state(pipeline_id, animation_state);
             }
 
@@ -510,12 +514,12 @@ impl IOCompositor {
                 self.composite_if_necessary(CompositingReason::Headless);
             }
 
-            CompositorMsg::SetThrottled(pipeline_id, throttled) => {
+            CompositorMsg::SetThrottled(_top_level_browsing_context_id, pipeline_id, throttled) => {
                 self.pipeline_details(pipeline_id).throttled = throttled;
                 self.process_animations(true);
             }
 
-            CompositorMsg::PipelineExited(pipeline_id, sender) => {
+            CompositorMsg::PipelineExited(_top_level_browsing_context_id, pipeline_id, sender) => {
                 debug!("Compositor got pipeline exited: {:?}", pipeline_id);
                 self.remove_pipeline_root_layer(pipeline_id);
                 let _ = sender.send(());
@@ -558,7 +562,11 @@ impl IOCompositor {
                 self.dispatch_input_event(InputEvent::MouseMove(MouseMoveEvent { point }));
             }
 
-            CompositorMsg::PendingPaintMetric(pipeline_id, epoch) => {
+            CompositorMsg::PendingPaintMetric(
+                _top_level_browsing_context_id,
+                pipeline_id,
+                epoch,
+            ) => {
                 self.pending_paint_metrics
                     .entry(pipeline_id)
                     .or_default()
@@ -586,6 +594,7 @@ impl IOCompositor {
             }
 
             CrossProcessCompositorMessage::SendScrollNode(
+                _top_level_browsing_context_id,
                 pipeline_id,
                 point,
                 external_scroll_id,
@@ -622,6 +631,7 @@ impl IOCompositor {
             }
 
             CrossProcessCompositorMessage::SendDisplayList {
+                webview_id: _,
                 display_list_info,
                 display_list_descriptor,
                 display_list_receiver,
@@ -802,7 +812,7 @@ impl IOCompositor {
     /// compositor no longer does any WebRender frame generation.
     fn handle_browser_message_while_shutting_down(&mut self, msg: CompositorMsg) -> bool {
         match msg {
-            CompositorMsg::PipelineExited(pipeline_id, sender) => {
+            CompositorMsg::PipelineExited(_webview_id, pipeline_id, sender) => {
                 debug!("Compositor got pipeline exited: {:?}", pipeline_id);
                 self.remove_pipeline_root_layer(pipeline_id);
                 let _ = sender.send(());
@@ -1301,28 +1311,25 @@ impl IOCompositor {
                 InputEvent::MouseButton(event) => {
                     match event.action {
                         MouseButtonAction::Click => {}
-                        MouseButtonAction::Down => self.on_touch_down(TouchEvent {
-                            event_type: TouchEventType::Down,
-                            id: TouchId(0),
-                            point: event.point,
-                            action: embedder_traits::TouchAction::NoAction,
-                        }),
-                        MouseButtonAction::Up => self.on_touch_up(TouchEvent {
-                            event_type: TouchEventType::Up,
-                            id: TouchId(0),
-                            point: event.point,
-                            action: embedder_traits::TouchAction::NoAction,
-                        }),
+                        MouseButtonAction::Down => self.on_touch_down(TouchEvent::new(
+                            TouchEventType::Down,
+                            TouchId(0),
+                            event.point,
+                        )),
+                        MouseButtonAction::Up => self.on_touch_up(TouchEvent::new(
+                            TouchEventType::Up,
+                            TouchId(0),
+                            event.point,
+                        )),
                     }
                     return;
                 }
                 InputEvent::MouseMove(event) => {
-                    self.on_touch_move(TouchEvent {
-                        event_type: TouchEventType::Move,
-                        id: TouchId(0),
-                        point: event.point,
-                        action: embedder_traits::TouchAction::NoAction,
-                    });
+                    self.on_touch_move(TouchEvent::new(
+                        TouchEventType::Move,
+                        TouchId(0),
+                        event.point,
+                    ));
                     return;
                 }
                 _ => {}

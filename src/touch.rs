@@ -1,7 +1,7 @@
 use embedder_traits::TouchId;
 use euclid::{Point2D, Scale, Vector2D};
 use log::warn;
-use script_traits::EventResult;
+use script_traits::TouchEventResult;
 use webrender_api::units::DevicePixel;
 
 use self::TouchState::*;
@@ -214,11 +214,11 @@ impl TouchHandler {
     }
 
     /// Handle event result.
-    pub fn on_event_processed(&mut self, result: EventResult) {
+    pub fn on_event_processed(&mut self, result: TouchEventResult) {
         if let WaitingForScript = self.state {
             self.state = match result {
-                EventResult::DefaultPrevented(_) => DefaultPrevented,
-                EventResult::DefaultAllowed(_) => match self.touch_count() {
+                TouchEventResult::DefaultPrevented(_, _) => DefaultPrevented,
+                TouchEventResult::DefaultAllowed(_, _) => match self.touch_count() {
                     1 => Touching,
                     2 => Pinching,
                     _ => MultiTouch,

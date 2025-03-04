@@ -1,7 +1,9 @@
 use base::id::WebViewId;
 use compositing_traits::ConstellationMsg;
 use crossbeam_channel::Sender;
-use embedder_traits::{AllowOrDeny, AuthenticationResponse, PromptResult};
+use embedder_traits::{
+    AlertResponse, AllowOrDeny, AuthenticationResponse, ConfirmResponse, PromptResponse,
+};
 use ipc_channel::ipc::IpcSender;
 use serde::{Deserialize, Serialize};
 use servo_url::ServoUrl;
@@ -38,11 +40,11 @@ enum PromptType {
 #[derive(Clone)]
 pub enum PromptSender {
     /// Alert sender
-    AlertSender(IpcSender<()>),
+    AlertSender(IpcSender<AlertResponse>),
     /// Ok/Cancel, Yes/No sender
-    ConfirmSender(IpcSender<PromptResult>),
+    ConfirmSender(IpcSender<ConfirmResponse>),
     /// Input sender
-    InputSender(IpcSender<Option<String>>),
+    InputSender(IpcSender<PromptResponse>),
     /// Allow/Deny Permission sender
     AllowDenySender(IpcSender<AllowOrDeny>),
     /// HTTP basic authentication sender
@@ -139,7 +141,7 @@ impl PromptDialog {
         sender: &Sender<ConstellationMsg>,
         rect: DeviceIntRect,
         message: String,
-        prompt_sender: IpcSender<()>,
+        prompt_sender: IpcSender<AlertResponse>,
     ) {
         self.prompt_sender = Some(PromptSender::AlertSender(prompt_sender));
         self.show(sender, rect, PromptType::Alert(message));
@@ -162,7 +164,7 @@ impl PromptDialog {
         sender: &Sender<ConstellationMsg>,
         rect: DeviceIntRect,
         message: String,
-        prompt_sender: IpcSender<PromptResult>,
+        prompt_sender: IpcSender<ConfirmResponse>,
     ) {
         self.prompt_sender = Some(PromptSender::ConfirmSender(prompt_sender));
         self.show(sender, rect, PromptType::OkCancel(message));
@@ -211,7 +213,7 @@ impl PromptDialog {
         rect: DeviceIntRect,
         message: String,
         default_value: Option<String>,
-        prompt_sender: IpcSender<Option<String>>,
+        prompt_sender: IpcSender<PromptResponse>,
     ) {
         self.prompt_sender = Some(PromptSender::InputSender(prompt_sender));
         self.show(sender, rect, PromptType::Input(message, default_value));

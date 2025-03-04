@@ -4,9 +4,9 @@ use base::id::WebViewId;
 use compositing_traits::ConstellationMsg;
 use crossbeam_channel::Sender;
 use embedder_traits::{
-    AllowOrDeny, ContextMenuResult, Cursor, EmbedderMsg, ImeEvent, InputEvent, MouseButton,
-    MouseButtonAction, MouseButtonEvent, MouseMoveEvent, PromptResult, TouchEventType,
-    TraversalDirection, WebResourceResponseMsg, WheelMode,
+    AlertResponse, AllowOrDeny, ConfirmResponse, ContextMenuResult, Cursor, EmbedderMsg, ImeEvent,
+    InputEvent, MouseButton, MouseButtonAction, MouseButtonEvent, MouseMoveEvent, PromptResponse,
+    TouchEventType, TraversalDirection, WebDriverJSValue, WebResourceResponseMsg, WheelMode,
 };
 use euclid::{Point2D, Size2D};
 use glutin::{
@@ -22,7 +22,6 @@ use keyboard_types::{
 use muda::{Menu as MudaMenu, MenuEvent, MenuEventReceiver, MenuItem};
 #[cfg(any(target_os = "macos", target_os = "windows"))]
 use raw_window_handle::HasWindowHandle;
-use script_traits::webdriver_msg::WebDriverJSValue;
 use servo_url::ServoUrl;
 use versoview_messages::ToControllerMessage;
 use webrender_api::{
@@ -884,10 +883,7 @@ impl Window {
         };
         self.window.set_ime_cursor_area(
             LogicalPosition::new(position.min.x, position.min.y + height as i32),
-            LogicalSize::new(
-                0,
-                position.max.y - position.min.y,
-            ),
+            LogicalSize::new(0, position.max.y - position.min.y),
         );
     }
 
@@ -1053,13 +1049,13 @@ impl Window {
         {
             match sender {
                 PromptSender::AlertSender(sender) => {
-                    let _ = sender.send(());
+                    let _ = sender.send(AlertResponse::default());
                 }
                 PromptSender::ConfirmSender(sender) => {
-                    let _ = sender.send(PromptResult::Dismissed);
+                    let _ = sender.send(ConfirmResponse::default());
                 }
                 PromptSender::InputSender(sender) => {
-                    let _ = sender.send(None);
+                    let _ = sender.send(PromptResponse::default());
                 }
                 PromptSender::AllowDenySender(sender) => {
                     let _ = sender.send(AllowOrDeny::Deny);
