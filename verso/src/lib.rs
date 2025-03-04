@@ -5,6 +5,7 @@ use std::{
     process::Command,
     sync::{mpsc::Sender as MpscSender, Arc, Mutex},
 };
+pub use versoview_messages::ConfigFromController as VersoviewSettings;
 use versoview_messages::{
     ToControllerMessage, ToVersoMessage, WebResourceRequest, WebResourceRequestResponse,
 };
@@ -38,68 +39,32 @@ pub struct VersoviewController {
     event_listeners: EventListeners,
 }
 
-#[derive(Debug, Default)]
-pub struct VersoviewSettings {
-    pub with_panel: bool,
-    pub size: Option<PhysicalSize<u32>>,
-    pub position: Option<PhysicalPosition<i32>>,
-    pub maximized: bool,
-    pub resources_directory: Option<String>,
-    pub userscripts_directory: Option<String>,
-    pub devtools_port: Option<u16>,
-}
-
 impl VersoviewController {
     /// Create a new verso instance with settings and get the controller to it
     fn create(
         verso_path: impl AsRef<Path>,
         initial_url: url::Url,
-        settings: VersoviewSettings,
+        // TODO: rework this into a builder
+        mut settings: VersoviewSettings,
     ) -> Self {
         let path = verso_path.as_ref();
         let (server, server_name) = IpcOneShotServer::<ToControllerMessage>::new().unwrap();
-        let mut command = Command::new(path);
-        command
+        Command::new(path)
             .arg(format!("--ipc-channel={server_name}"))
-            .arg(format!("--url={initial_url}"));
-        if !settings.with_panel {
-            command.arg("--no-panel");
-        }
-
-        if let Some(size) = settings.size {
-            let width = size.width;
-            let height = size.height;
-            command.arg(format!("--width={width}"));
-            command.arg(format!("--height={height}"));
-        }
-        if let Some(position) = settings.position {
-            let x = position.x;
-            let y = position.y;
-            command.arg(format!("--x={x}"));
-            command.arg(format!("--y={y}"));
-        }
-        if !settings.maximized {
-            command.arg("--no-maximized");
-        }
-
-        if let Some(resources_directory) = settings.resources_directory {
-            command.arg("--resources");
-            command.arg(resources_directory);
-        }
-        if let Some(userscripts_directory) = settings.userscripts_directory {
-            command.arg("--userscripts-directory");
-            command.arg(userscripts_directory);
-        }
-        if let Some(devtools_port) = settings.devtools_port {
-            command.arg(format!("--devtools-port={devtools_port}"));
-        }
-
-        command.spawn().unwrap();
+            .spawn()
+            .unwrap();
 
         let (receiver, message) = server.accept().unwrap();
         let ToControllerMessage::SetToVersoSender(sender) = message else {
-            panic!("The initial message sent from versoview is not a `VersoMessage::IpcSender`")
+            panic!(
+                "The initial message sent from versoview is not a `ToControllerMessage::SetToVersoSender`"
+            )
         };
+
+        settings.url.replace(initial_url);
+        sender
+            .send(ToVersoMessage::SetConfig(settings))
+            .expect("Failed to send initial settings to versoview");
 
         let event_listeners = EventListeners::default();
         let on_close_requested = event_listeners.on_close_requested.clone();

@@ -39,7 +39,7 @@ impl ApplicationHandler<EventLoopProxyMessage> for App {
                     v.request_redraw(event_loop);
                 }
                 EventLoopProxyMessage::IpcMessage(message) => {
-                    v.handle_incoming_webview_message(message);
+                    v.handle_incoming_webview_message(*message);
                 }
             }
         }
