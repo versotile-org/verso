@@ -555,7 +555,11 @@ impl Window {
                 self.focused_webview_id = Some(webview_id);
             }
             EmbedderMsg::ShowSimpleDialog(_webview_id, simple_dialog) => match simple_dialog {
-                SimpleDialog::Prompt {message, default, response_sender} => {
+                SimpleDialog::Prompt {
+                    message,
+                    default: _,
+                    response_sender,
+                } => {
                     let _ = response_sender.send(PromptResponse::default());
                     if message.starts_with("CONTEXT_MENU:") {
                         let json_str_msg = message.strip_prefix("CONTEXT_MENU:").unwrap();
