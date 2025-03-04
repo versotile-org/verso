@@ -554,11 +554,11 @@ impl Window {
             EmbedderMsg::WebViewFocused(webview_id) => {
                 self.focused_webview_id = Some(webview_id);
             }
-            EmbedderMsg::Prompt(_webview_id, definition, _origin) => match definition {
-                PromptDefinition::Input(msg, _, prompt_sender) => {
-                    let _ = prompt_sender.send(None);
-                    if msg.starts_with("CONTEXT_MENU:") {
-                        let json_str_msg = msg.strip_prefix("CONTEXT_MENU:").unwrap();
+            EmbedderMsg::ShowSimpleDialog(_webview_id, simple_dialog) => match simple_dialog {
+                SimpleDialog::Prompt {message, default, response_sender} => {
+                    let _ = response_sender.send(PromptResponse::default());
+                    if message.starts_with("CONTEXT_MENU:") {
+                        let json_str_msg = message.strip_prefix("CONTEXT_MENU:").unwrap();
                         let result =
                             serde_json::from_str::<ContextMenuUIResponse>(json_str_msg).unwrap();
 
