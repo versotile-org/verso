@@ -3,11 +3,11 @@ use base::id::WebViewId;
 use compositing_traits::ConstellationMsg;
 use crossbeam_channel::Sender;
 use embedder_traits::{
-    AllowOrDeny, ContextMenuResult, EmbedderMsg, LoadStatus, PromptDefinition, PromptResult,
-    TraversalDirection,
+    AlertResponse, AllowOrDeny, ConfirmResponse, ContextMenuResult, EmbedderMsg, LoadStatus,
+    PromptResponse, SimpleDialog, TraversalDirection, WebDriverCommandMsg, WebDriverJSResult,
+    WebDriverScriptCommand,
 };
 use ipc_channel::ipc;
-use script_traits::webdriver_msg::{WebDriverJSResult, WebDriverScriptCommand};
 use servo_url::ServoUrl;
 use url::Url;
 use versoview_messages::ToControllerMessage;
@@ -76,7 +76,7 @@ impl Window {
     ) {
         log::trace!("Verso WebView {webview_id:?} is handling Embedder message: {message:?}",);
         match message {
-            EmbedderMsg::WebViewOpened(_) | EmbedderMsg::WebViewClosed(_) => {
+            EmbedderMsg::WebViewClosed(_) => {
                 // Most WebView messages are ignored because it's done by compositor.
                 log::trace!("Verso WebView {webview_id:?} ignores this message: {message:?}")
             }
@@ -236,19 +236,29 @@ impl Window {
                     }
                 }
             }
-            EmbedderMsg::Prompt(_webview_id, prompt_type, _origin) => {
+            EmbedderMsg::ShowSimpleDialog(_webview_id, simple_dialog) => {
                 if let Some(tab) = self.tab_manager.tab(webview_id) {
                     let mut prompt = PromptDialog::new();
                     let rect = tab.webview().rect;
-                    match prompt_type {
-                        PromptDefinition::Alert(message, prompt_sender) => {
-                            prompt.alert(sender, rect, message, prompt_sender);
+                    match simple_dialog {
+                        SimpleDialog::Alert {
+                            message,
+                            response_sender,
+                        } => {
+                            prompt.alert(sender, rect, message, response_sender);
                         }
-                        PromptDefinition::OkCancel(message, prompt_sender) => {
-                            prompt.ok_cancel(sender, rect, message, prompt_sender);
+                        SimpleDialog::Confirm {
+                            message,
+                            response_sender,
+                        } => {
+                            prompt.ok_cancel(sender, rect, message, response_sender);
                         }
-                        PromptDefinition::Input(message, default_value, prompt_sender) => {
-                            prompt.input(sender, rect, message, Some(default_value), prompt_sender);
+                        SimpleDialog::Prompt {
+                            message,
+                            default,
+                            response_sender,
+                        } => {
+                            prompt.input(sender, rect, message, Some(default), response_sender);
                         }
                     }
 
@@ -311,7 +321,7 @@ impl Window {
     ) -> bool {
         log::trace!("Verso Panel {panel_id:?} is handling Embedder message: {message:?}",);
         match message {
-            EmbedderMsg::WebViewOpened(_) | EmbedderMsg::WebViewClosed(_) => {
+            EmbedderMsg::WebViewClosed(_) => {
                 // Most WebView messages are ignored because it's done by compositor.
                 log::trace!("Verso Panel ignores this message: {message:?}")
             }
@@ -344,12 +354,16 @@ impl Window {
             EmbedderMsg::HistoryChanged(..) | EmbedderMsg::ChangePageTitle(..) => {
                 log::trace!("Verso Panel ignores this message: {message:?}")
             }
-            EmbedderMsg::Prompt(_webview_id, definition, _origin) => {
-                match definition {
-                    PromptDefinition::Input(msg, _, prompt_sender) => {
+            EmbedderMsg::ShowSimpleDialog(_webview_id, simple_dialog) => {
+                match simple_dialog {
+                    SimpleDialog::Prompt {
+                        message,
+                        default: _,
+                        response_sender,
+                    } => {
                         /* Tab */
-                        if msg.starts_with("CLOSE_TAB:") {
-                            let request_str = msg.strip_prefix("CLOSE_TAB:").unwrap();
+                        if message.starts_with("CLOSE_TAB:") {
+                            let request_str = message.strip_prefix("CLOSE_TAB:").unwrap();
                             let request: TabCloseRequest = serde_json::from_str(request_str)
                                 .expect("Failed to parse TabCloseRequest");
 
@@ -361,10 +375,10 @@ impl Window {
                                 );
                             }
 
-                            let _ = prompt_sender.send(None);
+                            let _ = response_sender.send(PromptResponse::default());
                             return false;
-                        } else if msg.starts_with("ACTIVATE_TAB:") {
-                            let request_str = msg.strip_prefix("ACTIVATE_TAB:").unwrap();
+                        } else if message.starts_with("ACTIVATE_TAB:") {
+                            let request_str = message.strip_prefix("ACTIVATE_TAB:").unwrap();
                             let request: TabActivateRequest = serde_json::from_str(request_str)
                                 .expect("Failed to parse TabActivateRequest");
 
@@ -373,9 +387,9 @@ impl Window {
                             // FIXME: set dirty flag, and only resize when flag is set
                             self.activate_tab(compositor, tab_id, self.tab_manager.count() > 1);
 
-                            let _ = prompt_sender.send(None);
+                            let _ = response_sender.send(PromptResponse::default());
                             return false;
-                        } else if msg == "NEW_TAB" {
+                        } else if message == "NEW_TAB" {
                             let webview_id = WebViewId::new();
                             let size = self.size();
                             let rect = DeviceIntRect::from_size(size);
@@ -395,16 +409,16 @@ impl Window {
                                 success: true,
                                 id: webview_id,
                             };
-                            let _ = prompt_sender.send(Some(result.to_json()));
+                            let _ = response_sender.send(PromptResponse::Ok(result.to_json()));
                             return false;
                         }
 
-                        let _ = prompt_sender.send(None);
+                        let _ = response_sender.send(PromptResponse::default());
 
                         /* Window */
-                        match msg.as_str() {
+                        match message.as_str() {
                             "NEW_WINDOW" => {
-                                let _ = prompt_sender.send(None);
+                                let _ = response_sender.send(PromptResponse::default());
                                 return true;
                             }
                             "MINIMIZE" => {
@@ -426,8 +440,8 @@ impl Window {
                         /* Main WebView */
                         if let Some(tab) = self.tab_manager.current_tab() {
                             let id = tab.id();
-                            if msg.starts_with("NAVIGATE_TO:") {
-                                let unparsed_url = msg.strip_prefix("NAVIGATE_TO:").unwrap();
+                            if message.starts_with("NAVIGATE_TO:") {
+                                let unparsed_url = message.strip_prefix("NAVIGATE_TO:").unwrap();
                                 let url = match Url::parse(unparsed_url) {
                                     Ok(url_parsed) => url_parsed,
                                     Err(e) => {
@@ -445,7 +459,7 @@ impl Window {
                                     ConstellationMsg::LoadUrl(id, ServoUrl::from_url(url)),
                                 );
                             } else {
-                                match msg.as_str() {
+                                match message.as_str() {
                                     "PREV" => {
                                         send_to_constellation(
                                             sender,
@@ -540,11 +554,15 @@ impl Window {
             EmbedderMsg::WebViewFocused(webview_id) => {
                 self.focused_webview_id = Some(webview_id);
             }
-            EmbedderMsg::Prompt(_webview_id, definition, _origin) => match definition {
-                PromptDefinition::Input(msg, _, prompt_sender) => {
-                    let _ = prompt_sender.send(None);
-                    if msg.starts_with("CONTEXT_MENU:") {
-                        let json_str_msg = msg.strip_prefix("CONTEXT_MENU:").unwrap();
+            EmbedderMsg::ShowSimpleDialog(_webview_id, simple_dialog) => match simple_dialog {
+                SimpleDialog::Prompt {
+                    message,
+                    default: _,
+                    response_sender,
+                } => {
+                    let _ = response_sender.send(PromptResponse::default());
+                    if message.starts_with("CONTEXT_MENU:") {
+                        let json_str_msg = message.strip_prefix("CONTEXT_MENU:").unwrap();
                         let result =
                             serde_json::from_str::<ContextMenuUIResponse>(json_str_msg).unwrap();
 
@@ -584,9 +602,12 @@ impl Window {
             EmbedderMsg::WebViewFocused(webview_id) => {
                 self.focused_webview_id = Some(webview_id);
             }
-            EmbedderMsg::Prompt(_webview_id, prompt, _origin) => match prompt {
-                PromptDefinition::Alert(msg, dummy_sender) => {
-                    let _ = dummy_sender.send(());
+            EmbedderMsg::ShowSimpleDialog(_webview_id, simple_dialog) => match simple_dialog {
+                SimpleDialog::Alert {
+                    message,
+                    response_sender,
+                } => {
+                    let _ = response_sender.send(AlertResponse::default());
 
                     let Some(prompt) = self.tab_manager.prompt_by_prompt_id(webview_id) else {
                         log::error!("Prompt not found. WebView: {webview_id:?}");
@@ -596,46 +617,46 @@ impl Window {
                     let servo_sender = prompt.sender().unwrap();
                     match servo_sender {
                         PromptSender::AlertSender(sender) => {
-                            let _ = sender.send(());
+                            let _ = sender.send(AlertResponse::default());
                         }
                         PromptSender::ConfirmSender(sender) => {
-                            let result: PromptResult = match msg.as_str() {
-                                "ok" => PromptResult::Primary,
-                                "cancel" => PromptResult::Secondary,
+                            let result: ConfirmResponse = match message.as_str() {
+                                "ok" => ConfirmResponse::Ok,
+                                "cancel" => ConfirmResponse::Cancel,
                                 _ => {
-                                    log::error!("Invalid prompt action: {msg}");
-                                    PromptResult::Dismissed
+                                    log::error!("Invalid prompt action: {message}");
+                                    ConfirmResponse::default()
                                 }
                             };
                             let _ = sender.send(result);
                         }
                         PromptSender::InputSender(sender) => {
                             if let Ok(PromptInputResult { action, value }) =
-                                serde_json::from_str::<PromptInputResult>(&msg)
+                                serde_json::from_str::<PromptInputResult>(&message)
                             {
                                 match action.as_str() {
                                     "ok" => {
-                                        let _ = sender.send(Some(value));
+                                        let _ = sender.send(PromptResponse::Ok(value));
                                     }
                                     "cancel" => {
-                                        let _ = sender.send(None);
+                                        let _ = sender.send(PromptResponse::Cancel);
                                     }
                                     _ => {
-                                        log::error!("Invalid prompt action: {msg}");
-                                        let _ = sender.send(None);
+                                        log::error!("Invalid prompt action: {message}");
+                                        let _ = sender.send(PromptResponse::default());
                                     }
                                 }
                             } else {
-                                log::error!("Invalid prompt action: {msg}");
-                                let _ = sender.send(None);
+                                log::error!("Invalid prompt action: {message}");
+                                let _ = sender.send(PromptResponse::default());
                             }
                         }
                         PromptSender::AllowDenySender(sender) => {
-                            let result: AllowOrDeny = match msg.as_str() {
+                            let result: AllowOrDeny = match message.as_str() {
                                 "allow" => AllowOrDeny::Allow,
                                 "deny" => AllowOrDeny::Deny,
                                 _ => {
-                                    log::error!("Invalid prompt action: {msg}");
+                                    log::error!("Invalid prompt action: {message}");
                                     AllowOrDeny::Deny
                                 }
                             };
@@ -643,7 +664,7 @@ impl Window {
                         }
                         PromptSender::HttpBasicAuthSender(sender) => {
                             if let Ok(HttpBasicAuthInputResult { action, auth }) =
-                                serde_json::from_str::<HttpBasicAuthInputResult>(&msg)
+                                serde_json::from_str::<HttpBasicAuthInputResult>(&message)
                             {
                                 match action.as_str() {
                                     "signin" => {
@@ -657,7 +678,7 @@ impl Window {
                                     }
                                 };
                             } else {
-                                log::error!("Invalid prompt action: {msg}");
+                                log::error!("Invalid prompt action: {message}");
                                 let _ = sender.send(None);
                             }
                         }
@@ -687,7 +708,7 @@ pub fn execute_script(
     let (result_sender, result_receiver) = ipc::channel::<WebDriverJSResult>().unwrap();
     send_to_constellation(
         constellation_sender,
-        ConstellationMsg::WebDriverCommand(script_traits::WebDriverCommandMsg::ScriptCommand(
+        ConstellationMsg::WebDriverCommand(WebDriverCommandMsg::ScriptCommand(
             webview.0,
             WebDriverScriptCommand::ExecuteScript(js.to_string(), result_sender),
         )),
