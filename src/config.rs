@@ -36,7 +36,7 @@ pub struct CliArgs {
     /// Should launch without control panel
     pub no_panel: bool,
     /// Window size for the initial window
-    pub size: Option<PhysicalSize<u32>>,
+    pub inner_size: Option<PhysicalSize<u32>>,
     /// Window position for the initial window
     pub position: Option<PhysicalPosition<i32>>,
     /// Don't maximize the initial window
@@ -198,7 +198,7 @@ pub fn parse_cli_args() -> Result<CliArgs, getopts::Fail> {
         log::error!("Failed to parse height command line argument: {e}");
         None
     });
-    let size = match (width, height) {
+    let inner_size = match (width, height) {
         (Some(_width), None) => {
             log::error!("Invalid size command line argument, width is present but not height");
             None
@@ -250,7 +250,7 @@ pub fn parse_cli_args() -> Result<CliArgs, getopts::Fail> {
         init_script,
         userscripts_directory,
         zoom_level,
-        size,
+        inner_size,
         position,
         no_maximized,
     })
@@ -285,7 +285,7 @@ pub struct Config {
 impl Config {
     /// Create a new configuration for creating Verso instance from the CLI arguments.
     pub fn from_cli_args(cli_args: CliArgs) -> Self {
-        Self::from_config(ConfigFromController {
+        Self::from_controller_config(ConfigFromController {
             url: cli_args.url,
             with_panel: !cli_args.no_panel,
             devtools_port: cli_args.devtools_port,
@@ -297,13 +297,15 @@ impl Config {
             resources_directory: cli_args.resource_dir,
             maximized: !cli_args.no_maximized,
             position: cli_args.position.map(Into::into),
-            size: cli_args.size.map(Into::into),
+            inner_size: cli_args.inner_size.map(Into::into),
         })
     }
 
     /// Create a new configuration for creating Verso instance from the controller config.
-    pub fn from_config(config: ConfigFromController) -> Self {
-        let resource_dir = config.resources_directory.unwrap_or_else(resources_dir_path);
+    pub fn from_controller_config(config: ConfigFromController) -> Self {
+        let resource_dir = config
+            .resources_directory
+            .unwrap_or_else(resources_dir_path);
         let with_panel = config.with_panel;
         let user_agent = config
             .user_agent
@@ -319,19 +321,13 @@ impl Config {
         if let Some(position) = config.position {
             window_attributes = window_attributes.with_position(position);
         }
-        if let Some(size) = config.size {
+        if let Some(size) = config.inner_size {
             window_attributes = window_attributes.with_inner_size(size);
         }
         window_attributes = window_attributes.with_maximized(config.maximized);
 
-        Self {
-            url: config
-                .url
-                .unwrap_or_else(|| url::Url::parse("https://example.com").unwrap()),
-            with_panel,
-            window_attributes,
-            devtools_port: config.devtools_port,
-            profiler_settings: config
+        let profiler_settings =
+            config
                 .profiler_settings
                 .map(|profiler_settings| ProfilerSettings {
                     output_options: match profiler_settings.output_options {
@@ -343,7 +339,16 @@ impl Config {
                         }
                     },
                     trace_path: profiler_settings.trace_path,
-                }),
+                });
+
+        Self {
+            url: config
+                .url
+                .unwrap_or_else(|| url::Url::parse("https://example.com").unwrap()),
+            with_panel,
+            window_attributes,
+            devtools_port: config.devtools_port,
+            profiler_settings,
             user_agent,
             init_script: config.init_script,
             userscripts_directory: config.userscripts_directory,

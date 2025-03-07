@@ -107,7 +107,7 @@ pub struct ConfigFromController {
     /// Should launch without or without control panel
     pub with_panel: bool,
     /// Window size for the initial winit window
-    pub size: Option<Size>,
+    pub inner_size: Option<Size>,
     /// Window position for the initial winit window
     pub position: Option<Position>,
     /// Window position for the initial winit window
