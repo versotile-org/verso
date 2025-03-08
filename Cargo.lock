@@ -7080,6 +7080,7 @@ dependencies = [
  "log",
  "serde",
  "url",
+ "uuid",
  "versoview_messages",
 ]
 
