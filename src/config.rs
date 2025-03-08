@@ -1,5 +1,6 @@
 use std::{fs, path::PathBuf};
 
+use dpi::{LogicalSize, PhysicalPosition, PhysicalSize};
 use embedder_traits::resources::{self, Resource, ResourceReaderMethods};
 use headers::{ContentType, HeaderMapExt};
 use net::protocols::{ProtocolHandler, ProtocolRegistry};
@@ -12,7 +13,8 @@ use servo_config::{
     opts::{set_options, Opts, OutputOptions},
     prefs::Preferences,
 };
-use winit::{dpi, window::WindowAttributes};
+use versoview_messages::ConfigFromController;
+use winit::window::WindowAttributes;
 
 /// Servo time profile settings
 #[derive(Clone, Debug)]
@@ -33,12 +35,16 @@ pub struct CliArgs {
     pub ipc_channel: Option<String>,
     /// Should launch without control panel
     pub no_panel: bool,
-    /// Window settings for the initial winit window
-    pub window_attributes: WindowAttributes,
+    /// Window size for the initial window
+    pub inner_size: Option<PhysicalSize<u32>>,
+    /// Window position for the initial window
+    pub position: Option<PhysicalPosition<i32>>,
+    /// Don't maximize the initial window
+    pub no_maximized: bool,
     /// Port number to start a server to listen to remote Firefox devtools connections. 0 for random port.
     pub devtools_port: Option<u16>,
     /// Servo time profile settings
-    pub profiler_settings: Option<ProfilerSettings>,
+    pub profiler_settings: Option<versoview_messages::ProfilerSettings>,
     /// Path to resource directory. If None, Verso will try to get default directory. And if that
     /// still doesn't exist, all resource configuration will set to default values.
     pub resource_dir: Option<PathBuf>,
@@ -52,19 +58,8 @@ pub struct CliArgs {
     pub zoom_level: Option<f32>,
 }
 
-/// Configuration of Verso instance.
-#[derive(Clone, Debug)]
-pub struct Config {
-    /// Global flag options of Servo.
-    pub opts: Opts,
-    /// Command line arguments.
-    pub args: CliArgs,
-    /// Path to resource directory. If None, Verso will try to get default directory. And if that
-    /// still doesn't exist, all resource configuration will set to default values.
-    pub resource_dir: PathBuf,
-}
-
-fn parse_cli_args() -> Result<CliArgs, getopts::Fail> {
+/// Parse CLI arguments to a [`CliArgs`]
+pub fn parse_cli_args() -> Result<CliArgs, getopts::Fail> {
     let args: Vec<String> = std::env::args().collect();
 
     let mut opts = getopts::Options::new();
@@ -179,11 +174,11 @@ fn parse_cli_args() -> Result<CliArgs, getopts::Fail> {
     let profiler_settings = if let Ok(Some(profiler_interval)) = matches.opt_get("profiler") {
         let profile_output = matches.opt_str("profiler-output-file");
         let trace_output = matches.opt_str("profiler-trace-path");
-        Some(ProfilerSettings {
+        Some(versoview_messages::ProfilerSettings {
             output_options: if let Some(output_file) = profile_output {
-                OutputOptions::FileName(output_file)
+                versoview_messages::OutputOptions::FileName(output_file)
             } else {
-                OutputOptions::Stdout(profiler_interval)
+                versoview_messages::OutputOptions::Stdout(profiler_interval)
             },
             trace_path: trace_output,
         })
@@ -195,15 +190,6 @@ fn parse_cli_args() -> Result<CliArgs, getopts::Fail> {
     let init_script = matches.opt_str("init-script");
     let userscripts_directory = matches.opt_str("userscripts-directory");
 
-    let mut window_attributes = winit::window::Window::default_attributes();
-
-    // set min inner size
-    // should be at least able to show the whole control panel
-    // FIXME: url input has weird behavior that will expand lager when having long text
-    if !no_panel {
-        window_attributes = window_attributes.with_min_inner_size(dpi::LogicalSize::new(480, 72));
-    }
-
     let width = matches.opt_get::<u32>("width").unwrap_or_else(|e| {
         log::error!("Failed to parse width command line argument: {e}");
         None
@@ -212,44 +198,41 @@ fn parse_cli_args() -> Result<CliArgs, getopts::Fail> {
         log::error!("Failed to parse height command line argument: {e}");
         None
     });
-    match (width, height) {
+    let inner_size = match (width, height) {
         (Some(_width), None) => {
             log::error!("Invalid size command line argument, width is present but not height");
+            None
         }
         (None, Some(_height)) => {
             log::error!("Invalid size command line argument, height is present but not width");
+            None
         }
-        (Some(width), Some(height)) => {
-            window_attributes =
-                window_attributes.with_inner_size(dpi::PhysicalSize::new(width, height))
-        }
-        _ => {}
+        (Some(width), Some(height)) => Some(PhysicalSize::new(width, height)),
+        _ => None,
     };
 
-    let x = matches.opt_get::<u32>("x").unwrap_or_else(|e| {
+    let x = matches.opt_get::<i32>("x").unwrap_or_else(|e| {
         log::error!("Failed to parse x command line argument: {e}");
         None
     });
-    let y = matches.opt_get::<u32>("y").unwrap_or_else(|e| {
+    let y = matches.opt_get::<i32>("y").unwrap_or_else(|e| {
         log::error!("Failed to parse y command line argument: {e}");
         None
     });
-    match (x, y) {
+    let position = match (x, y) {
         (Some(_x), None) => {
             log::error!("Invalid size command line argument, x is present but not y");
+            None
         }
         (None, Some(_y)) => {
             log::error!("Invalid size command line argument, y is present but not x");
+            None
         }
-        (Some(x), Some(y)) => {
-            window_attributes = window_attributes.with_position(dpi::PhysicalPosition::new(x, y))
-        }
-        _ => {}
+        (Some(x), Some(y)) => Some(PhysicalPosition::new(x, y)),
+        _ => None,
     };
 
-    if !matches.opt_present("no-maximized") {
-        window_attributes = window_attributes.with_maximized(true);
-    }
+    let no_maximized = matches.opt_present("no-maximized");
 
     let zoom_level = matches.opt_get::<f32>("zoom").unwrap_or_else(|e| {
         log::error!("Failed to parse zoom command line argument: {e}");
@@ -261,49 +244,115 @@ fn parse_cli_args() -> Result<CliArgs, getopts::Fail> {
         resource_dir,
         ipc_channel,
         no_panel,
-        window_attributes,
         devtools_port,
         profiler_settings,
         user_agent,
         init_script,
         userscripts_directory,
         zoom_level,
+        inner_size,
+        position,
+        no_maximized,
     })
 }
 
+/// Configuration of Verso instance.
+#[derive(Clone, Debug)]
+pub struct Config {
+    /// URL to load initially.
+    pub url: url::Url,
+    /// Should launch without or without control panel
+    pub with_panel: bool,
+    /// Window settings for the initial winit window
+    pub window_attributes: WindowAttributes,
+    /// Port number to start a server to listen to remote Firefox devtools connections. 0 for random port.
+    pub devtools_port: Option<u16>,
+    /// Servo time profile settings
+    pub profiler_settings: Option<ProfilerSettings>,
+    /// Override the user agent
+    pub user_agent: String,
+    /// Script to run on document started to load
+    pub init_script: Option<String>,
+    /// The directory to load userscripts from
+    pub userscripts_directory: Option<String>,
+    /// Initial window's zoom level
+    pub zoom_level: Option<f32>,
+    /// Path to resource directory. If None, Verso will try to get default directory. And if that
+    /// still doesn't exist, all resource configuration will set to default values.
+    pub resource_dir: PathBuf,
+}
+
 impl Config {
-    /// Create a new configuration for creating Verso instance.
-    pub fn new() -> Self {
-        let mut opts = Opts::default();
-        let args = parse_cli_args().unwrap_or_default();
+    /// Create a new configuration for creating Verso instance from the CLI arguments.
+    pub fn from_cli_args(cli_args: CliArgs) -> Self {
+        Self::from_controller_config(ConfigFromController {
+            url: cli_args.url,
+            with_panel: !cli_args.no_panel,
+            devtools_port: cli_args.devtools_port,
+            profiler_settings: cli_args.profiler_settings,
+            user_agent: cli_args.user_agent,
+            init_script: cli_args.init_script,
+            userscripts_directory: cli_args.userscripts_directory,
+            zoom_level: cli_args.zoom_level,
+            resources_directory: cli_args.resource_dir,
+            maximized: !cli_args.no_maximized,
+            position: cli_args.position.map(Into::into),
+            inner_size: cli_args.inner_size.map(Into::into),
+        })
+    }
 
-        let (devtools_server_enabled, devtools_port) =
-            if let Some(devtools_port) = args.devtools_port {
-                (true, devtools_port)
-            } else {
-                (false, 0)
-            };
+    /// Create a new configuration for creating Verso instance from the controller config.
+    pub fn from_controller_config(config: ConfigFromController) -> Self {
+        let resource_dir = config
+            .resources_directory
+            .unwrap_or_else(resources_dir_path);
+        let with_panel = config.with_panel;
+        let user_agent = config
+            .user_agent
+            .unwrap_or_else(|| default_user_agent_string().to_string());
 
-        servo_config::prefs::set(Preferences {
-            devtools_server_enabled,
-            devtools_server_port: devtools_port as i64,
-            ..Default::default()
-        });
-
-        if let Some(ref profiler_settings) = args.profiler_settings {
-            opts.time_profiling = Some(profiler_settings.output_options.clone());
-            opts.time_profiler_trace_path = profiler_settings.trace_path.clone();
+        let mut window_attributes = winit::window::Window::default_attributes();
+        // set min inner size
+        // should be at least able to show the whole control panel
+        // FIXME: url input has weird behavior that will expand lager when having long text
+        if with_panel {
+            window_attributes = window_attributes.with_min_inner_size(LogicalSize::new(480, 72));
         }
-
-        if let Some(ref userscripts_directory) = args.userscripts_directory {
-            opts.userscripts = Some(userscripts_directory.clone());
+        if let Some(position) = config.position {
+            window_attributes = window_attributes.with_position(position);
         }
+        if let Some(size) = config.inner_size {
+            window_attributes = window_attributes.with_inner_size(size);
+        }
+        window_attributes = window_attributes.with_maximized(config.maximized);
 
-        let resource_dir = args.resource_dir.clone().unwrap_or(resources_dir_path());
+        let profiler_settings =
+            config
+                .profiler_settings
+                .map(|profiler_settings| ProfilerSettings {
+                    output_options: match profiler_settings.output_options {
+                        versoview_messages::OutputOptions::FileName(outfile) => {
+                            OutputOptions::FileName(outfile)
+                        }
+                        versoview_messages::OutputOptions::Stdout(profiler_interval) => {
+                            OutputOptions::Stdout(profiler_interval)
+                        }
+                    },
+                    trace_path: profiler_settings.trace_path,
+                });
 
         Self {
-            opts,
-            args,
+            url: config
+                .url
+                .unwrap_or_else(|| url::Url::parse("https://example.com").unwrap()),
+            with_panel,
+            window_attributes,
+            devtools_port: config.devtools_port,
+            profiler_settings,
+            user_agent,
+            init_script: config.init_script,
+            userscripts_directory: config.userscripts_directory,
+            zoom_level: config.zoom_level,
             resource_dir,
         }
     }
@@ -317,12 +366,37 @@ impl Config {
     }
 
     /// Init options and preferences.
-    pub fn init(self) {
-        // Set the resource files and preferences of Servo.
-        resources::set(Box::new(ResourceReader(self.resource_dir)));
+    pub fn init(&self) {
+        // Set the resource files of Servo.
+        resources::set(Box::new(ResourceReader(self.resource_dir.clone())));
+
+        let mut opts = Opts::default();
+
+        if let Some(ref profiler_settings) = self.profiler_settings {
+            opts.time_profiling = Some(profiler_settings.output_options.clone());
+            opts.time_profiler_trace_path = profiler_settings.trace_path.clone();
+        }
+
+        if let Some(ref userscripts_directory) = self.userscripts_directory {
+            opts.userscripts = Some(userscripts_directory.clone());
+        }
 
         // Set the global options of Servo.
-        set_options(self.opts);
+        set_options(opts);
+
+        let (devtools_server_enabled, devtools_port) =
+            if let Some(devtools_port) = self.devtools_port {
+                (true, devtools_port)
+            } else {
+                (false, 0)
+            };
+
+        // Set the preferences of Servo.
+        servo_config::prefs::set(Preferences {
+            devtools_server_enabled,
+            devtools_server_port: devtools_port as i64,
+            ..Default::default()
+        });
     }
 }
 
@@ -408,4 +482,22 @@ fn resources_dir_path() -> PathBuf {
     let root_dir = std::env::current_dir();
 
     root_dir.ok().map(|dir| dir.join("resources")).unwrap()
+}
+
+fn default_user_agent_string() -> &'static str {
+    #[cfg(macos)]
+    const UA_STRING: &str =
+        "Mozilla/5.0 (Macintosh; Intel Mac OS X 10.15; rv:109.0) Servo/1.0 Firefox/111.0";
+    #[cfg(ios)]
+    const UA_STRING: &str =
+        "Mozilla/5.0 (iPhone; CPU iPhone OS 16_4 like Mac OS X; rv:109.0) Servo/1.0 Firefox/111.0";
+    #[cfg(android)]
+    const UA_STRING: &str = "Mozilla/5.0 (Android; Mobile; rv:109.0) Servo/1.0 Firefox/111.0";
+    #[cfg(linux)]
+    const UA_STRING: &str = "Mozilla/5.0 (X11; Linux x86_64; rv:109.0) Servo/1.0 Firefox/111.0";
+    #[cfg(windows)]
+    const UA_STRING: &str =
+        "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:109.0) Servo/1.0 Firefox/111.0";
+
+    UA_STRING
 }

@@ -224,18 +224,14 @@ impl Window {
     pub fn create_panel(
         &mut self,
         constellation_sender: &Sender<ConstellationMsg>,
-        initial_url: Option<url::Url>,
+        initial_url: url::Url,
     ) {
         let size = self.window.inner_size();
         let size = Size2D::new(size.width as i32, size.height as i32);
         let panel_id = WebViewId::new();
         self.panel = Some(Panel {
             webview: WebView::new(panel_id, DeviceIntRect::from_size(size)),
-            initial_url: if let Some(initial_url) = initial_url {
-                ServoUrl::from_url(initial_url)
-            } else {
-                ServoUrl::parse("https://example.com").unwrap()
-            },
+            initial_url: ServoUrl::from_url(initial_url),
         });
 
         let url = ServoUrl::parse("verso://resources/components/panel.html").unwrap();

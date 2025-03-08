@@ -7100,6 +7100,7 @@ dependencies = [
  "constellation",
  "crossbeam-channel",
  "devtools",
+ "dpi",
  "embedder_traits",
  "env_logger",
  "euclid",
