@@ -165,8 +165,12 @@ jobs:
 
       - name: Install dependencies
         run: |
-          scoop install git llvm cmake curl
+          scoop install git cmake curl
           python -m pip install mako
+
+      - name: Upgrade LLVM
+        run: |
+          choco upgrade llvm
 
       - name: Run sccache-cache
         uses: Mozilla-Actions/sccache-action@v0.0.4
