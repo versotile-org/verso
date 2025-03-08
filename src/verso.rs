@@ -717,19 +717,20 @@ impl Verso {
                     let _ = window.window.drag_window();
                 }
             }
-            ToVersoMessage::GetSize => {
+            ToVersoMessage::GetSize(id) => {
                 if let Some(window) = self.first_window() {
                     if let Err(error) = self.to_controller_sender.as_ref().unwrap().send(
-                        ToControllerMessage::GetSizeResponse(window.window.inner_size()),
+                        ToControllerMessage::GetSizeResponse(id, window.window.inner_size()),
                     ) {
                         log::error!("Verso failed to send GetSizeReponse to controller: {error}")
                     }
                 }
             }
-            ToVersoMessage::GetPosition => {
+            ToVersoMessage::GetPosition(id) => {
                 if let Some(window) = self.first_window() {
                     if let Err(error) = self.to_controller_sender.as_ref().unwrap().send(
                         ToControllerMessage::GetPositionResponse(
+                            id,
                             window.window.inner_position().ok(),
                         ),
                     ) {
@@ -739,10 +740,11 @@ impl Verso {
                     }
                 }
             }
-            ToVersoMessage::GetMinimized => {
+            ToVersoMessage::GetMinimized(id) => {
                 if let Some(window) = self.first_window() {
                     if let Err(error) = self.to_controller_sender.as_ref().unwrap().send(
                         ToControllerMessage::GetMinimizedResponse(
+                            id,
                             window.window.is_minimized().unwrap_or_default(),
                         ),
                     ) {
@@ -752,10 +754,10 @@ impl Verso {
                     }
                 }
             }
-            ToVersoMessage::GetMaximized => {
+            ToVersoMessage::GetMaximized(id) => {
                 if let Some(window) = self.first_window() {
                     if let Err(error) = self.to_controller_sender.as_ref().unwrap().send(
-                        ToControllerMessage::GetMaximizedResponse(window.window.is_maximized()),
+                        ToControllerMessage::GetMaximizedResponse(id, window.window.is_maximized()),
                     ) {
                         log::error!(
                             "Verso failed to send GetMaximizedResponse to controller: {error}"
@@ -763,10 +765,11 @@ impl Verso {
                     }
                 }
             }
-            ToVersoMessage::GetFullscreen => {
+            ToVersoMessage::GetFullscreen(id) => {
                 if let Some(window) = self.first_window() {
                     if let Err(error) = self.to_controller_sender.as_ref().unwrap().send(
                         ToControllerMessage::GetFullscreenResponse(
+                            id,
                             window.window.fullscreen().is_some(),
                         ),
                     ) {
@@ -776,10 +779,11 @@ impl Verso {
                     }
                 }
             }
-            ToVersoMessage::GetVisible => {
+            ToVersoMessage::GetVisible(id) => {
                 if let Some(window) = self.first_window() {
                     if let Err(error) = self.to_controller_sender.as_ref().unwrap().send(
                         ToControllerMessage::GetVisibleResponse(
+                            id,
                             window.window.is_visible().unwrap_or(true),
                         ),
                     ) {
@@ -789,10 +793,13 @@ impl Verso {
                     }
                 }
             }
-            ToVersoMessage::GetScaleFactor => {
+            ToVersoMessage::GetScaleFactor(id) => {
                 if let Some(window) = self.first_window() {
                     if let Err(error) = self.to_controller_sender.as_ref().unwrap().send(
-                        ToControllerMessage::GetScaleFactorResponse(window.window.scale_factor()),
+                        ToControllerMessage::GetScaleFactorResponse(
+                            id,
+                            window.window.scale_factor(),
+                        ),
                     ) {
                         log::error!(
                             "Verso failed to send GetScaleFactorResponse to controller: {error}"
@@ -800,12 +807,13 @@ impl Verso {
                     }
                 }
             }
-            ToVersoMessage::GetCurrentUrl => {
+            ToVersoMessage::GetCurrentUrl(id) => {
                 if let Some(window) = self.first_window() {
                     let tab = window.tab_manager.current_tab().unwrap();
                     let history = tab.history();
                     if let Err(error) = self.to_controller_sender.as_ref().unwrap().send(
                         ToControllerMessage::GetCurrentUrlResponse(
+                            id,
                             history.list[history.current_idx].as_url().clone(),
                         ),
                     ) {

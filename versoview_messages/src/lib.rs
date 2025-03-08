@@ -51,21 +51,21 @@ pub enum ToVersoMessage {
     /// Moves the window with the left mouse button until the button is released
     StartDragging,
     /// Get the window's size, need a response with [`ToControllerMessage::GetSizeResponse`]
-    GetSize,
+    GetSize(uuid::Uuid),
     /// Get the window's position, need a response with [`ToControllerMessage::GetPositionResponse`]
-    GetPosition,
+    GetPosition(uuid::Uuid),
     /// Get if the window is currently maximized or not, need a response with [`ToControllerMessage::GetMaximizedResponse`]
-    GetMaximized,
+    GetMaximized(uuid::Uuid),
     /// Get if the window is currently minimized or not, need a response with [`ToControllerMessage::GetMinimizedResponse`]
-    GetMinimized,
+    GetMinimized(uuid::Uuid),
     /// Get if the window is currently fullscreen or not, need a response with [`ToControllerMessage::GetFullscreenResponse`]
-    GetFullscreen,
+    GetFullscreen(uuid::Uuid),
     /// Get the visibility of the window, need a response with [`ToControllerMessage::GetVisibleResponse`]
-    GetVisible,
+    GetVisible(uuid::Uuid),
     /// Get the scale factor of the window, need a response with [`ToControllerMessage::GetScaleFactorResponse`]
-    GetScaleFactor,
+    GetScaleFactor(uuid::Uuid),
     /// Get the current URL of the webview, need a response with [`ToControllerMessage::GetCurrentUrlResponse`]
-    GetCurrentUrl,
+    GetCurrentUrl(uuid::Uuid),
 }
 
 /// Message sent from versoview to the controller
@@ -80,21 +80,21 @@ pub enum ToControllerMessage {
     /// Sent on a new web resource request, need a response with [`ToVersoMessage::WebResourceRequestResponse`]
     OnWebResourceRequested(WebResourceRequest),
     /// Response to a [`ToVersoMessage::GetSize`]
-    GetSizeResponse(PhysicalSize<u32>),
+    GetSizeResponse(uuid::Uuid, PhysicalSize<u32>),
     /// Response to a [`ToVersoMessage::GetPosition`]
-    GetPositionResponse(Option<PhysicalPosition<i32>>),
+    GetPositionResponse(uuid::Uuid, Option<PhysicalPosition<i32>>),
     /// Response to a [`ToVersoMessage::GetMaximized`]
-    GetMaximizedResponse(bool),
+    GetMaximizedResponse(uuid::Uuid, bool),
     /// Response to a [`ToVersoMessage::GetMinimized`]
-    GetMinimizedResponse(bool),
+    GetMinimizedResponse(uuid::Uuid, bool),
     /// Response to a [`ToVersoMessage::GetFullscreen`]
-    GetFullscreenResponse(bool),
+    GetFullscreenResponse(uuid::Uuid, bool),
     /// Response to a [`ToVersoMessage::GetVisible`]
-    GetVisibleResponse(bool),
+    GetVisibleResponse(uuid::Uuid, bool),
     /// Response to a [`ToVersoMessage::GetScaleFactor`]
-    GetScaleFactorResponse(f64),
+    GetScaleFactorResponse(uuid::Uuid, f64),
     /// Response to a [`ToVersoMessage::GetCurrentUrl`]
-    GetCurrentUrlResponse(url::Url),
+    GetCurrentUrlResponse(uuid::Uuid, url::Url),
     /// Verso have recieved a close request from the OS
     OnCloseRequested,
 }

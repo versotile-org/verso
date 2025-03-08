@@ -1,6 +1,7 @@
 use dpi::{PhysicalPosition, PhysicalSize, Position, Size};
 use log::error;
 use std::{
+    collections::HashMap,
     path::Path,
     process::Command,
     sync::{mpsc::Sender as MpscSender, Arc, Mutex},
@@ -17,6 +18,7 @@ use ipc_channel::{
 
 type ResponseFunction = Box<dyn FnOnce(Option<http::Response<Vec<u8>>>) + Send>;
 type Listener<T> = Arc<Mutex<Option<T>>>;
+type ResponseListener<T> = Arc<Mutex<HashMap<uuid::Uuid, T>>>;
 
 #[derive(Default)]
 struct EventListeners {
@@ -24,14 +26,14 @@ struct EventListeners {
     on_navigation_starting: Listener<Box<dyn Fn(url::Url) -> bool + Send + 'static>>,
     on_web_resource_requested:
         Listener<Box<dyn Fn(WebResourceRequest, ResponseFunction) + Send + 'static>>,
-    size_response: Listener<MpscSender<PhysicalSize<u32>>>,
-    position_response: Listener<MpscSender<Option<PhysicalPosition<i32>>>>,
-    maximized_response: Listener<MpscSender<bool>>,
-    minimized_response: Listener<MpscSender<bool>>,
-    fullscreen_response: Listener<MpscSender<bool>>,
-    visible_response: Listener<MpscSender<bool>>,
-    scale_factor_response: Listener<MpscSender<f64>>,
-    get_url_response: Listener<MpscSender<url::Url>>,
+    size_response: ResponseListener<MpscSender<PhysicalSize<u32>>>,
+    position_response: ResponseListener<MpscSender<Option<PhysicalPosition<i32>>>>,
+    maximized_response: ResponseListener<MpscSender<bool>>,
+    minimized_response: ResponseListener<MpscSender<bool>>,
+    fullscreen_response: ResponseListener<MpscSender<bool>>,
+    visible_response: ResponseListener<MpscSender<bool>>,
+    scale_factor_response: ResponseListener<MpscSender<f64>>,
+    get_url_response: ResponseListener<MpscSender<url::Url>>,
 }
 
 pub struct VersoviewController {
@@ -115,43 +117,43 @@ impl VersoviewController {
                             );
                         }
                     }
-                    ToControllerMessage::GetSizeResponse(size) => {
-                        if let Some(sender) = size_response.lock().unwrap().take() {
+                    ToControllerMessage::GetSizeResponse(id, size) => {
+                        if let Some(sender) = size_response.lock().unwrap().get(&id).take() {
                             sender.send(size).unwrap();
                         }
                     }
-                    ToControllerMessage::GetPositionResponse(position) => {
-                        if let Some(sender) = position_response.lock().unwrap().take() {
+                    ToControllerMessage::GetPositionResponse(id, position) => {
+                        if let Some(sender) = position_response.lock().unwrap().get(&id).take() {
                             sender.send(position).unwrap();
                         }
                     }
-                    ToControllerMessage::GetMaximizedResponse(maximized) => {
-                        if let Some(sender) = maximized_response.lock().unwrap().take() {
+                    ToControllerMessage::GetMaximizedResponse(id, maximized) => {
+                        if let Some(sender) = maximized_response.lock().unwrap().get(&id).take() {
                             sender.send(maximized).unwrap();
                         }
                     }
-                    ToControllerMessage::GetMinimizedResponse(minimized) => {
-                        if let Some(sender) = minimized_response.lock().unwrap().take() {
+                    ToControllerMessage::GetMinimizedResponse(id, minimized) => {
+                        if let Some(sender) = minimized_response.lock().unwrap().get(&id).take() {
                             sender.send(minimized).unwrap();
                         }
                     }
-                    ToControllerMessage::GetFullscreenResponse(fullscreen) => {
-                        if let Some(sender) = fullscreen_response.lock().unwrap().take() {
+                    ToControllerMessage::GetFullscreenResponse(id, fullscreen) => {
+                        if let Some(sender) = fullscreen_response.lock().unwrap().get(&id).take() {
                             sender.send(fullscreen).unwrap();
                         }
                     }
-                    ToControllerMessage::GetVisibleResponse(visible) => {
-                        if let Some(sender) = visible_response.lock().unwrap().take() {
+                    ToControllerMessage::GetVisibleResponse(id, visible) => {
+                        if let Some(sender) = visible_response.lock().unwrap().get(&id).take() {
                             sender.send(visible).unwrap();
                         }
                     }
-                    ToControllerMessage::GetScaleFactorResponse(scale_factor) => {
-                        if let Some(sender) = scale_factor_response.lock().unwrap().take() {
+                    ToControllerMessage::GetScaleFactorResponse(id, scale_factor) => {
+                        if let Some(sender) = scale_factor_response.lock().unwrap().get(&id).take() {
                             sender.send(scale_factor).unwrap();
                         }
                     }
-                    ToControllerMessage::GetCurrentUrlResponse(url) => {
-                        if let Some(sender) = get_url_response.lock().unwrap().take() {
+                    ToControllerMessage::GetCurrentUrlResponse(id, url) => {
+                        if let Some(sender) = get_url_response.lock().unwrap().get(&id).take() {
                             sender.send(url).unwrap();
                         }
                     }
@@ -301,11 +303,21 @@ impl VersoviewController {
 
     /// Get the window's size
     pub fn get_size(&self) -> Result<PhysicalSize<u32>, Box<ipc_channel::ErrorKind>> {
-        let mut size_response = self.event_listeners.size_response.lock().unwrap();
-        self.sender.send(ToVersoMessage::GetSize)?;
+        let id = uuid::Uuid::new_v4();
         let (sender, receiver) = std::sync::mpsc::channel();
-        size_response.replace(sender);
-        drop(size_response);
+        self.event_listeners
+            .size_response
+            .lock()
+            .unwrap()
+            .insert(id, sender);
+        if let Err(error) = self.sender.send(ToVersoMessage::GetSize(id)) {
+            self.event_listeners
+                .size_response
+                .lock()
+                .unwrap()
+                .remove(&id);
+            return Err(error);
+        };
         Ok(receiver.recv().unwrap())
     }
 
@@ -314,71 +326,141 @@ impl VersoviewController {
     pub fn get_position(
         &self,
     ) -> Result<Option<PhysicalPosition<i32>>, Box<ipc_channel::ErrorKind>> {
-        let mut position_response = self.event_listeners.position_response.lock().unwrap();
-        self.sender.send(ToVersoMessage::GetPosition)?;
+        let id = uuid::Uuid::new_v4();
         let (sender, receiver) = std::sync::mpsc::channel();
-        position_response.replace(sender);
-        drop(position_response);
+        self.event_listeners
+            .position_response
+            .lock()
+            .unwrap()
+            .insert(id, sender);
+        if let Err(error) = self.sender.send(ToVersoMessage::GetPosition(id)) {
+            self.event_listeners
+                .position_response
+                .lock()
+                .unwrap()
+                .remove(&id);
+            return Err(error);
+        };
         Ok(receiver.recv().unwrap())
     }
 
     /// Get if the window is currently maximized or not
     pub fn is_maximized(&self) -> Result<bool, Box<ipc_channel::ErrorKind>> {
-        let mut maximized_response = self.event_listeners.maximized_response.lock().unwrap();
-        self.sender.send(ToVersoMessage::GetMaximized)?;
+        let id = uuid::Uuid::new_v4();
         let (sender, receiver) = std::sync::mpsc::channel();
-        maximized_response.replace(sender);
-        drop(maximized_response);
+        self.event_listeners
+            .maximized_response
+            .lock()
+            .unwrap()
+            .insert(id, sender);
+        if let Err(error) = self.sender.send(ToVersoMessage::GetMaximized(id)) {
+            self.event_listeners
+                .maximized_response
+                .lock()
+                .unwrap()
+                .remove(&id);
+            return Err(error);
+        };
         Ok(receiver.recv().unwrap())
     }
 
     /// Get if the window is currently minimized or not
     pub fn is_minimized(&self) -> Result<bool, Box<ipc_channel::ErrorKind>> {
-        let mut minimized_response = self.event_listeners.minimized_response.lock().unwrap();
-        self.sender.send(ToVersoMessage::GetMinimized)?;
+        let id = uuid::Uuid::new_v4();
         let (sender, receiver) = std::sync::mpsc::channel();
-        minimized_response.replace(sender);
-        drop(minimized_response);
+        self.event_listeners
+            .minimized_response
+            .lock()
+            .unwrap()
+            .insert(id, sender);
+        if let Err(error) = self.sender.send(ToVersoMessage::GetMinimized(id)) {
+            self.event_listeners
+                .minimized_response
+                .lock()
+                .unwrap()
+                .remove(&id);
+            return Err(error);
+        };
         Ok(receiver.recv().unwrap())
     }
 
     /// Get if the window is currently fullscreen or not
     pub fn is_fullscreen(&self) -> Result<bool, Box<ipc_channel::ErrorKind>> {
-        let mut fullscreen_response = self.event_listeners.fullscreen_response.lock().unwrap();
-        self.sender.send(ToVersoMessage::GetFullscreen)?;
+        let id = uuid::Uuid::new_v4();
         let (sender, receiver) = std::sync::mpsc::channel();
-        fullscreen_response.replace(sender);
-        drop(fullscreen_response);
+        self.event_listeners
+            .fullscreen_response
+            .lock()
+            .unwrap()
+            .insert(id, sender);
+        if let Err(error) = self.sender.send(ToVersoMessage::GetFullscreen(id)) {
+            self.event_listeners
+                .fullscreen_response
+                .lock()
+                .unwrap()
+                .remove(&id);
+            return Err(error);
+        };
         Ok(receiver.recv().unwrap())
     }
 
     /// Get the visibility of the window
     pub fn is_visible(&self) -> Result<bool, Box<ipc_channel::ErrorKind>> {
-        let mut visible_response = self.event_listeners.visible_response.lock().unwrap();
-        self.sender.send(ToVersoMessage::GetVisible)?;
+        let id = uuid::Uuid::new_v4();
         let (sender, receiver) = std::sync::mpsc::channel();
-        visible_response.replace(sender);
-        drop(visible_response);
+        self.event_listeners
+            .visible_response
+            .lock()
+            .unwrap()
+            .insert(id, sender);
+        if let Err(error) = self.sender.send(ToVersoMessage::GetVisible(id)) {
+            self.event_listeners
+                .visible_response
+                .lock()
+                .unwrap()
+                .remove(&id);
+            return Err(error);
+        };
         Ok(receiver.recv().unwrap())
     }
 
     /// Get the scale factor of the window
     pub fn get_scale_factor(&self) -> Result<f64, Box<ipc_channel::ErrorKind>> {
-        let mut scale_factor_response = self.event_listeners.scale_factor_response.lock().unwrap();
-        self.sender.send(ToVersoMessage::GetScaleFactor)?;
+        let id = uuid::Uuid::new_v4();
         let (sender, receiver) = std::sync::mpsc::channel();
-        scale_factor_response.replace(sender);
-        drop(scale_factor_response);
+        self.event_listeners
+            .scale_factor_response
+            .lock()
+            .unwrap()
+            .insert(id, sender);
+        if let Err(error) = self.sender.send(ToVersoMessage::GetScaleFactor(id)) {
+            self.event_listeners
+                .scale_factor_response
+                .lock()
+                .unwrap()
+                .remove(&id);
+            return Err(error);
+        };
         Ok(receiver.recv().unwrap())
     }
 
     /// Get the URL of the webview
     pub fn get_current_url(&self) -> Result<url::Url, Box<ipc_channel::ErrorKind>> {
-        let mut get_url_response = self.event_listeners.get_url_response.lock().unwrap();
-        self.sender.send(ToVersoMessage::GetCurrentUrl)?;
+        let id = uuid::Uuid::new_v4();
         let (sender, receiver) = std::sync::mpsc::channel();
-        get_url_response.replace(sender);
-        drop(get_url_response);
+        self.event_listeners
+            .get_url_response
+            .lock()
+            .unwrap()
+            .insert(id, sender);
+        if let Err(error) = self.sender.send(ToVersoMessage::GetCurrentUrl(id)) {
+            self.event_listeners
+                .get_url_response
+                .lock()
+                .unwrap()
+                .remove(&id);
+            return Err(error);
+        };
         Ok(receiver.recv().unwrap())
     }
 
