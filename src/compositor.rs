@@ -490,7 +490,7 @@ impl IOCompositor {
                 self.remove_webview(top_level_browsing_context_id, windows);
             }
 
-            CompositorMsg::TouchEventProcessed(result) => {
+            CompositorMsg::TouchEventProcessed(_webview_id, result) => {
                 self.touch_handler.on_event_processed(result);
             }
 
@@ -546,20 +546,26 @@ impl IOCompositor {
                 }
             }
 
-            CompositorMsg::WebDriverMouseButtonEvent(action, button, x, y) => {
+            CompositorMsg::WebDriverMouseButtonEvent(webview_id, action, button, x, y) => {
                 let dppx = self.device_pixels_per_page_pixel();
                 let point = dppx.transform_point(Point2D::new(x, y));
-                self.dispatch_input_event(InputEvent::MouseButton(MouseButtonEvent {
-                    point,
-                    action,
-                    button,
-                }));
+                self.dispatch_input_event(
+                    webview_id,
+                    InputEvent::MouseButton(MouseButtonEvent {
+                        point,
+                        action,
+                        button,
+                    }),
+                );
             }
 
-            CompositorMsg::WebDriverMouseMoveEvent(x, y) => {
+            CompositorMsg::WebDriverMouseMoveEvent(webview_id, x, y) => {
                 let dppx = self.device_pixels_per_page_pixel();
                 let point = dppx.transform_point(Point2D::new(x, y));
-                self.dispatch_input_event(InputEvent::MouseMove(MouseMoveEvent { point }));
+                self.dispatch_input_event(
+                    webview_id,
+                    InputEvent::MouseMove(MouseMoveEvent { point }),
+                );
             }
 
             CompositorMsg::PendingPaintMetric(
@@ -1279,7 +1285,7 @@ impl IOCompositor {
     }
 
     /// Dispatch input event to constellation.
-    fn dispatch_input_event(&mut self, event: InputEvent) {
+    fn dispatch_input_event(&mut self, webview_id: TopLevelBrowsingContextId, event: InputEvent) {
         // Events that do not need to do hit testing are sent directly to the
         // constellation to filter down.
         let Some(point) = event.point() else {
@@ -1295,14 +1301,18 @@ impl IOCompositor {
 
         if let Err(error) = self
             .constellation_chan
-            .send(ConstellationMsg::ForwardInputEvent(event, Some(result)))
+            .send(ConstellationMsg::ForwardInputEvent(
+                webview_id,
+                event,
+                Some(result),
+            ))
         {
             warn!("Sending event to constellation failed ({error:?}).");
         }
     }
 
     /// Handle the input event in the window.
-    pub fn on_input_event(&mut self, event: InputEvent) {
+    pub fn on_input_event(&mut self, webview_id: TopLevelBrowsingContextId, event: InputEvent) {
         if self.shutdown_state != ShutdownState::NotShuttingDown {
             return;
         }
@@ -1311,31 +1321,28 @@ impl IOCompositor {
                 InputEvent::MouseButton(event) => {
                     match event.action {
                         MouseButtonAction::Click => {}
-                        MouseButtonAction::Down => self.on_touch_down(TouchEvent::new(
-                            TouchEventType::Down,
-                            TouchId(0),
-                            event.point,
-                        )),
-                        MouseButtonAction::Up => self.on_touch_up(TouchEvent::new(
-                            TouchEventType::Up,
-                            TouchId(0),
-                            event.point,
-                        )),
+                        MouseButtonAction::Down => self.on_touch_down(
+                            webview_id,
+                            TouchEvent::new(TouchEventType::Down, TouchId(0), event.point),
+                        ),
+                        MouseButtonAction::Up => self.on_touch_up(
+                            webview_id,
+                            TouchEvent::new(TouchEventType::Up, TouchId(0), event.point),
+                        ),
                     }
                     return;
                 }
                 InputEvent::MouseMove(event) => {
-                    self.on_touch_move(TouchEvent::new(
-                        TouchEventType::Move,
-                        TouchId(0),
-                        event.point,
-                    ));
+                    self.on_touch_move(
+                        webview_id,
+                        TouchEvent::new(TouchEventType::Move, TouchId(0), event.point),
+                    );
                     return;
                 }
                 _ => {}
             }
         }
-        self.dispatch_input_event(event);
+        self.dispatch_input_event(webview_id, event);
     }
 
     fn hit_test_at_point(&self, point: DevicePoint) -> Option<CompositorHitTestResult> {
@@ -1387,7 +1394,7 @@ impl IOCompositor {
             .collect()
     }
 
-    fn send_touch_event(&self, event: TouchEvent) {
+    fn send_touch_event(&self, webview_id: TopLevelBrowsingContextId, event: TouchEvent) {
         let Some(result) = self.hit_test_at_point(event.point) else {
             return;
         };
@@ -1395,32 +1402,36 @@ impl IOCompositor {
         let event = InputEvent::Touch(event);
         if let Err(e) = self
             .constellation_chan
-            .send(ConstellationMsg::ForwardInputEvent(event, Some(result)))
+            .send(ConstellationMsg::ForwardInputEvent(
+                webview_id,
+                event,
+                Some(result),
+            ))
         {
             warn!("Sending event to constellation failed ({:?}).", e);
         }
     }
 
     /// Handle touch event.
-    pub fn on_touch_event(&mut self, event: TouchEvent) {
+    pub fn on_touch_event(&mut self, webview_id: TopLevelBrowsingContextId, event: TouchEvent) {
         if self.shutdown_state != ShutdownState::NotShuttingDown {
             return;
         }
 
         match event.event_type {
-            TouchEventType::Down => self.on_touch_down(event),
-            TouchEventType::Move => self.on_touch_move(event),
-            TouchEventType::Up => self.on_touch_up(event),
-            TouchEventType::Cancel => self.on_touch_cancel(event),
+            TouchEventType::Down => self.on_touch_down(webview_id, event),
+            TouchEventType::Move => self.on_touch_move(webview_id, event),
+            TouchEventType::Up => self.on_touch_up(webview_id, event),
+            TouchEventType::Cancel => self.on_touch_cancel(webview_id, event),
         }
     }
 
-    fn on_touch_down(&mut self, event: TouchEvent) {
+    fn on_touch_down(&mut self, webview_id: TopLevelBrowsingContextId, event: TouchEvent) {
         self.touch_handler.on_touch_down(event.id, event.point);
-        self.send_touch_event(event);
+        self.send_touch_event(webview_id, event);
     }
 
-    fn on_touch_move(&mut self, event: TouchEvent) {
+    fn on_touch_move(&mut self, webview_id: TopLevelBrowsingContextId, event: TouchEvent) {
         match self.touch_handler.on_touch_move(event.id, event.point) {
             TouchAction::Scroll(delta) => self.on_scroll_window_event(
                 ScrollLocation::Delta(LayoutVector2D::from_untyped(delta.to_untyped())),
@@ -1443,44 +1454,53 @@ impl IOCompositor {
                         event_count: 1,
                     }));
             }
-            TouchAction::DispatchEvent => self.send_touch_event(event),
+            TouchAction::DispatchEvent => self.send_touch_event(webview_id, event),
             _ => {}
         }
     }
 
-    fn on_touch_up(&mut self, event: TouchEvent) {
-        self.send_touch_event(event);
+    fn on_touch_up(&mut self, webview_id: TopLevelBrowsingContextId, event: TouchEvent) {
+        self.send_touch_event(webview_id, event);
 
         if let TouchAction::Click = self.touch_handler.on_touch_up(event.id, event.point) {
-            self.simulate_mouse_click(event.point);
+            self.simulate_mouse_click(webview_id, event.point);
         }
     }
 
-    fn on_touch_cancel(&mut self, event: TouchEvent) {
+    fn on_touch_cancel(&mut self, webview_id: TopLevelBrowsingContextId, event: TouchEvent) {
         // Send the event to script.
         self.touch_handler.on_touch_cancel(event.id, event.point);
-        self.send_touch_event(event);
+        self.send_touch_event(webview_id, event);
     }
 
     /// <http://w3c.github.io/touch-events/#mouse-events>
-    fn simulate_mouse_click(&mut self, point: DevicePoint) {
+    fn simulate_mouse_click(&mut self, webview_id: TopLevelBrowsingContextId, point: DevicePoint) {
         let button = MouseButton::Left;
-        self.dispatch_input_event(InputEvent::MouseMove(MouseMoveEvent { point }));
-        self.dispatch_input_event(InputEvent::MouseButton(MouseButtonEvent {
-            button,
-            action: MouseButtonAction::Down,
-            point,
-        }));
-        self.dispatch_input_event(InputEvent::MouseButton(MouseButtonEvent {
-            button,
-            action: MouseButtonAction::Up,
-            point,
-        }));
-        self.dispatch_input_event(InputEvent::MouseButton(MouseButtonEvent {
-            button,
-            action: MouseButtonAction::Click,
-            point,
-        }));
+        self.dispatch_input_event(webview_id, InputEvent::MouseMove(MouseMoveEvent { point }));
+        self.dispatch_input_event(
+            webview_id,
+            InputEvent::MouseButton(MouseButtonEvent {
+                button,
+                action: MouseButtonAction::Down,
+                point,
+            }),
+        );
+        self.dispatch_input_event(
+            webview_id,
+            InputEvent::MouseButton(MouseButtonEvent {
+                button,
+                action: MouseButtonAction::Up,
+                point,
+            }),
+        );
+        self.dispatch_input_event(
+            webview_id,
+            InputEvent::MouseButton(MouseButtonEvent {
+                button,
+                action: MouseButtonAction::Click,
+                point,
+            }),
+        );
     }
 
     /// Handle scroll event.

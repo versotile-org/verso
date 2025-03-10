@@ -122,7 +122,7 @@ impl Verso {
             &opts.time_profiling,
             opts.time_profiler_trace_path.clone(),
         );
-        let mem_profiler_sender = profile::mem::Profiler::create(opts.mem_profiler_period);
+        let mem_profiler_sender = profile::mem::Profiler::create();
 
         // Create compositor and embedder channels
         let (compositor_sender, compositor_receiver) = {
