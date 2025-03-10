@@ -1,6 +1,6 @@
 use std::{cell::Cell, collections::HashMap};
 
-use base::id::WebViewId;
+use base::id::{TopLevelBrowsingContextId, WebViewId};
 use compositing_traits::ConstellationMsg;
 use crossbeam_channel::Sender;
 use embedder_traits::{
@@ -391,8 +391,17 @@ impl Window {
             WindowEvent::CursorMoved { position, .. } => {
                 let point: DevicePoint = DevicePoint::new(position.x as f32, position.y as f32);
                 self.mouse_position.set(Some(*position));
+                let webview_id = match self.focused_webview_id {
+                    Some(webview_id) => webview_id,
+                    None => {
+                        log::trace!("No focused webview, skipping MouseInput event.");
+                        return;
+                    }
+                };
+
                 forward_input_event(
                     compositor,
+                    webview_id,
                     sender,
                     InputEvent::MouseMove(MouseMoveEvent { point }),
                 );
@@ -463,7 +472,20 @@ impl Window {
                         }
                     }
                 };
-                forward_input_event(compositor, sender, InputEvent::MouseButton(event));
+
+                let webview_id = match self.focused_webview_id {
+                    Some(webview_id) => webview_id,
+                    None => {
+                        log::trace!("No focused webview, skipping MouseInput event.");
+                        return;
+                    }
+                };
+                forward_input_event(
+                    compositor,
+                    webview_id,
+                    sender,
+                    InputEvent::MouseButton(event),
+                );
 
                 // Winit didn't send click event, so we send it after mouse up
                 if *state == ElementState::Released {
@@ -472,7 +494,12 @@ impl Window {
                         action: MouseButtonAction::Click,
                         button,
                     };
-                    forward_input_event(compositor, sender, InputEvent::MouseButton(event));
+                    forward_input_event(
+                        compositor,
+                        webview_id,
+                        sender,
+                        InputEvent::MouseButton(event),
+                    );
                 }
             }
             WindowEvent::PinchGesture { delta, .. } => {
@@ -543,6 +570,7 @@ impl Window {
                         let text = text.clone();
                         forward_input_event(
                             compositor,
+                            webview_id,
                             sender,
                             InputEvent::Ime(ImeEvent::Composition(CompositionEvent {
                                 state: CompositionState::End,
@@ -553,6 +581,7 @@ impl Window {
                     Ime::Enabled => {
                         forward_input_event(
                             compositor,
+                            webview_id,
                             sender,
                             InputEvent::Ime(ImeEvent::Composition(CompositionEvent {
                                 state: CompositionState::Start,
@@ -563,6 +592,7 @@ impl Window {
                     Ime::Preedit(text, _) => {
                         forward_input_event(
                             compositor,
+                            webview_id,
                             sender,
                             InputEvent::Ime(ImeEvent::Composition(CompositionEvent {
                                 state: CompositionState::Update,
@@ -573,6 +603,7 @@ impl Window {
                     Ime::Disabled => {
                         forward_input_event(
                             compositor,
+                            webview_id,
                             sender,
                             InputEvent::Ime(ImeEvent::Composition(CompositionEvent {
                                 state: CompositionState::End,
@@ -604,7 +635,7 @@ impl Window {
                 if self.handle_keyboard_shortcut(compositor, &event) {
                     return;
                 }
-                forward_input_event(compositor, sender, InputEvent::Keyboard(event));
+                forward_input_event(compositor, webview_id, sender, InputEvent::Keyboard(event));
             }
             e => log::trace!("Verso Window isn't supporting this window event yet: {e:?}"),
         }
@@ -1183,16 +1214,17 @@ pub unsafe fn decorate_window(view: *mut AnyObject, _position: LogicalPosition<f
 /// Forward input event to compositor or constellation.
 fn forward_input_event(
     compositor: &mut IOCompositor,
+    webview_id: TopLevelBrowsingContextId,
     constellation_proxy: &Sender<ConstellationMsg>,
     event: InputEvent,
 ) {
     // Events with a `point` first go to the compositor for hit testing.
     if event.point().is_some() {
-        compositor.on_input_event(event);
+        compositor.on_input_event(webview_id, event);
         return;
     }
 
     let _ = constellation_proxy.send(ConstellationMsg::ForwardInputEvent(
-        event, None, /* hit_test */
+        webview_id, event, None, /* hit_test */
     ));
 }
