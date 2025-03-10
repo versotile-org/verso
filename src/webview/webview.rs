@@ -298,6 +298,42 @@ impl Window {
                     log::error!("Failed to get WebView {webview_id:?} in this window.");
                 }
             }
+            EmbedderMsg::SelectFiles(
+                _webview_id,
+                _filter_pattern,
+                _allow_multiple_files,
+                ipc_sender,
+            ) => {
+                if _allow_multiple_files {
+                    rfd::FileDialog::new()
+                        .pick_files()
+                        .map(|files| {
+                            if let Err(e) = ipc_sender.send(Some(files)) {
+                                log::warn!("Verso Panel failed to send files: {}", e);
+                            }
+                        })
+                        .unwrap_or_else(|| {
+                            log::error!("Failed to open file dialog.");
+                            if let Err(e) = ipc_sender.send(None) {
+                                log::warn!("Verso Panel failed to send files: {}", e);
+                            }
+                        });
+                } else {
+                    rfd::FileDialog::new()
+                        .pick_file()
+                        .map(|file| {
+                            if let Err(e) = ipc_sender.send(Some(vec![file])) {
+                                log::warn!("Verso Panel failed to send files: {}", e);
+                            }
+                        })
+                        .unwrap_or_else(|| {
+                            log::error!("Failed to open file dialog.");
+                            if let Err(e) = ipc_sender.send(None) {
+                                log::warn!("Verso Panel failed to send files: {}", e);
+                            }
+                        });
+                }
+            }
             EmbedderMsg::ShowIME(_webview_id, input_method_type, text, multiline, position) => {
                 self.show_ime(input_method_type, text, multiline, position);
             }

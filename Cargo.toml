@@ -86,6 +86,7 @@ serde_json = "1.0"
 bincode = { workspace = true }
 mime = "0.3"
 uuid = { workspace = true }
+rfd = "0.15"
 # Servo repo crates
 background_hang_monitor = { git = "https://github.com/servo/servo.git", rev = "ce4ba30", features = ["sampler"] }
 base = { git = "https://github.com/servo/servo.git", rev = "ce4ba30" }
