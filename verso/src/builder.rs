@@ -49,6 +49,12 @@ impl VersoBuilder {
         self
     }
 
+    /// Sets whether the window will be initially focused or not.
+    pub fn focused(mut self, focused: bool) -> Self {
+        self.0.focused = focused;
+        self
+    }
+
     /// Port number to start a server to listen to remote Firefox devtools connections. 0 for random port.
     pub fn devtools_port(mut self, port: u16) -> Self {
         self.0.devtools_port = Some(port);

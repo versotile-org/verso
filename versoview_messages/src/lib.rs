@@ -116,6 +116,8 @@ pub struct ConfigFromController {
     pub visible: bool,
     /// Launch fullscreen or not for the initial winit window
     pub fullscreen: bool,
+    /// Launch focused or not for the initial winit window
+    pub focused: bool,
     /// Port number to start a server to listen to remote Firefox devtools connections. 0 for random port.
     pub devtools_port: Option<u16>,
     /// Servo time profile settings
@@ -142,6 +144,7 @@ impl Default for ConfigFromController {
             position: None,
             maximized: false,
             visible: true,
+            focused: true,
             fullscreen: false,
             devtools_port: None,
             profiler_settings: None,

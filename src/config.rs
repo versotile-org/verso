@@ -332,6 +332,7 @@ impl Config {
             None
         });
         window_attributes = window_attributes.with_visible(config.visible);
+        window_attributes = window_attributes.with_active(config.focused);
 
         let profiler_settings =
             config
