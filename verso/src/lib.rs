@@ -1,3 +1,6 @@
+mod builder;
+pub use builder::VersoBuilder;
+
 use dpi::{PhysicalPosition, PhysicalSize, Position, Size};
 use log::error;
 use std::{
@@ -6,7 +9,7 @@ use std::{
     process::Command,
     sync::{mpsc::Sender as MpscSender, Arc, Mutex},
 };
-pub use versoview_messages::ConfigFromController as VersoviewSettings;
+pub use versoview_messages::{ConfigFromController as VersoviewSettings, ProfilerSettings};
 use versoview_messages::{
     ToControllerMessage, ToVersoMessage, WebResourceRequest, WebResourceRequestResponse,
 };
@@ -46,7 +49,6 @@ impl VersoviewController {
     fn create(
         verso_path: impl AsRef<Path>,
         initial_url: url::Url,
-        // TODO: rework this into a builder
         mut settings: VersoviewSettings,
     ) -> Self {
         let path = verso_path.as_ref();
@@ -174,6 +176,7 @@ impl VersoviewController {
     }
 
     /// Create a new verso instance with custom settings and get the controller to it
+    #[deprecated = "Use VersoBuilder instead"]
     pub fn new_with_settings(
         verso_path: impl AsRef<Path>,
         initial_url: url::Url,
