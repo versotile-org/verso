@@ -5,6 +5,7 @@ use versoview_messages::{ConfigFromController, ProfilerSettings};
 use crate::VersoviewController;
 
 /// A builder for configuring and creating a `VersoviewController` instance.
+#[derive(Debug, Clone)]
 pub struct VersoBuilder(ConfigFromController);
 
 impl VersoBuilder {
