@@ -11,4 +11,5 @@ url = { workspace = true }
 http = { workspace = true }
 log = { workspace = true }
 dpi = { workspace = true }
+uuid = { workspace = true }
 versoview_messages = { path = "../versoview_messages" }
