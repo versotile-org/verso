@@ -175,16 +175,6 @@ impl VersoviewController {
         Self::create(verso_path, initial_url, VersoviewSettings::default())
     }
 
-    /// Create a new verso instance with custom settings and get the controller to it
-    #[deprecated = "Use VersoBuilder instead"]
-    pub fn new_with_settings(
-        verso_path: impl AsRef<Path>,
-        initial_url: url::Url,
-        settings: VersoviewSettings,
-    ) -> Self {
-        Self::create(verso_path, initial_url, settings)
-    }
-
     /// Exit
     pub fn exit(&self) -> Result<(), Box<ipc_channel::ErrorKind>> {
         self.sender.send(ToVersoMessage::Exit)
