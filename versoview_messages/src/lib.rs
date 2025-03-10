@@ -100,7 +100,7 @@ pub enum ToControllerMessage {
 }
 
 /// Configuration of Verso instance.
-#[derive(Clone, Debug, Default, Serialize, Deserialize)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct ConfigFromController {
     /// URL to load initially.
     pub url: Option<url::Url>,
@@ -110,8 +110,14 @@ pub struct ConfigFromController {
     pub inner_size: Option<Size>,
     /// Window position for the initial winit window
     pub position: Option<Position>,
-    /// Window position for the initial winit window
+    /// Launch maximized or not for the initial winit window
     pub maximized: bool,
+    /// Launch visible or not for the initial winit window
+    pub visible: bool,
+    /// Launch fullscreen or not for the initial winit window
+    pub fullscreen: bool,
+    /// Launch focused or not for the initial winit window
+    pub focused: bool,
     /// Port number to start a server to listen to remote Firefox devtools connections. 0 for random port.
     pub devtools_port: Option<u16>,
     /// Servo time profile settings
@@ -127,6 +133,28 @@ pub struct ConfigFromController {
     /// Path to resource directory. If None, Verso will try to get default directory. And if that
     /// still doesn't exist, all resource configuration will set to default values.
     pub resources_directory: Option<PathBuf>,
+}
+
+impl Default for ConfigFromController {
+    fn default() -> Self {
+        Self {
+            url: None,
+            with_panel: false,
+            inner_size: None,
+            position: None,
+            maximized: false,
+            visible: true,
+            focused: true,
+            fullscreen: false,
+            devtools_port: None,
+            profiler_settings: None,
+            user_agent: None,
+            init_script: None,
+            userscripts_directory: None,
+            zoom_level: None,
+            resources_directory: None,
+        }
+    }
 }
 
 /// Servo time profile settings
