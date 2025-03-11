@@ -14,7 +14,7 @@ use servo_config::{
     prefs::Preferences,
 };
 use versoview_messages::ConfigFromController;
-use winit::window::WindowAttributes;
+use winit::window::{Fullscreen, WindowAttributes};
 
 /// Servo time profile settings
 #[derive(Clone, Debug)]
@@ -298,6 +298,7 @@ impl Config {
             maximized: !cli_args.no_maximized,
             position: cli_args.position.map(Into::into),
             inner_size: cli_args.inner_size.map(Into::into),
+            ..Default::default()
         })
     }
 
@@ -325,6 +326,13 @@ impl Config {
             window_attributes = window_attributes.with_inner_size(size);
         }
         window_attributes = window_attributes.with_maximized(config.maximized);
+        window_attributes = window_attributes.with_fullscreen(if config.fullscreen {
+            Some(Fullscreen::Borderless(None))
+        } else {
+            None
+        });
+        window_attributes = window_attributes.with_visible(config.visible);
+        window_attributes = window_attributes.with_active(config.focused);
 
         let profiler_settings =
             config
