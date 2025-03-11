@@ -4,12 +4,12 @@ use versoview_messages::{ConfigFromController, ProfilerSettings};
 
 use crate::VersoviewController;
 
-/// A builder for configuring and creating a `VersoviewController` instance.
+/// A builder for configuring and creating a [`VersoviewController`] instance.
 #[derive(Debug, Clone)]
 pub struct VersoBuilder(ConfigFromController);
 
 impl VersoBuilder {
-    /// Creates a new `VersoBuilder` with default settings.
+    /// Creates a new [`VersoBuilder`] with default settings.
     pub fn new() -> Self {
         Self(ConfigFromController::default())
     }
@@ -56,6 +56,18 @@ impl VersoBuilder {
         self
     }
 
+    /// Sets whether the window will be initially decorated or not.
+    pub fn decorated(mut self, decorated: bool) -> Self {
+        self.0.decorated = decorated;
+        self
+    }
+
+    /// Sets whether the window will be initially transparent or not.
+    pub fn transparent(mut self, transparent: bool) -> Self {
+        self.0.transparent = transparent;
+        self
+    }
+
     /// Port number to start a server to listen to remote Firefox devtools connections. 0 for random port.
     pub fn devtools_port(mut self, port: u16) -> Self {
         self.0.devtools_port = Some(port);
@@ -98,7 +110,7 @@ impl VersoBuilder {
         self
     }
 
-    /// Builds the `VersoviewController` with the configured settings.
+    /// Builds the [`VersoviewController`] with the configured settings.
     pub fn build(
         self,
         versoview_path: impl AsRef<Path>,

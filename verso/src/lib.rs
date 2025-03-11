@@ -39,6 +39,7 @@ struct EventListeners {
     get_url_response: ResponseListener<MpscSender<url::Url>>,
 }
 
+/// Sends an exit signal to this Verso instance when dropped
 pub struct VersoviewController {
     sender: IpcSender<ToVersoMessage>,
     event_listeners: EventListeners,
@@ -464,6 +465,7 @@ impl VersoviewController {
 }
 
 impl Drop for VersoviewController {
+    /// Send an exit signal to this Verso instance
     fn drop(&mut self) {
         let _ = self.exit();
     }

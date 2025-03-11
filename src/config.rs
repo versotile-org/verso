@@ -313,8 +313,8 @@ impl Config {
             .unwrap_or_else(|| default_user_agent_string().to_string());
 
         let mut window_attributes = winit::window::Window::default_attributes()
-            .with_transparent(true)
-            .with_decorations(false);
+            .with_transparent(config.transparent)
+            .with_decorations(config.decorated);
         // set min inner size
         // should be at least able to show the whole control panel
         // FIXME: url input has weird behavior that will expand lager when having long text
