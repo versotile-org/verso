@@ -68,6 +68,12 @@ impl VersoBuilder {
         self
     }
 
+    /// Sets the initial title of the window in the title bar.
+    pub fn title(mut self, title: impl Into<String>) -> Self {
+        self.0.title = Some(title.into());
+        self
+    }
+
     /// Port number to start a server to listen to remote Firefox devtools connections. 0 for random port.
     pub fn devtools_port(mut self, port: u16) -> Self {
         self.0.devtools_port = Some(port);

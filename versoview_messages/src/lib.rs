@@ -122,6 +122,8 @@ pub struct ConfigFromController {
     pub decorated: bool,
     /// Launch transparent or not for the initial winit window
     pub transparent: bool,
+    /// Title of the initial winit window in the title bar.
+    pub title: Option<String>,
     /// Port number to start a server to listen to remote Firefox devtools connections. 0 for random port.
     pub devtools_port: Option<u16>,
     /// Servo time profile settings
@@ -151,6 +153,7 @@ impl Default for ConfigFromController {
             focused: true,
             decorated: false,
             transparent: true,
+            title: None,
             fullscreen: false,
             devtools_port: None,
             profiler_settings: None,
