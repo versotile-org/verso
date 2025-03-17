@@ -105,8 +105,8 @@ impl Window {
                 }
                 _ => {
                     log::trace!(
-                            "Verso WebView {webview_id:?} ignores NotifyLoadStatusChanged status: {status:?}"
-                        );
+                        "Verso WebView {webview_id:?} ignores NotifyLoadStatusChanged status: {status:?}"
+                    );
                 }
             },
             EmbedderMsg::ChangePageTitle(_webview_id, title) => {
@@ -134,7 +134,9 @@ impl Window {
                                 url.into_url(),
                             ))
                         {
-                            log::error!("Verso failed to send AllowNavigationRequest to controller: {error}")
+                            log::error!(
+                                "Verso failed to send AllowNavigationRequest to controller: {error}"
+                            )
                         } else {
                             // We will handle a ToVersoMessage::OnNavigationStartingResponse
                             // and send ConstellationMsg::AllowNavigationResponse there if the call succeed
@@ -170,7 +172,9 @@ impl Window {
                                 return;
                             }
                             Err(error) => {
-                                log::error!("Verso failed to send WebResourceRequested to controller: {error}")
+                                log::error!(
+                                    "Verso failed to send WebResourceRequested to controller: {error}"
+                                )
                             }
                         }
                     }

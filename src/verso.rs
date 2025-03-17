@@ -1,17 +1,18 @@
 use std::{
     borrow::Cow,
     collections::HashMap,
-    sync::{atomic::Ordering, Arc},
+    fmt::Debug,
+    sync::{Arc, atomic::Ordering},
 };
 
 use arboard::Clipboard;
-use base::id::{PipelineNamespace, PipelineNamespaceId, TopLevelBrowsingContextId, WebViewId};
+use base::id::{PipelineNamespace, PipelineNamespaceId, WebViewId};
 use bluetooth::BluetoothThreadFactory;
 use bluetooth_traits::BluetoothRequest;
 use canvas::canvas_paint_thread::CanvasPaintThread;
 use compositing_traits::{CompositorMsg, CompositorProxy, CompositorReceiver, ConstellationMsg};
 use constellation::{Constellation, FromCompositorLogger, InitialConstellationState};
-use crossbeam_channel::{unbounded, Receiver, Sender};
+use crossbeam_channel::{Receiver, Sender, unbounded};
 use devtools;
 use embedder_traits::{
     AllowOrDeny, EmbedderMsg, EmbedderProxy, EventLoopWaker, WebResourceResponse,
@@ -32,7 +33,7 @@ use servo_url::ServoUrl;
 use style;
 use versoview_messages::{ToControllerMessage, ToVersoMessage};
 use webgpu;
-use webrender::{create_webrender_instance, ShaderPrecacheFlags, WebRenderOptions};
+use webrender::{ShaderPrecacheFlags, WebRenderOptions, create_webrender_instance};
 use webrender_api::*;
 use webrender_traits::*;
 use winit::{
@@ -43,7 +44,7 @@ use winit::{
 
 use crate::{
     compositor::{IOCompositor, InitialCompositorState, ShutdownState},
-    config::{parse_cli_args, Config},
+    config::{Config, parse_cli_args},
     webview::execute_script,
     window::Window,
 };
@@ -94,7 +95,7 @@ impl Verso {
         let zoom_level = config.zoom_level;
 
         config.init();
-        // Reserving a namespace to create TopLevelBrowsingContextId.
+        // Reserving a namespace to create WebViewId.
         PipelineNamespace::install(PipelineNamespaceId(0));
         let (mut window, rendering_context) = Window::new(evl, window_settings);
         let event_loop_waker = Box::new(Waker(proxy));
@@ -506,11 +507,15 @@ impl Verso {
                             // }
                             EmbedderMsg::RequestDevtoolsConnection(sender) => {
                                 if let Err(err) = sender.send(AllowOrDeny::Allow) {
-                                    log::error!("Failed to send RequestDevtoolsConnection response back: {err}");
+                                    log::error!(
+                                        "Failed to send RequestDevtoolsConnection response back: {err}"
+                                    );
                                 }
                             }
                             e => {
-                                log::trace!("Verso Window isn't supporting handling this message yet: {e:?}")
+                                log::trace!(
+                                    "Verso Window isn't supporting handling this message yet: {e:?}"
+                                )
                             }
                         }
                     }
@@ -835,7 +840,7 @@ impl Verso {
         self.windows.values_mut().next().map(|(window, _)| window)
     }
 
-    fn first_webview_id(&self) -> Option<TopLevelBrowsingContextId> {
+    fn first_webview_id(&self) -> Option<WebViewId> {
         self.windows
             .values()
             .next()
@@ -992,7 +997,7 @@ where
 }
 
 pub(crate) fn send_to_constellation(sender: &Sender<ConstellationMsg>, msg: ConstellationMsg) {
-    let variant_name = msg.variant_name();
+    let variant_name: &str = (&msg).into();
     if let Err(e) = sender.send(msg) {
         log::warn!("Sending {variant_name} to constellation failed: {e:?}");
     }

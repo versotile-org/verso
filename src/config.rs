@@ -5,12 +5,12 @@ use embedder_traits::resources::{self, Resource, ResourceReaderMethods};
 use headers::{ContentType, HeaderMapExt};
 use net::protocols::{ProtocolHandler, ProtocolRegistry};
 use net_traits::{
+    ResourceFetchTiming,
     request::Request,
     response::{Response, ResponseBody},
-    ResourceFetchTiming,
 };
 use servo_config::{
-    opts::{set_options, Opts, OutputOptions},
+    opts::{Opts, OutputOptions, set_options},
     prefs::Preferences,
 };
 use versoview_messages::ConfigFromController;
