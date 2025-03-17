@@ -1,6 +1,6 @@
 use std::{cell::Cell, collections::HashMap};
 
-use base::id::{TopLevelBrowsingContextId, WebViewId};
+use base::id::WebViewId;
 use compositing_traits::ConstellationMsg;
 use crossbeam_channel::Sender;
 use embedder_traits::{
@@ -25,8 +25,8 @@ use raw_window_handle::HasWindowHandle;
 use servo_url::ServoUrl;
 use versoview_messages::ToControllerMessage;
 use webrender_api::{
-    units::{DeviceIntPoint, DeviceIntRect, DeviceIntSize, DevicePoint, LayoutVector2D},
     ScrollLocation,
+    units::{DeviceIntPoint, DeviceIntRect, DeviceIntSize, DevicePoint, LayoutVector2D},
 };
 #[cfg(any(linux, target_os = "windows"))]
 use winit::window::ResizeDirection;
@@ -41,14 +41,14 @@ use winit::{
 use crate::{
     compositor::IOCompositor,
     keyboard::keyboard_event_from_winit,
-    rendering::{gl_config_picker, RenderingContext},
+    rendering::{RenderingContext, gl_config_picker},
     tab::TabManager,
     verso::send_to_constellation,
     webview::{
+        Panel, WebView,
         context_menu::{ContextMenu, Menu},
         execute_script,
         prompt::PromptSender,
-        Panel, WebView,
     },
 };
 
@@ -1214,7 +1214,7 @@ pub unsafe fn decorate_window(view: *mut AnyObject, _position: LogicalPosition<f
 /// Forward input event to compositor or constellation.
 fn forward_input_event(
     compositor: &mut IOCompositor,
-    webview_id: TopLevelBrowsingContextId,
+    webview_id: WebViewId,
     constellation_proxy: &Sender<ConstellationMsg>,
     event: InputEvent,
 ) {
