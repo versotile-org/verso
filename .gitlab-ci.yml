@@ -47,7 +47,7 @@ pr_fast_check:
 build_linux:
   stage: build
   rules:
-    - if: '$CI_PIPELINE_SOURCE == "push" || $CI_PIPELINE_SOURCE == "schedule" || $CI_PIPELINE_SOURCE == "web"'
+    - if: '$CI_PIPELINE_SOURCE == "push" && $CI_COMMIT_BRANCH == "main" || $CI_PIPELINE_SOURCE == "schedule" || $CI_PIPELINE_SOURCE == "web"'
       when: always
   image: ubuntu:22.04
   resource_group: "continuous_integration-$CI_COMMIT_REF_NAME"
@@ -101,7 +101,6 @@ build_linux:
   artifacts:
     paths:
       - verso_${VERSO_VERSION}_x64.flatpak
-    if: '$CI_PIPELINE_SOURCE == "schedule" || $CI_PIPELINE_SOURCE == "web"'
     when: always
     expire_in: 1 week
 
@@ -109,7 +108,7 @@ build_linux:
 build_result:
   stage: result
   rules:
-    - if: '$CI_PIPELINE_SOURCE == "push" || $CI_PIPELINE_SOURCE == "schedule" || $CI_PIPELINE_SOURCE == "web"'
+    - if: '$CI_PIPELINE_SOURCE == "push" && $CI_COMMIT_BRANCH == "main" || $CI_PIPELINE_SOURCE == "schedule" || $CI_PIPELINE_SOURCE == "web"'
       needs: ["build_linux"]
     - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
       needs: ["pr_fast_check"]
