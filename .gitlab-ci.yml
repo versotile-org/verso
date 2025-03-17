@@ -48,7 +48,6 @@ build_linux:
   stage: build
   rules:
     - if: '$CI_PIPELINE_SOURCE == "push" && $CI_COMMIT_BRANCH == "main" || $CI_PIPELINE_SOURCE == "schedule" || $CI_PIPELINE_SOURCE == "web"'
-      when: always
   image: ubuntu:22.04
   resource_group: "continuous_integration-$CI_COMMIT_REF_NAME"
   interruptible: true
