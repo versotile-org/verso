@@ -1,0 +1,125 @@
+stages:
+  - check
+  - build
+  - result
+
+variables:
+  CN_APP_SLUG: "verso/verso-nightly"
+  LIBCLANG_PATH: "/usr/lib/llvm-14/lib"
+
+# Fast Check Job for Merge Requests
+pr_fast_check:
+  stage: check
+  rules:
+    - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
+  image: ubuntu:22.04
+  resource_group: "continuous_integration-$CI_COMMIT_REF_NAME"
+  interruptible: true
+  variables:
+    WAYLAND_DISPLAY: "wayland-1"
+    WLR_BACKENDS: "headless"
+    WLR_LIBINPUT_NO_DEVICES: "1"
+    XDG_RUNTIME_DIR: "/tmp"
+    XDG_SESSION_TYPE: "wayland"
+  before_script:
+    - DEBIAN_FRONTEND=noninteractive apt-get update
+  script:
+    - apt-get install -y curl
+    - curl https://sh.rustup.rs -sSf | sh -s -- -y
+    - source "$HOME/.cargo/env"
+    - export LIBCLANG_PATH=/usr/lib/llvm-14/lib
+    - |
+      DEBIAN_FRONTEND=noninteractive apt-get install -y build-essential python3-pip ccache clang cmake \
+        g++ git gperf libdbus-1-dev libfreetype6-dev libgl1-mesa-dri \
+        libgles2-mesa-dev libglib2.0-dev libgstreamer-plugins-base1.0-dev \
+        gstreamer1.0-plugins-good libgstreamer-plugins-good1.0-dev \
+        gstreamer1.0-plugins-bad libgstreamer-plugins-bad1.0-dev \
+        gstreamer1.0-plugins-ugly gstreamer1.0-plugins-base \
+        libgstreamer-plugins-base1.0-dev gstreamer1.0-libav \
+        libgstrtspserver-1.0-dev gstreamer1.0-tools libges-1.0-dev \
+        libharfbuzz-dev liblzma-dev libunwind-dev libvulkan1 \
+        libx11-dev libxcb-render0-dev libxcb-shape0-dev libxcb-xfixes0-dev \
+        libxmu-dev libxmu6 libegl1-mesa-dev llvm-dev m4 xorg-dev sway \
+        python3-mako
+    - cargo check
+
+# Build for Linux
+build_linux:
+  stage: build
+  rules:
+    - if: '$CI_PIPELINE_SOURCE == "push" && $CI_COMMIT_BRANCH == "main" || $CI_PIPELINE_SOURCE == "schedule" || $CI_PIPELINE_SOURCE == "web"'
+  image: ubuntu:22.04
+  resource_group: "continuous_integration-$CI_COMMIT_REF_NAME"
+  interruptible: true
+  variables:
+    WAYLAND_DISPLAY: "wayland-1"
+    WLR_BACKENDS: "headless"
+    WLR_LIBINPUT_NO_DEVICES: "1"
+    XDG_RUNTIME_DIR: "/tmp"
+    XDG_SESSION_TYPE: "wayland"
+  before_script:
+    - DEBIAN_FRONTEND=noninteractive apt-get update
+  script:
+    - apt-get install -y curl
+    - curl https://sh.rustup.rs -sSf | sh -s -- -y
+    - source "$HOME/.cargo/env"
+    - export LIBCLANG_PATH=/usr/lib/llvm-14/lib
+    - |
+      if [[ "$CI_PIPELINE_SOURCE" == "schedule" || "$CI_PIPELINE_SOURCE" == "web" ]]; then
+        apt-get install -y flatpak flatpak-builder
+        flatpak remote-add --if-not-exists flathub https://dl.flathub.org/repo/flathub.flatpakrepo
+        flatpak install -y --noninteractive flathub org.freedesktop.Platform//24.08
+        flatpak install -y --noninteractive flathub org.freedesktop.Sdk//24.08
+        flatpak install -y --noninteractive flathub org.freedesktop.Sdk.Extension.rust-stable//24.08
+        flatpak install -y --noninteractive flathub org.freedesktop.Sdk.Extension.llvm18//24.08
+      else
+        DEBIAN_FRONTEND=noninteractive apt-get install -y build-essential python3-pip ccache clang cmake \
+          g++ git gperf libdbus-1-dev libfreetype6-dev libgl1-mesa-dri \
+          libgles2-mesa-dev libglib2.0-dev libgstreamer-plugins-base1.0-dev \
+          gstreamer1.0-plugins-good libgstreamer-plugins-good1.0-dev \
+          gstreamer1.0-plugins-bad libgstreamer-plugins-bad1.0-dev \
+          gstreamer1.0-plugins-ugly gstreamer1.0-plugins-base \
+          libgstreamer-plugins-base1.0-dev gstreamer1.0-libav \
+          libgstrtspserver-1.0-dev gstreamer1.0-tools libges-1.0-dev \
+          libharfbuzz-dev liblzma-dev libunwind-dev libvulkan1 \
+          libx11-dev libxcb-render0-dev libxcb-shape0-dev libxcb-xfixes0-dev \
+          libxmu-dev libxmu6 libegl1-mesa-dev llvm-dev m4 xorg-dev sway \
+          python3-mako
+        cargo check || echo "Not a scheduled or manual build"
+      fi
+    - |
+      if [[ "$CI_PIPELINE_SOURCE" == "schedule" || "$CI_PIPELINE_SOURCE" == "web" ]]; then
+        VERSO_VERSION=$(cargo metadata --format-version=1 --no-deps | jq -r '.packages[] | select(.name == "versoview") | .version')
+        export VERSO_VERSION
+        pip3 install aiohttp toml
+        python3 ./flatpak-cargo-generator.py ./Cargo.lock -o cargo-sources.json
+        flatpak-builder --repo=repo --force-clean build org.versotile.verso.yml
+        flatpak build-bundle repo "verso_${VERSO_VERSION}_x64.flatpak" org.versotile.verso
+        cp "verso_${VERSO_VERSION}_x64.flatpak" build/
+      fi
+  artifacts:
+    paths:
+      - verso_${VERSO_VERSION}_x64.flatpak
+    when: always
+    expire_in: 1 week
+
+# Aggregate Build Results
+build_result:
+  stage: result
+  rules:
+    - if: '$CI_PIPELINE_SOURCE == "push" && $CI_COMMIT_BRANCH == "main" || $CI_PIPELINE_SOURCE == "schedule" || $CI_PIPELINE_SOURCE == "web"'
+      needs: ["build_linux"]
+    - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
+      needs: ["pr_fast_check"]
+  resource_group: "continuous_integration-$CI_COMMIT_REF_NAME"
+  interruptible: true
+  script:
+    - |
+      # GitLab does not have a direct equivalent for GitHub's needs.*, so we'll check job statuses via predefined variables
+      if [[ "$CI_JOB_STATUS" == "failed" || "$CI_JOB_STATUS" == "canceled" ]]; then
+        echo "One or more build jobs failed or were canceled."
+        exit 1
+      else
+        echo "All build jobs succeeded."
+        exit 0
+      fi
