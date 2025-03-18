@@ -1,5 +1,5 @@
 stages:
-  - check
+  - merge_check
   - build
   - result
 
@@ -8,8 +8,8 @@ variables:
   LIBCLANG_PATH: "/usr/lib/llvm-14/lib"
 
 # Fast Check Job for Merge Requests
-pr_fast_check:
-  stage: check
+merge_pre_check:
+  stage: merge_check
   rules:
     - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
   image: ubuntu:22.04
@@ -42,6 +42,17 @@ pr_fast_check:
         libxmu-dev libxmu6 libegl1-mesa-dev llvm-dev m4 xorg-dev sway \
         python3-mako
     - cargo check
+
+# Check NixOS
+build_nixos:
+  stage: build
+  rules:
+    - if: '$CI_PIPELINE_SOURCE == "push" && $CI_COMMIT_BRANCH == "main" || $CI_PIPELINE_SOURCE == "schedule" || $CI_PIPELINE_SOURCE == "web"'
+  resource_group: "continuous_integration-$CI_COMMIT_REF_NAME"
+  image: nixos/nix:2.26.3
+  script:
+    - nix-channel --update nixpkgs
+    - nix-shell shell.nix --run 'cargo check'
 
 # Build for Linux
 build_linux:
@@ -108,9 +119,9 @@ build_result:
   stage: result
   rules:
     - if: '$CI_PIPELINE_SOURCE == "push" && $CI_COMMIT_BRANCH == "main" || $CI_PIPELINE_SOURCE == "schedule" || $CI_PIPELINE_SOURCE == "web"'
-      needs: ["build_linux"]
+      needs: ["build_nixos", "build_linux"]
     - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
-      needs: ["pr_fast_check"]
+      needs: ["merge_pre_check"]
   resource_group: "continuous_integration-$CI_COMMIT_REF_NAME"
   interruptible: true
   script:
