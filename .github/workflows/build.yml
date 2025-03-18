@@ -8,6 +8,9 @@ on:
       - main
   schedule:
     - cron: "0 0 * * 0"
+  push:
+    branches:
+      - main
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
