@@ -10,8 +10,9 @@ use base::id::{PipelineNamespace, PipelineNamespaceId, WebViewId};
 use bluetooth::BluetoothThreadFactory;
 use bluetooth_traits::BluetoothRequest;
 use canvas::canvas_paint_thread::CanvasPaintThread;
-use compositing_traits::{CompositorMsg, CompositorProxy, CompositorReceiver, ConstellationMsg};
+use compositing_traits::{CompositorMsg, CompositorProxy, CompositorReceiver};
 use constellation::{Constellation, FromCompositorLogger, InitialConstellationState};
+use constellation_traits::{ConstellationMsg, WindowSizeData};
 use crossbeam_channel::{Receiver, Sender, unbounded};
 use devtools;
 use embedder_traits::{
@@ -27,7 +28,6 @@ use log::{Log, Metadata, Record};
 use net::resource_thread;
 use profile;
 use script::{self, JSEngineSetup};
-use script_traits::WindowSizeData;
 use servo_config::{opts, pref};
 use servo_url::ServoUrl;
 use style;

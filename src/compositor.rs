@@ -8,8 +8,11 @@ use base::cross_process_instant::CrossProcessInstant;
 use base::id::{PipelineId, WebViewId};
 use base::{Epoch, WebRenderEpochToU16};
 use compositing_traits::{
-    CompositionPipeline, CompositorMsg, CompositorProxy, CompositorReceiver, ConstellationMsg,
-    SendableFrameTree,
+    CompositionPipeline, CompositorMsg, CompositorProxy, CompositorReceiver, SendableFrameTree,
+};
+use constellation_traits::{
+    AnimationTickType, CompositorHitTestResult, ConstellationMsg, PaintMetricEvent, ScrollState,
+    UntrustedNodeAddress, WindowSizeData, WindowSizeType,
 };
 use crossbeam_channel::Sender;
 use embedder_traits::{
@@ -22,10 +25,7 @@ use ipc_channel::ipc::{self, IpcSharedMemory};
 use log::{debug, error, trace, warn};
 use profile_traits::time::{self as profile_time, ProfilerCategory};
 use profile_traits::{mem, time, time_profile};
-use script_traits::{
-    AnimationState, AnimationTickType, ScriptThreadMessage, ScrollState, WindowSizeData,
-    WindowSizeType,
-};
+use script_traits::AnimationState;
 use servo_geometry::{DeviceIndependentIntSize, DeviceIndependentPixel};
 use style_traits::{CSSPixel, PinchZoomFactor};
 use webrender::{RenderApi, Transaction};
@@ -42,9 +42,7 @@ use webrender_api::{
     SpatialTreeItemKey, TransformStyle,
 };
 use webrender_traits::display_list::{HitTestInfo, ScrollTree};
-use webrender_traits::{
-    CompositorHitTestResult, CrossProcessCompositorMessage, ImageUpdate, UntrustedNodeAddress,
-};
+use webrender_traits::{CrossProcessCompositorMessage, ImageUpdate};
 use winit::window::WindowId;
 
 use crate::rendering::RenderingContext;
@@ -184,13 +182,6 @@ pub struct IOCompositor {
     /// The GL bindings for webrender
     webrender_gl: Rc<dyn gl::Gl>,
 
-    /// A per-pipeline queue of display lists that have not yet been rendered by WebRender. Layout
-    /// expects WebRender to paint each given epoch. Once the compositor paints a frame with that
-    /// epoch's display list, it will be removed from the queue and the paint time will be recorded
-    /// as a metric. In case new display lists come faster than painting a metric might never be
-    /// recorded.
-    pending_paint_metrics: HashMap<PipelineId, Vec<Epoch>>,
-
     /// Current mouse cursor.
     cursor: Cursor,
 
@@ -270,6 +261,21 @@ pub enum ShutdownState {
     FinishedShuttingDown,
 }
 
+/// The paint status of a particular pipeline in the Servo renderer. This is used to trigger metrics
+/// in script (via the constellation) when display lists are received.
+///
+/// See <https://w3c.github.io/paint-timing/#first-contentful-paint>.
+#[derive(PartialEq)]
+pub(crate) enum PaintMetricState {
+    /// The renderer is still waiting to process a display list which triggers this metric.
+    Waiting,
+    /// The renderer has processed the display list which will trigger this event, marked the Servo
+    /// instance ready to paint, and is waiting for the given epoch to actually be rendered.
+    Seen(WebRenderEpoch, bool /* first_reflow */),
+    /// The metric has been sent to the constellation and no more work needs to be done.
+    Sent,
+}
+
 struct PipelineDetails {
     /// The pipeline associated with this PipelineDetails object.
     pipeline: Option<CompositionPipeline>,
@@ -297,6 +303,12 @@ struct PipelineDetails {
     /// The compositor-side [ScrollTree]. This is used to allow finding and scrolling
     /// nodes in the compositor before forwarding new offsets to WebRender.
     scroll_tree: ScrollTree,
+
+    /// The paint metric status of the first paint.
+    pub first_paint_metric: PaintMetricState,
+
+    /// The paint metric status of the first contentful paint.
+    pub first_contentful_paint_metric: PaintMetricState,
 }
 
 impl PipelineDetails {
@@ -310,6 +322,8 @@ impl PipelineDetails {
             throttled: false,
             hit_test_items: Vec::new(),
             scroll_tree: ScrollTree::default(),
+            first_paint_metric: PaintMetricState::Waiting,
+            first_contentful_paint_metric: PaintMetricState::Waiting,
         }
     }
 
@@ -373,7 +387,6 @@ impl IOCompositor {
             webrender_api: state.webrender_api,
             rendering_context: state.rendering_context,
             webrender_gl: state.webrender_gl,
-            pending_paint_metrics: HashMap::new(),
             cursor: Cursor::None,
             cursor_pos: DevicePoint::new(0.0, 0.0),
             wait_for_stable_image,
@@ -569,13 +582,6 @@ impl IOCompositor {
                 );
             }
 
-            CompositorMsg::PendingPaintMetric(_webview_id, pipeline_id, epoch) => {
-                self.pending_paint_metrics
-                    .entry(pipeline_id)
-                    .or_default()
-                    .push(epoch);
-            }
-
             CompositorMsg::CrossProcess(cross_process_message) => {
                 self.handle_cross_process_message(cross_process_message);
             }
@@ -678,6 +684,18 @@ impl IOCompositor {
                 details.most_recent_display_list_epoch = Some(display_list_info.epoch);
                 details.hit_test_items = display_list_info.hit_test_info;
                 details.install_new_scroll_tree(display_list_info.scroll_tree);
+
+                let epoch = display_list_info.epoch;
+                let first_reflow = display_list_info.first_reflow;
+                if details.first_paint_metric == PaintMetricState::Waiting {
+                    details.first_paint_metric = PaintMetricState::Seen(epoch, first_reflow);
+                }
+                if details.first_contentful_paint_metric == PaintMetricState::Waiting &&
+                    display_list_info.is_contentful
+                {
+                    details.first_contentful_paint_metric =
+                        PaintMetricState::Seen(epoch, first_reflow);
+                }
 
                 let mut transaction = Transaction::new();
                 transaction
@@ -1779,10 +1797,8 @@ impl IOCompositor {
             }
         });
 
-        if let Some(pipeline) = details.pipeline.as_ref() {
-            let message = ScriptThreadMessage::SetScrollStates(*pipeline_id, scroll_states);
-            let _ = pipeline.script_chan.send(message);
-        }
+        let message = ConstellationMsg::SetScrollStates(*pipeline_id, scroll_states);
+        let _ = self.constellation_chan.send(message);
     }
 
     // Check if any pipelines currently have active animations or animation callbacks.
@@ -2097,54 +2113,49 @@ impl IOCompositor {
     /// current time, inform the constellation about it and remove the pending metric from
     /// the list.
     fn send_pending_paint_metrics_messages_after_composite(&mut self) {
-        if self.pending_paint_metrics.is_empty() {
-            return;
-        }
         let paint_time = CrossProcessInstant::now();
-        let mut pipelines_to_remove = Vec::new();
-        let pending_paint_metrics = &mut self.pending_paint_metrics;
-        // For each pending paint metrics pipeline id, determine the current
-        // epoch and update paint timing if necessary.
-        for (pipeline_id, pending_epochs) in pending_paint_metrics.iter_mut() {
-            let Some(WebRenderEpoch(current_epoch)) = self
+        let document_id = self.webrender_document;
+        for (_, pipeline_id) in self.webviews.iter_mut() {
+            debug_assert!(self.pipeline_details.contains_key(pipeline_id));
+            let pipeline = self.pipeline_details.get_mut(pipeline_id).unwrap();
+            let Some(current_epoch) = self
                 .webrender
                 .as_ref()
-                .and_then(|wr| wr.current_epoch(self.webrender_document, pipeline_id.into()))
+                .and_then(|wr| wr.current_epoch(document_id, (*pipeline_id).into()))
             else {
                 continue;
             };
-            // If the pipeline is unknown, stop trying to send paint metrics for it.
-            let Some(pipeline) = self
-                .pipeline_details
-                .get(pipeline_id)
-                .and_then(|pipeline_details| pipeline_details.pipeline.as_ref())
-            else {
-                pipelines_to_remove.push(*pipeline_id);
-                continue;
-            };
-            let current_epoch = Epoch(current_epoch);
-            let Some(index) = pending_epochs
-                .iter()
-                .position(|epoch| *epoch == current_epoch)
-            else {
-                continue;
-            };
-            // Remove all epochs that were pending before the current epochs. They were not and will not,
-            // be painted.
-            pending_epochs.drain(0..index);
-            if let Err(error) = pipeline
-                .script_chan
-                .send(ScriptThreadMessage::SetEpochPaintTime(
-                    *pipeline_id,
-                    current_epoch,
-                    paint_time,
-                ))
-            {
-                warn!("Sending RequestLayoutPaintMetric message to layout failed ({error:?}).");
+
+            match pipeline.first_paint_metric {
+                // We need to check whether the current epoch is later, because
+                // CrossProcessCompositorMessage::SendInitialTransaction sends an
+                // empty display list to WebRender which can happen before we receive
+                // the first "real" display list.
+                PaintMetricState::Seen(epoch, first_reflow) if epoch <= current_epoch => {
+                    assert!(epoch <= current_epoch);
+                    if let Err(error) = self.constellation_chan.send(ConstellationMsg::PaintMetric(
+                        *pipeline_id,
+                        PaintMetricEvent::FirstPaint(paint_time, first_reflow),
+                    )) {
+                        warn!("Sending paint metric event to constellation failed ({error:?}).");
+                    }
+                    pipeline.first_paint_metric = PaintMetricState::Sent;
+                }
+                _ => {}
             }
-        }
-        for pipeline_id in pipelines_to_remove.iter() {
-            self.pending_paint_metrics.remove(pipeline_id);
+
+            match pipeline.first_contentful_paint_metric {
+                PaintMetricState::Seen(epoch, first_reflow) if epoch <= current_epoch => {
+                    if let Err(error) = self.constellation_chan.send(ConstellationMsg::PaintMetric(
+                        *pipeline_id,
+                        PaintMetricEvent::FirstContentfulPaint(paint_time, first_reflow),
+                    )) {
+                        warn!("Sending paint metric event to constellation failed ({error:?}).");
+                    }
+                    pipeline.first_contentful_paint_metric = PaintMetricState::Sent;
+                }
+                _ => {}
+            }
         }
     }
 }

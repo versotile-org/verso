@@ -1,12 +1,12 @@
 use std::{cell::Cell, collections::HashMap};
 
 use base::id::WebViewId;
-use compositing_traits::ConstellationMsg;
+use constellation_traits::{ConstellationMsg, TraversalDirection};
 use crossbeam_channel::Sender;
 use embedder_traits::{
     AlertResponse, AllowOrDeny, ConfirmResponse, ContextMenuResult, Cursor, EmbedderMsg, ImeEvent,
     InputEvent, MouseButton, MouseButtonAction, MouseButtonEvent, MouseMoveEvent, PromptResponse,
-    TouchEventType, TraversalDirection, WebDriverJSValue, WebResourceResponseMsg, WheelMode,
+    TouchEventType, WebDriverJSValue, WebResourceResponseMsg, WheelMode,
 };
 use euclid::{Point2D, Size2D};
 use glutin::{

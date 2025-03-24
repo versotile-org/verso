@@ -1,11 +1,10 @@
 use arboard::Clipboard;
 use base::id::WebViewId;
-use compositing_traits::ConstellationMsg;
+use constellation_traits::{ConstellationMsg, TraversalDirection};
 use crossbeam_channel::Sender;
 use embedder_traits::{
     AlertResponse, AllowOrDeny, ConfirmResponse, ContextMenuResult, EmbedderMsg, LoadStatus,
-    PromptResponse, SimpleDialog, TraversalDirection, WebDriverCommandMsg, WebDriverJSResult,
-    WebDriverScriptCommand,
+    PromptResponse, SimpleDialog, WebDriverCommandMsg, WebDriverJSResult, WebDriverScriptCommand,
 };
 use ipc_channel::ipc;
 use servo_url::ServoUrl;
