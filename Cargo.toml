@@ -125,7 +125,11 @@ cargo-packager-resource-resolver = { version = "0.1.1", features = [
   "auto-detect-format",
 ], optional = true }
 
+[target.'cfg(all(unix, not(target_os = "macos"), not(target_os = "ios"), not(target_os = "android")))'.dependencies]
+notify-rust = { version = "4.11.5", features = ["images"] }
+
 [target.'cfg(any(target_os = "macos", target_os = "windows"))'.dependencies]
+notify-rust = "4.11.5"
 muda = "0.15"
 
 [target.'cfg(any(target_os = "ios", target_os = "macos"))'.dependencies]

@@ -403,6 +403,7 @@ impl Config {
         servo_config::prefs::set(Preferences {
             devtools_server_enabled,
             devtools_server_port: devtools_port as i64,
+            dom_notification_enabled: true, // experimental feature
             ..Default::default()
         });
     }

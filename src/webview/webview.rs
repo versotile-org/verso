@@ -343,6 +343,9 @@ impl Window {
             EmbedderMsg::HideIME(_webview_id) => {
                 self.hide_ime();
             }
+            EmbedderMsg::ShowNotification(_webview_id, notification) => {
+                self.show_notification(&notification);
+            }
             e => {
                 log::trace!("Verso WebView isn't supporting this message yet: {e:?}")
             }

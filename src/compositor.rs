@@ -690,8 +690,8 @@ impl IOCompositor {
                 if details.first_paint_metric == PaintMetricState::Waiting {
                     details.first_paint_metric = PaintMetricState::Seen(epoch, first_reflow);
                 }
-                if details.first_contentful_paint_metric == PaintMetricState::Waiting &&
-                    display_list_info.is_contentful
+                if details.first_contentful_paint_metric == PaintMetricState::Waiting
+                    && display_list_info.is_contentful
                 {
                     details.first_contentful_paint_metric =
                         PaintMetricState::Seen(epoch, first_reflow);
