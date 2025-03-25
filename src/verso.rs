@@ -592,6 +592,7 @@ impl Verso {
             EmbedderMsg::RequestDevtoolsConnection(_) => None,
             EmbedderMsg::PlayGamepadHapticEffect(webview_id, _, _, _) => Some(webview_id),
             EmbedderMsg::StopGamepadHapticEffect(webview_id, _, _) => Some(webview_id),
+            EmbedderMsg::ShowNotification(opt_webview_id, _) => opt_webview_id.as_ref(),
             EmbedderMsg::ShutdownComplete => None,
         }
     }
