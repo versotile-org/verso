@@ -5,8 +5,8 @@ use constellation_traits::{ConstellationMsg, TraversalDirection};
 use crossbeam_channel::Sender;
 use embedder_traits::{
     AlertResponse, AllowOrDeny, ConfirmResponse, ContextMenuResult, Cursor, EmbedderMsg, ImeEvent,
-    InputEvent, MouseButton, MouseButtonAction, MouseButtonEvent, MouseMoveEvent, PromptResponse,
-    TouchEventType, WebDriverJSValue, WebResourceResponseMsg, WheelMode,
+    InputEvent, MouseButton, MouseButtonAction, MouseButtonEvent, MouseMoveEvent, Notification,
+    PromptResponse, TouchEventType, WebDriverJSValue, WebResourceResponseMsg, WheelMode,
 };
 use euclid::{Point2D, Size2D};
 use glutin::{
@@ -20,6 +20,8 @@ use keyboard_types::{
 };
 #[cfg(any(target_os = "macos", target_os = "windows"))]
 use muda::{Menu as MudaMenu, MenuEvent, MenuEventReceiver, MenuItem};
+#[cfg(linux)]
+use notify_rust::Image;
 #[cfg(any(target_os = "macos", target_os = "windows"))]
 use raw_window_handle::HasWindowHandle;
 use servo_url::ServoUrl;
@@ -917,6 +919,34 @@ impl Window {
     /// This method disables IME of the window.
     pub fn hide_ime(&self) {
         self.window.set_ime_allowed(false);
+    }
+
+    /// Show notification
+    pub fn show_notification(&self, notification: &Notification) {
+        let mut display_notification = notify_rust::Notification::new();
+
+        display_notification
+            .summary(&notification.title)
+            .body(&notification.body);
+
+        #[cfg(linux)]
+        {
+            if let Some(icon_image) = notification.icon_resource.as_ref().and_then(|icon| {
+                Image::from_rgba(icon.width as i32, icon.height as i32, icon.bytes().to_vec()).ok()
+            }) {
+                display_notification.image_data(icon_image);
+            }
+        }
+
+        #[cfg(linux)]
+        std::thread::spawn(move || {
+            if let Ok(handle) = display_notification.show() {
+                // prevent handler dropped immediately which will close the notification as well
+                handle.on_close(|| {});
+            }
+        });
+        #[cfg(not(linux))]
+        let _ = display_notification.show();
     }
 }
 
