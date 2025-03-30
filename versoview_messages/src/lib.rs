@@ -52,7 +52,7 @@ pub enum ToVersoMessage {
     SetVisible(bool),
     /// Moves the window with the left mouse button until the button is released
     StartDragging,
-    /// Bring the window to the front
+    /// Bring the window to the front, and capture input focus
     Focus,
     /// Get the window's size, need a response with [`ToControllerMessage::GetSizeResponse`]
     GetSize(uuid::Uuid),

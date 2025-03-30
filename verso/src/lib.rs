@@ -299,7 +299,7 @@ impl VersoviewController {
         Ok(())
     }
 
-    /// Bring the window to the front
+    /// Bring the window to the front, and capture input focus
     pub fn focus(&self) -> Result<(), Box<ipc_channel::ErrorKind>> {
         self.sender.send(ToVersoMessage::Focus)?;
         Ok(())
