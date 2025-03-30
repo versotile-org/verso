@@ -209,6 +209,11 @@ impl VersoviewController {
         self.sender.send(ToVersoMessage::NavigateTo(url))
     }
 
+    /// Reload the current webview
+    pub fn reload(&self) -> Result<(), Box<ipc_channel::ErrorKind>> {
+        self.sender.send(ToVersoMessage::Reload)
+    }
+
     /// Listen on navigation starting triggered by user click on a link,
     /// return a boolean in the callback to decide whether or not allowing this navigation
     pub fn on_navigation_starting(
@@ -291,6 +296,12 @@ impl VersoviewController {
     /// Moves the window with the left mouse button until the button is released
     pub fn start_dragging(&self) -> Result<(), Box<ipc_channel::ErrorKind>> {
         self.sender.send(ToVersoMessage::StartDragging)?;
+        Ok(())
+    }
+
+    /// Bring the window to the front
+    pub fn focus(&self) -> Result<(), Box<ipc_channel::ErrorKind>> {
+        self.sender.send(ToVersoMessage::Focus)?;
         Ok(())
     }
 

@@ -630,6 +630,14 @@ impl Verso {
                     );
                 }
             }
+            ToVersoMessage::Reload => {
+                if let Some(webview_id) = self.first_webview_id() {
+                    send_to_constellation(
+                        &self.constellation_sender,
+                        ConstellationMsg::Reload(webview_id),
+                    );
+                }
+            }
             ToVersoMessage::ListenToOnNavigationStarting => {
                 if let Some(window) = self.first_window_mut() {
                     window.event_listeners.on_navigation_starting = true;
@@ -721,6 +729,11 @@ impl Verso {
             ToVersoMessage::StartDragging => {
                 if let Some(window) = self.first_window() {
                     let _ = window.window.drag_window();
+                }
+            }
+            ToVersoMessage::Focus => {
+                if let Some(window) = self.first_window() {
+                    window.window.focus_window();
                 }
             }
             ToVersoMessage::GetSize(id) => {
