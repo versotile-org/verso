@@ -81,8 +81,6 @@ pub struct Window {
     pub(crate) panel: Option<Panel>,
     /// The WebView of this window.
     // pub(crate) webview: Option<WebView>,
-    /// Script to run on document started to load
-    pub(crate) init_script: Option<String>,
     /// Event listeners registered from the webview controller
     pub(crate) event_listeners: EventListeners,
     /// The mouse physical position in the web view.
@@ -145,7 +143,6 @@ impl Window {
                 window,
                 surface,
                 panel: None,
-                init_script: None,
                 event_listeners: Default::default(),
                 mouse_position: Default::default(),
                 modifiers_state: Cell::new(ModifiersState::default()),
@@ -190,7 +187,6 @@ impl Window {
             surface,
             panel: None,
             // webview: None,
-            init_script: None,
             event_listeners: Default::default(),
             mouse_position: Default::default(),
             modifiers_state: Cell::new(ModifiersState::default()),
@@ -345,11 +341,6 @@ impl Window {
                 compositor.send_root_pipeline_display_list(self);
             }
         }
-    }
-
-    /// Set the init script that runs on document started to load.
-    pub fn set_init_script(&mut self, init_script: Option<String>) {
-        self.init_script = init_script;
     }
 
     /// Handle Winit window event and return a boolean to indicate if the compositor should repaint immediately.

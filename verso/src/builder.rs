@@ -1,6 +1,6 @@
 use dpi::{Position, Size};
 use std::path::{Path, PathBuf};
-use versoview_messages::{ConfigFromController, ProfilerSettings};
+use versoview_messages::{ConfigFromController, ProfilerSettings, UserScript};
 
 use crate::VersoviewController;
 
@@ -74,15 +74,21 @@ impl VersoBuilder {
         self
     }
 
-    /// Sets the script to run when the document starts loading.
-    // pub fn init_script(mut self, script: impl Into<String>) -> Self {
-    //     self.0.init_script = Some(script.into());
-    //     self
-    // }
+    /// Adds an user script to run when the document starts loading.
+    pub fn user_script(mut self, script: impl Into<UserScript>) -> Self {
+        self.0.user_scripts.push(script.into());
+        self
+    }
 
-    /// Sets the directory to load user scripts from.
-    pub fn userscripts_directory(mut self, directory: impl Into<String>) -> Self {
-        self.0.userscripts_directory = Some(directory.into());
+    /// Adds multiple user scripts to run when the document starts loading.
+    pub fn user_scripts<I, S>(mut self, scripts: I) -> Self
+    where
+        I: IntoIterator<Item = S>,
+        S: Into<UserScript>,
+    {
+        for script in scripts {
+            self = self.user_script(script)
+        }
         self
     }
 

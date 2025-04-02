@@ -16,9 +16,11 @@ fn main() {
         })
         .unwrap();
     sleep(Duration::from_secs(10));
-    dbg!(controller
-        .navigate(url::Url::parse("https://docs.rs").unwrap())
-        .unwrap());
+    dbg!(
+        controller
+            .navigate(url::Url::parse("https://docs.rs").unwrap())
+            .unwrap()
+    );
     loop {
         sleep(Duration::MAX);
     }

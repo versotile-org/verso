@@ -17,7 +17,7 @@ use crossbeam_channel::{Receiver, Sender, unbounded};
 use devtools;
 use embedder_traits::{
     AllowOrDeny, EmbedderMsg, EmbedderProxy, EventLoopWaker, WebResourceResponse,
-    WebResourceResponseMsg,
+    WebResourceResponseMsg, user_content_manager::UserContentManager,
 };
 use euclid::Scale;
 use fonts::SystemFontService;
@@ -91,7 +91,7 @@ impl Verso {
         let with_panel = config.with_panel;
         let window_settings = config.window_attributes.clone();
         let user_agent: Cow<'static, str> = config.user_agent.clone().into();
-        let init_script = config.init_script.clone();
+        let user_scripts = config.user_scripts.clone();
         let zoom_level = config.zoom_level;
 
         config.init();
@@ -276,6 +276,11 @@ impl Verso {
             public_resource_threads.clone(),
         );
 
+        let mut user_content_manager = UserContentManager::new();
+        for script in user_scripts {
+            user_content_manager.add_script(script);
+        }
+
         // Create layout factory
         let layout_factory = Arc::new(layout_thread_2020::LayoutFactoryImpl());
         let initial_state = InitialConstellationState {
@@ -295,6 +300,7 @@ impl Verso {
             user_agent,
             webrender_external_images: external_images,
             wgpu_image_map,
+            user_content_manager,
         };
 
         // The division by 1 represents the page's default zoom of 100%,
@@ -353,8 +359,6 @@ impl Verso {
         } else {
             window.create_tab(&constellation_sender, initial_url.into());
         }
-
-        window.set_init_script(init_script);
 
         let mut windows = HashMap::new();
         windows.insert(window.id(), (window, webrender_document));

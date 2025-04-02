@@ -7,7 +7,7 @@ use std::{
     collections::HashMap,
     path::Path,
     process::Command,
-    sync::{mpsc::Sender as MpscSender, Arc, Mutex},
+    sync::{Arc, Mutex, mpsc::Sender as MpscSender},
 };
 pub use versoview_messages::{ConfigFromController as VersoviewSettings, ProfilerSettings};
 use versoview_messages::{

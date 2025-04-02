@@ -93,11 +93,6 @@ impl Window {
                 );
             }
             EmbedderMsg::NotifyLoadStatusChanged(_webview_id, status) => match status {
-                LoadStatus::Started => {
-                    if let Some(init_script) = &self.init_script {
-                        let _ = execute_script(sender, &webview_id, init_script);
-                    }
-                }
                 LoadStatus::Complete => {
                     self.window.request_redraw();
                     send_to_constellation(sender, ConstellationMsg::FocusWebView(webview_id));
