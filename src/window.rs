@@ -107,10 +107,6 @@ impl Window {
         evl: &ActiveEventLoop,
         window_attributes: WindowAttributes,
     ) -> (Self, RenderingContext) {
-        let window_attributes = window_attributes
-            .with_transparent(true)
-            .with_decorations(false);
-
         let template = ConfigTemplateBuilder::new()
             .with_alpha_size(8)
             .with_transparency(cfg!(macos));
@@ -159,12 +155,13 @@ impl Window {
     }
 
     /// Create a Verso window with the rendering context.
-    pub fn new_with_compositor(evl: &ActiveEventLoop, compositor: &mut IOCompositor) -> Self {
-        let window_attrs = WinitWindow::default_attributes()
-            .with_decorations(false)
-            .with_transparent(true);
+    pub fn new_with_compositor(
+        evl: &ActiveEventLoop,
+        window_attributes: WindowAttributes,
+        compositor: &mut IOCompositor,
+    ) -> Self {
         let window = evl
-            .create_window(window_attrs)
+            .create_window(window_attributes)
             .expect("Failed to create window.");
 
         #[cfg(macos)]

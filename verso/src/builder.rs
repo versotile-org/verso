@@ -4,12 +4,12 @@ use versoview_messages::{ConfigFromController, ProfilerSettings, UserScript};
 
 use crate::VersoviewController;
 
-/// A builder for configuring and creating a `VersoviewController` instance.
+/// A builder for configuring and creating a [`VersoviewController`] instance.
 #[derive(Debug, Clone)]
 pub struct VersoBuilder(ConfigFromController);
 
 impl VersoBuilder {
-    /// Creates a new `VersoBuilder` with default settings.
+    /// Creates a new [`VersoBuilder`] with default settings.
     pub fn new() -> Self {
         Self(ConfigFromController::default())
     }
@@ -53,6 +53,24 @@ impl VersoBuilder {
     /// Sets whether the window will be initially focused or not.
     pub fn focused(mut self, focused: bool) -> Self {
         self.0.focused = focused;
+        self
+    }
+
+    /// Sets whether the window will be initially decorated or not.
+    pub fn decorated(mut self, decorated: bool) -> Self {
+        self.0.decorated = decorated;
+        self
+    }
+
+    /// Sets whether the window will be initially transparent or not.
+    pub fn transparent(mut self, transparent: bool) -> Self {
+        self.0.transparent = transparent;
+        self
+    }
+
+    /// Sets the initial title of the window in the title bar.
+    pub fn title(mut self, title: impl Into<String>) -> Self {
+        self.0.title = Some(title.into());
         self
     }
 
@@ -104,7 +122,7 @@ impl VersoBuilder {
         self
     }
 
-    /// Builds the `VersoviewController` with the configured settings.
+    /// Builds the [`VersoviewController`] with the configured settings.
     pub fn build(
         self,
         versoview_path: impl AsRef<Path>,

@@ -487,7 +487,11 @@ impl Verso {
                                     self.clipboard.as_mut(),
                                     compositor,
                                 ) {
-                                    let mut window = Window::new_with_compositor(evl, compositor);
+                                    let mut window = Window::new_with_compositor(
+                                        evl,
+                                        self.config.window_attributes.clone(),
+                                        compositor,
+                                    );
                                     window.create_panel(
                                         &self.constellation_sender,
                                         self.config.url.clone(),
