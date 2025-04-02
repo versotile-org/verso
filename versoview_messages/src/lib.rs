@@ -131,9 +131,7 @@ pub struct ConfigFromController {
     /// Override the user agent
     pub user_agent: Option<String>,
     /// Script to run on document started to load
-    pub init_script: Option<String>,
-    /// The directory to load userscripts from
-    pub userscripts_directory: Option<String>,
+    pub user_scripts: Vec<UserScript>,
     /// Initial window's zoom level
     pub zoom_level: Option<f32>,
     /// Path to resource directory. If None, Verso will try to get default directory. And if that
@@ -158,10 +156,24 @@ impl Default for ConfigFromController {
             devtools_port: None,
             profiler_settings: None,
             user_agent: None,
-            init_script: None,
-            userscripts_directory: None,
+            user_scripts: Vec::new(),
             zoom_level: None,
             resources_directory: None,
+        }
+    }
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize)]
+pub struct UserScript {
+    pub script: String,
+    pub source_file: Option<PathBuf>,
+}
+
+impl<T: Into<String>> From<T> for UserScript {
+    fn from(script: T) -> Self {
+        UserScript {
+            script: script.into(),
+            source_file: None,
         }
     }
 }

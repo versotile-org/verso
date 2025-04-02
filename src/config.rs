@@ -1,19 +1,23 @@
-use std::{fs, path::PathBuf};
+use std::{
+    fs,
+    path::{Path, PathBuf},
+};
 
 use dpi::{LogicalSize, PhysicalPosition, PhysicalSize};
 use embedder_traits::resources::{self, Resource, ResourceReaderMethods};
+use embedder_traits::user_content_manager::UserScript as ServoUserScript;
 use headers::{ContentType, HeaderMapExt};
 use net::protocols::{ProtocolHandler, ProtocolRegistry};
 use net_traits::{
+    ResourceFetchTiming,
     request::Request,
     response::{Response, ResponseBody},
-    ResourceFetchTiming,
 };
 use servo_config::{
-    opts::{set_options, Opts, OutputOptions},
+    opts::{Opts, OutputOptions, set_options},
     prefs::Preferences,
 };
-use versoview_messages::ConfigFromController;
+use versoview_messages::{ConfigFromController, UserScript};
 use winit::window::{Fullscreen, WindowAttributes};
 
 /// Servo time profile settings
@@ -272,9 +276,7 @@ pub struct Config {
     /// Override the user agent
     pub user_agent: String,
     /// Script to run on document started to load
-    pub init_script: Option<String>,
-    /// The directory to load userscripts from
-    pub userscripts_directory: Option<String>,
+    pub user_scripts: Vec<ServoUserScript>,
     /// Initial window's zoom level
     pub zoom_level: Option<f32>,
     /// Path to resource directory. If None, Verso will try to get default directory. And if that
@@ -285,14 +287,20 @@ pub struct Config {
 impl Config {
     /// Create a new configuration for creating Verso instance from the CLI arguments.
     pub fn from_cli_args(cli_args: CliArgs) -> Self {
+        let mut user_scripts = Vec::new();
+        if let Some(init_script) = cli_args.init_script {
+            user_scripts.push(init_script.into());
+        }
+        user_scripts.extend(
+            load_userscripts(cli_args.userscripts_directory).expect("Failed to load userscript"),
+        );
         Self::from_controller_config(ConfigFromController {
             url: cli_args.url,
             with_panel: !cli_args.no_panel,
             devtools_port: cli_args.devtools_port,
             profiler_settings: cli_args.profiler_settings,
             user_agent: cli_args.user_agent,
-            init_script: cli_args.init_script,
-            userscripts_directory: cli_args.userscripts_directory,
+            user_scripts,
             zoom_level: cli_args.zoom_level,
             resources_directory: cli_args.resource_dir,
             maximized: !cli_args.no_maximized,
@@ -361,8 +369,14 @@ impl Config {
             devtools_port: config.devtools_port,
             profiler_settings,
             user_agent,
-            init_script: config.init_script,
-            userscripts_directory: config.userscripts_directory,
+            user_scripts: config
+                .user_scripts
+                .into_iter()
+                .map(|userscript| ServoUserScript {
+                    script: userscript.script,
+                    source_file: userscript.source_file,
+                })
+                .collect(),
             zoom_level: config.zoom_level,
             resource_dir,
         }
@@ -388,10 +402,6 @@ impl Config {
             opts.time_profiler_trace_path = profiler_settings.trace_path.clone();
         }
 
-        if let Some(ref userscripts_directory) = self.userscripts_directory {
-            opts.userscripts = Some(userscripts_directory.clone());
-        }
-
         // Set the global options of Servo.
         set_options(opts);
 
@@ -406,9 +416,29 @@ impl Config {
         servo_config::prefs::set(Preferences {
             devtools_server_enabled,
             devtools_server_port: devtools_port as i64,
+            dom_notification_enabled: true, // experimental feature
             ..Default::default()
         });
     }
+}
+
+fn load_userscripts(
+    userscripts_directory: Option<impl AsRef<Path>>,
+) -> std::io::Result<Vec<UserScript>> {
+    let mut userscripts = Vec::new();
+    if let Some(userscripts_directory) = &userscripts_directory {
+        let mut files = std::fs::read_dir(userscripts_directory)?
+            .map(|e| e.map(|entry| entry.path()))
+            .collect::<Result<Vec<_>, _>>()?;
+        files.sort();
+        for file in files {
+            userscripts.push(UserScript {
+                script: std::fs::read_to_string(&file)?,
+                source_file: Some(file),
+            });
+        }
+    }
+    Ok(userscripts)
 }
 
 struct ResourceReader(PathBuf);

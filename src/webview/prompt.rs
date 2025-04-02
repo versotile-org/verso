@@ -1,5 +1,5 @@
 use base::id::WebViewId;
-use compositing_traits::ConstellationMsg;
+use constellation_traits::ConstellationMsg;
 use crossbeam_channel::Sender;
 use embedder_traits::{
     AlertResponse, AllowOrDeny, AuthenticationResponse, ConfirmResponse, PromptResponse,

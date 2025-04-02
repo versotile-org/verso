@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 
-use crate::webview::{prompt::PromptDialog, WebView};
+use crate::webview::{WebView, prompt::PromptDialog};
 use base::id::WebViewId;
 use serde::{Deserialize, Serialize};
 use servo_url::ServoUrl;

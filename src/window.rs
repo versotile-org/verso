@@ -1,12 +1,12 @@
 use std::{cell::Cell, collections::HashMap};
 
-use base::id::{TopLevelBrowsingContextId, WebViewId};
-use compositing_traits::ConstellationMsg;
+use base::id::WebViewId;
+use constellation_traits::{ConstellationMsg, TraversalDirection};
 use crossbeam_channel::Sender;
 use embedder_traits::{
     AlertResponse, AllowOrDeny, ConfirmResponse, ContextMenuResult, Cursor, EmbedderMsg, ImeEvent,
-    InputEvent, MouseButton, MouseButtonAction, MouseButtonEvent, MouseMoveEvent, PromptResponse,
-    TouchEventType, TraversalDirection, WebDriverJSValue, WebResourceResponseMsg, WheelMode,
+    InputEvent, MouseButton, MouseButtonAction, MouseButtonEvent, MouseMoveEvent, Notification,
+    PromptResponse, TouchEventType, WebDriverJSValue, WebResourceResponseMsg, WheelMode,
 };
 use euclid::{Point2D, Size2D};
 use glutin::{
@@ -20,13 +20,15 @@ use keyboard_types::{
 };
 #[cfg(any(target_os = "macos", target_os = "windows"))]
 use muda::{Menu as MudaMenu, MenuEvent, MenuEventReceiver, MenuItem};
+#[cfg(linux)]
+use notify_rust::Image;
 #[cfg(any(target_os = "macos", target_os = "windows"))]
 use raw_window_handle::HasWindowHandle;
 use servo_url::ServoUrl;
 use versoview_messages::ToControllerMessage;
 use webrender_api::{
-    units::{DeviceIntPoint, DeviceIntRect, DeviceIntSize, DevicePoint, LayoutVector2D},
     ScrollLocation,
+    units::{DeviceIntPoint, DeviceIntRect, DeviceIntSize, DevicePoint, LayoutVector2D},
 };
 #[cfg(any(linux, target_os = "windows"))]
 use winit::window::ResizeDirection;
@@ -41,14 +43,14 @@ use winit::{
 use crate::{
     compositor::IOCompositor,
     keyboard::keyboard_event_from_winit,
-    rendering::{gl_config_picker, RenderingContext},
+    rendering::{RenderingContext, gl_config_picker},
     tab::TabManager,
     verso::send_to_constellation,
     webview::{
+        Panel, WebView,
         context_menu::{ContextMenu, Menu},
         execute_script,
         prompt::PromptSender,
-        Panel, WebView,
     },
 };
 
@@ -79,8 +81,6 @@ pub struct Window {
     pub(crate) panel: Option<Panel>,
     /// The WebView of this window.
     // pub(crate) webview: Option<WebView>,
-    /// Script to run on document started to load
-    pub(crate) init_script: Option<String>,
     /// Event listeners registered from the webview controller
     pub(crate) event_listeners: EventListeners,
     /// The mouse physical position in the web view.
@@ -139,7 +139,6 @@ impl Window {
                 window,
                 surface,
                 panel: None,
-                init_script: None,
                 event_listeners: Default::default(),
                 mouse_position: Default::default(),
                 modifiers_state: Cell::new(ModifiersState::default()),
@@ -185,7 +184,6 @@ impl Window {
             surface,
             panel: None,
             // webview: None,
-            init_script: None,
             event_listeners: Default::default(),
             mouse_position: Default::default(),
             modifiers_state: Cell::new(ModifiersState::default()),
@@ -340,11 +338,6 @@ impl Window {
                 compositor.send_root_pipeline_display_list(self);
             }
         }
-    }
-
-    /// Set the init script that runs on document started to load.
-    pub fn set_init_script(&mut self, init_script: Option<String>) {
-        self.init_script = init_script;
     }
 
     /// Handle Winit window event and return a boolean to indicate if the compositor should repaint immediately.
@@ -915,6 +908,34 @@ impl Window {
     pub fn hide_ime(&self) {
         self.window.set_ime_allowed(false);
     }
+
+    /// Show notification
+    pub fn show_notification(&self, notification: &Notification) {
+        let mut display_notification = notify_rust::Notification::new();
+
+        display_notification
+            .summary(&notification.title)
+            .body(&notification.body);
+
+        #[cfg(linux)]
+        {
+            if let Some(icon_image) = notification.icon_resource.as_ref().and_then(|icon| {
+                Image::from_rgba(icon.width as i32, icon.height as i32, icon.bytes().to_vec()).ok()
+            }) {
+                display_notification.image_data(icon_image);
+            }
+        }
+
+        #[cfg(linux)]
+        std::thread::spawn(move || {
+            if let Ok(handle) = display_notification.show() {
+                // prevent handler dropped immediately which will close the notification as well
+                handle.on_close(|| {});
+            }
+        });
+        #[cfg(not(linux))]
+        let _ = display_notification.show();
+    }
 }
 
 // Context Menu methods
@@ -1211,7 +1232,7 @@ pub unsafe fn decorate_window(view: *mut AnyObject, _position: LogicalPosition<f
 /// Forward input event to compositor or constellation.
 fn forward_input_event(
     compositor: &mut IOCompositor,
-    webview_id: TopLevelBrowsingContextId,
+    webview_id: WebViewId,
     constellation_proxy: &Sender<ConstellationMsg>,
     event: InputEvent,
 ) {

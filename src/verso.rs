@@ -1,21 +1,23 @@
 use std::{
     borrow::Cow,
     collections::HashMap,
-    sync::{atomic::Ordering, Arc},
+    fmt::Debug,
+    sync::{Arc, atomic::Ordering},
 };
 
 use arboard::Clipboard;
-use base::id::{PipelineNamespace, PipelineNamespaceId, TopLevelBrowsingContextId, WebViewId};
+use base::id::{PipelineNamespace, PipelineNamespaceId, WebViewId};
 use bluetooth::BluetoothThreadFactory;
 use bluetooth_traits::BluetoothRequest;
 use canvas::canvas_paint_thread::CanvasPaintThread;
-use compositing_traits::{CompositorMsg, CompositorProxy, CompositorReceiver, ConstellationMsg};
+use compositing_traits::{CompositorMsg, CompositorProxy, CompositorReceiver};
 use constellation::{Constellation, FromCompositorLogger, InitialConstellationState};
-use crossbeam_channel::{unbounded, Receiver, Sender};
+use constellation_traits::{ConstellationMsg, WindowSizeData};
+use crossbeam_channel::{Receiver, Sender, unbounded};
 use devtools;
 use embedder_traits::{
     AllowOrDeny, EmbedderMsg, EmbedderProxy, EventLoopWaker, WebResourceResponse,
-    WebResourceResponseMsg,
+    WebResourceResponseMsg, user_content_manager::UserContentManager,
 };
 use euclid::Scale;
 use fonts::SystemFontService;
@@ -26,13 +28,12 @@ use log::{Log, Metadata, Record};
 use net::resource_thread;
 use profile;
 use script::{self, JSEngineSetup};
-use script_traits::WindowSizeData;
 use servo_config::{opts, pref};
 use servo_url::ServoUrl;
 use style;
 use versoview_messages::{ToControllerMessage, ToVersoMessage};
 use webgpu;
-use webrender::{create_webrender_instance, ShaderPrecacheFlags, WebRenderOptions};
+use webrender::{ShaderPrecacheFlags, WebRenderOptions, create_webrender_instance};
 use webrender_api::*;
 use webrender_traits::*;
 use winit::{
@@ -43,7 +44,7 @@ use winit::{
 
 use crate::{
     compositor::{IOCompositor, InitialCompositorState, ShutdownState},
-    config::{parse_cli_args, Config},
+    config::{Config, parse_cli_args},
     webview::execute_script,
     window::Window,
 };
@@ -90,11 +91,11 @@ impl Verso {
         let with_panel = config.with_panel;
         let window_settings = config.window_attributes.clone();
         let user_agent: Cow<'static, str> = config.user_agent.clone().into();
-        let init_script = config.init_script.clone();
+        let user_scripts = config.user_scripts.clone();
         let zoom_level = config.zoom_level;
 
         config.init();
-        // Reserving a namespace to create TopLevelBrowsingContextId.
+        // Reserving a namespace to create WebViewId.
         PipelineNamespace::install(PipelineNamespaceId(0));
         let (mut window, rendering_context) = Window::new(evl, window_settings);
         let event_loop_waker = Box::new(Waker(proxy));
@@ -275,6 +276,11 @@ impl Verso {
             public_resource_threads.clone(),
         );
 
+        let mut user_content_manager = UserContentManager::new();
+        for script in user_scripts {
+            user_content_manager.add_script(script);
+        }
+
         // Create layout factory
         let layout_factory = Arc::new(layout_thread_2020::LayoutFactoryImpl());
         let initial_state = InitialConstellationState {
@@ -294,6 +300,7 @@ impl Verso {
             user_agent,
             webrender_external_images: external_images,
             wgpu_image_map,
+            user_content_manager,
         };
 
         // The division by 1 represents the page's default zoom of 100%,
@@ -352,8 +359,6 @@ impl Verso {
         } else {
             window.create_tab(&constellation_sender, initial_url.into());
         }
-
-        window.set_init_script(init_script);
 
         let mut windows = HashMap::new();
         windows.insert(window.id(), (window, webrender_document));
@@ -510,11 +515,15 @@ impl Verso {
                             // }
                             EmbedderMsg::RequestDevtoolsConnection(sender) => {
                                 if let Err(err) = sender.send(AllowOrDeny::Allow) {
-                                    log::error!("Failed to send RequestDevtoolsConnection response back: {err}");
+                                    log::error!(
+                                        "Failed to send RequestDevtoolsConnection response back: {err}"
+                                    );
                                 }
                             }
                             e => {
-                                log::trace!("Verso Window isn't supporting handling this message yet: {e:?}")
+                                log::trace!(
+                                    "Verso Window isn't supporting handling this message yet: {e:?}"
+                                )
                             }
                         }
                     }
@@ -591,6 +600,7 @@ impl Verso {
             EmbedderMsg::RequestDevtoolsConnection(_) => None,
             EmbedderMsg::PlayGamepadHapticEffect(webview_id, _, _, _) => Some(webview_id),
             EmbedderMsg::StopGamepadHapticEffect(webview_id, _, _) => Some(webview_id),
+            EmbedderMsg::ShowNotification(opt_webview_id, _) => opt_webview_id.as_ref(),
             EmbedderMsg::ShutdownComplete => None,
         }
     }
@@ -839,7 +849,7 @@ impl Verso {
         self.windows.values_mut().next().map(|(window, _)| window)
     }
 
-    fn first_webview_id(&self) -> Option<TopLevelBrowsingContextId> {
+    fn first_webview_id(&self) -> Option<WebViewId> {
         self.windows
             .values()
             .next()
@@ -996,7 +1006,7 @@ where
 }
 
 pub(crate) fn send_to_constellation(sender: &Sender<ConstellationMsg>, msg: ConstellationMsg) {
-    let variant_name = msg.variant_name();
+    let variant_name: &str = (&msg).into();
     if let Err(e) = sender.send(msg) {
         log::warn!("Sending {variant_name} to constellation failed: {e:?}");
     }

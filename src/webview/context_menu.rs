@@ -12,7 +12,7 @@ use crate::{verso::send_to_constellation, webview::WebView, window::Window};
 #[cfg(linux)]
 use base::id::WebViewId;
 #[cfg(linux)]
-use compositing_traits::ConstellationMsg;
+use constellation_traits::ConstellationMsg;
 #[cfg(linux)]
 use crossbeam_channel::Sender;
 #[cfg(linux)]

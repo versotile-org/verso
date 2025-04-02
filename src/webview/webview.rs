@@ -1,11 +1,10 @@
 use arboard::Clipboard;
 use base::id::WebViewId;
-use compositing_traits::ConstellationMsg;
+use constellation_traits::{ConstellationMsg, TraversalDirection};
 use crossbeam_channel::Sender;
 use embedder_traits::{
     AlertResponse, AllowOrDeny, ConfirmResponse, ContextMenuResult, EmbedderMsg, LoadStatus,
-    PromptResponse, SimpleDialog, TraversalDirection, WebDriverCommandMsg, WebDriverJSResult,
-    WebDriverScriptCommand,
+    PromptResponse, SimpleDialog, WebDriverCommandMsg, WebDriverJSResult, WebDriverScriptCommand,
 };
 use ipc_channel::ipc;
 use servo_url::ServoUrl;
@@ -94,19 +93,14 @@ impl Window {
                 );
             }
             EmbedderMsg::NotifyLoadStatusChanged(_webview_id, status) => match status {
-                LoadStatus::Started => {
-                    if let Some(init_script) = &self.init_script {
-                        let _ = execute_script(sender, &webview_id, init_script);
-                    }
-                }
                 LoadStatus::Complete => {
                     self.window.request_redraw();
                     send_to_constellation(sender, ConstellationMsg::FocusWebView(webview_id));
                 }
                 _ => {
                     log::trace!(
-                            "Verso WebView {webview_id:?} ignores NotifyLoadStatusChanged status: {status:?}"
-                        );
+                        "Verso WebView {webview_id:?} ignores NotifyLoadStatusChanged status: {status:?}"
+                    );
                 }
             },
             EmbedderMsg::ChangePageTitle(_webview_id, title) => {
@@ -134,7 +128,9 @@ impl Window {
                                 url.into_url(),
                             ))
                         {
-                            log::error!("Verso failed to send AllowNavigationRequest to controller: {error}")
+                            log::error!(
+                                "Verso failed to send AllowNavigationRequest to controller: {error}"
+                            )
                         } else {
                             // We will handle a ToVersoMessage::OnNavigationStartingResponse
                             // and send ConstellationMsg::AllowNavigationResponse there if the call succeed
@@ -170,7 +166,9 @@ impl Window {
                                 return;
                             }
                             Err(error) => {
-                                log::error!("Verso failed to send WebResourceRequested to controller: {error}")
+                                log::error!(
+                                    "Verso failed to send WebResourceRequested to controller: {error}"
+                                )
                             }
                         }
                     }
@@ -339,6 +337,9 @@ impl Window {
             }
             EmbedderMsg::HideIME(_webview_id) => {
                 self.hide_ime();
+            }
+            EmbedderMsg::ShowNotification(_webview_id, notification) => {
+                self.show_notification(&notification);
             }
             e => {
                 log::trace!("Verso WebView isn't supporting this message yet: {e:?}")
