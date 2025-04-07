@@ -1,10 +1,15 @@
 [package]
 name = "verso"
 version = "0.0.1"
-edition = "2021"
+edition = "2024"
 
 [dependencies]
-ipc-channel = { workspace = true }
 serde = { workspace = true }
+ipc-channel = { workspace = true }
+bincode = { workspace = true }
 url = { workspace = true }
+http = { workspace = true }
+log = { workspace = true }
+dpi = { workspace = true }
+uuid = { workspace = true }
 versoview_messages = { path = "../versoview_messages" }

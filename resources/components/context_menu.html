@@ -1,0 +1,163 @@
+<html>
+  <head>
+    <style>
+      body {
+        font-family: Arial, Helvetica, sans-serif;
+        margin: 0;
+        padding: 0;
+      }
+      .window-mask {
+        position: absolute;
+        top: 0;
+        left: 0;
+        background: transparent;
+        width: 200%;
+        height: 200%;
+        z-index: 0;
+      }
+      .menu {
+        position: absolute;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: start;
+        background: #dfdfdf;
+        width: 184px;
+        padding: 10px 8px 10px 8px;
+        border-radius: 5px;
+        z-index: 1;
+      }
+      .menu-item {
+        cursor: pointer;
+        display: inline-block;
+        height: 30px;
+        width: 100%;
+        line-height: 30px;
+        padding-left: 5px;
+        overflow: hidden;
+        white-space: nowrap;
+        text-overflow: ellipsis;
+      }
+      .menu-item:hover {
+        background: #cecece;
+        border-radius: 5px;
+      }
+      .menu-item.disabled {
+        cursor: default;
+        background: #dfdfdf;
+        color: #505050;
+        cursor: pointer;
+      }
+      .menu-item:hover.disabled {
+        background: #dfdfdf;
+      }
+    </style>
+  </head>
+  <body>
+    <div id="mask" class="window-mask"></div>
+    <div id="menu" class="menu"></div>
+  </body>
+  <script>
+    const menuEl = document.getElementById('menu');
+    const maskEl = document.getElementById('mask');
+
+    /* register event listener */
+
+    // prevent create context menu when context menu exists
+    document.oncontextmenu = (ev) => {
+      ev.preventDefault();
+    };
+
+    // close menu when click on mask
+    maskEl.onmousedown = (ev) => {
+      const msg = JSON.stringify({
+        id: null,
+        close: true,
+      });
+      window.prompt(`CONTEXT_MENU:${msg}`);
+    };
+
+    /* parse params */
+
+    let url = URL.parse(window.location.href);
+    let params = url.searchParams;
+    const pos = {
+      x: parseInt(params.get('pos_x')),
+      y: parseInt(params.get('pos_y')),
+    };
+    const options = JSON.parse(params.get('items'));
+
+    /* calc menu position */
+
+    // Avoid overflow to the window, adjust position if necessary
+    let windowSize = {
+      width: window.innerWidth,
+      height: window.innerHeight,
+    };
+    let menuSize = {
+      width: 200,
+      height: options.length * 30 + 20,
+    };
+    let overflow = {
+      x: pos.x + menuSize.width - windowSize.width,
+      y: pos.y + menuSize.height - windowSize.height,
+    };
+
+    if (overflow.x >= 0) {
+      // check if the menu can be shown on left side of the cursor
+      if (pos.x - menuSize.width >= 0) {
+        pos.x = Math.max(0, pos.x - menuSize.width);
+      } else {
+        // if menu can't fit to left side of the cursor,
+        // shift left the menu, but not less than zero.
+        // TODO: if still smaller than screen, should show scroller
+        pos.x = Math.max(0, pos.x - overflow.x);
+      }
+    }
+    if (overflow.y >= 0) {
+      // check if the menu can be shown above the cursor
+      if (pos.y - menuSize.height >= 0) {
+        pos.y = Math.max(0, pos.y - menuSize.height);
+      } else {
+        // if menu can't fit to top of the cursor
+        // shift up the menu, but not less than zero.
+        // TODO: if still smaller than screen, should show scroller
+        pos.y = Math.max(0, pos.y - overflow.y);
+      }
+    }
+
+    menuEl.style.left = `${pos.x}px`;
+    menuEl.style.top = `${pos.y}px`;
+
+    /* create menu items */
+    for (option of options) {
+      createMenuItem(option.id, option.label, option.enabled);
+    }
+
+    function createMenuItem(id, label, enabled) {
+      const menuItem = document.createElement('div');
+      menuItem.classList.add('menu-item');
+      menuItem.id = id;
+      menuItem.innerText = label;
+
+      if (!enabled) {
+        menuItem.classList.add('disabled');
+      } else {
+        menuItem.onclick = (ev) => {
+          // accept left click only
+          if (ev.buttons !== 1) {
+            return;
+          }
+          const msg = JSON.stringify({
+            id,
+            close: true,
+          });
+          console.log(`CONTEXT_MENU:${msg}`);
+          window.prompt(`CONTEXT_MENU:${msg}`);
+        };
+      }
+
+      menuEl.appendChild(menuItem);
+    }
+  </script>
+</html>

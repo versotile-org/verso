@@ -1,0 +1,31 @@
+<html>
+  <head>
+    <link
+      rel="stylesheet"
+      type="text/css"
+      href="verso://resources/components/prompt/prompt.css"
+    />
+  </head>
+  <body>
+    <div class="dialog">
+      <div id="msg" class="msg"></div>
+      <div class="btn-group">
+        <button onclick="sendToVersoAndClose('deny')">Deny</button>
+        <button onclick="sendToVersoAndClose('allow')">Allow</button>
+      </div>
+    </div>
+  </body>
+  <script>
+    let url = URL.parse(window.location.href);
+    let msg = url.searchParams.get('msg');
+
+    // Set dialog message
+    const msgEl = document.getElementById('msg');
+    msgEl.textContent = msg ?? '';
+
+    function sendToVersoAndClose(action) {
+      window.alert(action); // Use as an IPC between Verso and WebView
+      window.close();
+    }
+  </script>
+</html>

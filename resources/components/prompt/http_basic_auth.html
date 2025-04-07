@@ -1,0 +1,79 @@
+<html>
+  <head>
+    <link
+      rel="stylesheet"
+      type="text/css"
+      href="verso://resources/components/prompt/prompt.css"
+    />
+    <style>
+      .field {
+        padding-bottom: 4px;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="dialog">
+      <div class="msg">
+        <p id="msg"></p>
+        <div class="field">
+          <input
+            type="text"
+            id="username"
+            placeholder="Username"
+            aria-label="username"
+          />
+        </div>
+        <div class="field">
+          <input
+            type="password"
+            id="password"
+            placeholder="Password"
+            aria-label="password"
+          />
+        </div>
+      </div>
+      <div class="btn-group">
+        <button onclick="sendToVersoAndClose('cancel')">Cancel</button>
+        <button onclick="sendToVersoAndClose('signin')">Sign In</button>
+      </div>
+    </div>
+  </body>
+  <script>
+    const msgEl = document.getElementById('msg');
+    const usernameEl = document.getElementById('username');
+    const passwordEl = document.getElementById('password');
+
+    const params = URL.parse(window.location.href).searchParams;
+
+    // Set dialog message
+    msgEl.textContent = 'Sign in';
+    // TODO: add target host and check if it's secure
+    // const host = params.get('host');
+    // if (host) {
+    //   msgEl.textContent = `Sign in to ${host}`;
+    // } else {
+    //   msgEl.textContent = 'Sign in';
+    // }
+
+    function sendToVersoAndClose(action) {
+      const auth = {
+        username: '',
+        password: '',
+      };
+
+      if (action === 'signin') {
+        auth.username = usernameEl.value ?? '';
+        auth.password = passwordEl.value ?? '';
+      }
+
+      // Use as an IPC between Verso and WebView
+      window.alert(
+        JSON.stringify({
+          action,
+          auth,
+        })
+      );
+      window.close();
+    }
+  </script>
+</html>

@@ -1,9 +1,15 @@
 [package]
 name = "versoview_messages"
 version = "0.0.1"
-edition = "2021"
+edition = "2024"
 
 [dependencies]
 ipc-channel = { workspace = true }
 serde = { workspace = true }
 url = { workspace = true }
+headers = { workspace = true }
+http = { workspace = true }
+# hyper_serde used by Servo has been archived, so using this one instead
+http-serde-ext = "1"
+uuid = { workspace = true }
+dpi = { workspace = true }

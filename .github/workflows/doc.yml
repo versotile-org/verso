@@ -15,23 +15,13 @@ jobs:
       - uses: actions/checkout@v4
       - uses: nixbuild/nix-quick-install-action@v28
 
-      - name: "Restore and cache Nix store"
-        uses: nix-community/cache-nix-action@v5
-        with:
-          paths: |
-            ~/.cargo
-            target/debug/
-          primary-key: nix-${{ runner.os }}-${{ hashFiles('**/*.nix', 'Cargo.lock', 'Cargo.toml') }}
-          restore-prefixes-first-match: nix-${{ runner.os }}-
-          gc-max-store-size-linux: 1073741824
-
       - name: "Add Nix channel"
         run: |
           nix-channel --add https://nixos.org/channels/nixos-24.05 nixpkgs
           nix-channel --update nixpkgs
 
       - name: "Build Verso docs"
-        run: nix-shell shell.nix --run 'cargo doc -p versoview --no-deps'
+        run: nix-shell shell.nix --run 'cargo doc --workspace --no-deps'
 
       - name: "Remove doc lock file"
         run: rm target/doc/.lock

@@ -1,6 +1,6 @@
 id: org.versotile.verso
 runtime: org.freedesktop.Platform
-runtime-version: '23.08'
+runtime-version: '24.08'
 sdk: org.freedesktop.Sdk
 sdk-extensions:
   - org.freedesktop.Sdk.Extension.rust-stable
@@ -36,7 +36,9 @@ modules:
       # Build Verso release profile
       - cargo --offline fetch --manifest-path Cargo.toml
       - cargo --offline build --release --features flatpak
+      - cargo --offline build --release --package verso
       # Install Verso
+      - install -Dm755 ./target/release/versoview -t /app/bin/
       - install -Dm755 ./target/release/verso -t /app/bin/
       - mkdir /app/resources
       - cp -r ./resources/* /app/resources
@@ -46,8 +48,8 @@ modules:
         path: .
       - type: file
         # Update the link whenever mozjs-sys is updated
-        url: https://github.com/servo/mozjs/releases/download/mozjs-sys-v0.128.0-6/libmozjs-x86_64-unknown-linux-gnu.tar.gz
-        sha256: 9093a3cdb576097565ff5c6f756f980b273cb13e50148f946b471efc900f867e
+        url: https://github.com/servo/mozjs/releases/download/mozjs-sys-v0.128.6-1/libmozjs-x86_64-unknown-linux-gnu.tar.gz
+        sha256: 024e90c6b8573aaa57b2685dc9c4da16b0bbce98147806b85c09c6fd1e134a5d
         only-arches:
           - x86_64
 

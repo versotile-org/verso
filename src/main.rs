@@ -1,7 +1,6 @@
 // Prevent console window from appearing on Windows
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
-use versoview::config::Config;
 use versoview::verso::EventLoopProxyMessage;
 use versoview::{Result, Verso};
 use winit::application::ApplicationHandler;
@@ -15,8 +14,7 @@ struct App {
 
 impl ApplicationHandler<EventLoopProxyMessage> for App {
     fn resumed(&mut self, event_loop: &winit::event_loop::ActiveEventLoop) {
-        let config = Config::new(resources_dir_path().unwrap());
-        self.verso = Some(Verso::new(event_loop, self.proxy.clone(), config));
+        self.verso = Some(Verso::new(event_loop, self.proxy.clone()));
     }
 
     fn window_event(
@@ -26,8 +24,7 @@ impl ApplicationHandler<EventLoopProxyMessage> for App {
         event: winit::event::WindowEvent,
     ) {
         if let Some(v) = self.verso.as_mut() {
-            v.handle_winit_window_event(window_id, event);
-            v.handle_servo_messages(event_loop);
+            v.handle_window_event(event_loop, window_id, event);
         }
     }
 
@@ -39,10 +36,10 @@ impl ApplicationHandler<EventLoopProxyMessage> for App {
         if let Some(v) = self.verso.as_mut() {
             match event {
                 EventLoopProxyMessage::Wake => {
-                    v.handle_servo_messages(event_loop);
+                    v.request_redraw(event_loop);
                 }
                 EventLoopProxyMessage::IpcMessage(message) => {
-                    v.handle_incoming_webview_message(message);
+                    v.handle_incoming_webview_message(*message);
                 }
             }
         }
@@ -50,6 +47,8 @@ impl ApplicationHandler<EventLoopProxyMessage> for App {
 }
 
 fn main() -> Result<()> {
+    init_crypto();
+
     let event_loop = EventLoop::<EventLoopProxyMessage>::with_user_event().build()?;
     event_loop.listen_device_events(DeviceEvents::Never);
     let proxy = event_loop.create_proxy();
@@ -59,19 +58,8 @@ fn main() -> Result<()> {
     Ok(())
 }
 
-fn resources_dir_path() -> Option<std::path::PathBuf> {
-    #[cfg(feature = "packager")]
-    let root_dir = {
-        use cargo_packager_resource_resolver::{current_format, resources_dir};
-        current_format().and_then(|format| resources_dir(format))
-    };
-    #[cfg(feature = "flatpak")]
-    let root_dir = {
-        use std::str::FromStr;
-        std::path::PathBuf::from_str("/app")
-    };
-    #[cfg(not(any(feature = "packager", feature = "flatpak")))]
-    let root_dir = std::env::current_dir();
-
-    root_dir.ok().map(|dir| dir.join("resources"))
+fn init_crypto() {
+    rustls::crypto::aws_lc_rs::default_provider()
+        .install_default()
+        .expect("Error initializing crypto provider");
 }
