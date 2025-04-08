@@ -12,9 +12,13 @@ use crate::{verso::send_to_constellation, webview::WebView, window::Window};
 #[cfg(linux)]
 use base::id::WebViewId;
 #[cfg(linux)]
-use constellation_traits::ConstellationMsg;
+use constellation_traits::EmbedderToConstellationMessage;
 #[cfg(linux)]
 use crossbeam_channel::Sender;
+#[cfg(linux)]
+use embedder_traits::ViewportDetails;
+#[cfg(linux)]
+use euclid::Scale;
 #[cfg(linux)]
 use serde::{Deserialize, Serialize};
 #[cfg(linux)]
@@ -133,16 +137,25 @@ impl ContextMenu {
     /// Show the context menu to current cursor position
     pub fn show(
         &mut self,
-        sender: &Sender<ConstellationMsg>,
-        window: &mut Window,
+        sender: &Sender<EmbedderToConstellationMessage>,
+        window: &Window,
         position: PhysicalPosition<f64>,
     ) {
         self.position = position.to_logical(window.scale_factor());
         self.webview.rect = DeviceIntRect::from_size(window.outer_size());
 
+        let hidpi_scale_factor = Scale::new(window.scale_factor() as f32);
+        let size = window.outer_size().to_f32() / hidpi_scale_factor;
         send_to_constellation(
             sender,
-            ConstellationMsg::NewWebView(self.resource_url(), self.webview.webview_id),
+            EmbedderToConstellationMessage::NewWebView(
+                self.resource_url(),
+                self.webview.webview_id,
+                ViewportDetails {
+                    size,
+                    hidpi_scale_factor,
+                },
+            ),
         );
     }
 
