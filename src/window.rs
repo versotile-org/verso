@@ -1119,7 +1119,7 @@ impl Window {
     /// Check current window state is allowed to drag-resize.
     fn is_resizable(&self) -> bool {
         // TODO: Check if the window is in fullscreen mode.
-        !self.window.is_maximized() && self.window.is_resizable()
+        !self.window.is_decorated() && !self.window.is_maximized() && self.window.is_resizable()
     }
 
     /// Drag resize the window.
