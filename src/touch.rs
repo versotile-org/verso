@@ -1,7 +1,7 @@
+use embedder_traits::TouchEventResult;
 use embedder_traits::TouchId;
 use euclid::{Point2D, Scale, Vector2D};
 use log::warn;
-use script_traits::TouchEventResult;
 use webrender_api::units::DevicePixel;
 
 use self::TouchState::*;

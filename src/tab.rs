@@ -246,6 +246,12 @@ impl TabManager {
     }
 }
 
+impl Default for TabManager {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 /// Tab history
 pub struct TabHistory {
     /// History list

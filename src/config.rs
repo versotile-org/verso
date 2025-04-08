@@ -417,6 +417,7 @@ impl Config {
             devtools_server_enabled,
             devtools_server_port: devtools_port as i64,
             dom_notification_enabled: true, // experimental feature
+            user_agent: self.user_agent.clone(),
             ..Default::default()
         });
     }

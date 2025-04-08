@@ -1,14 +1,15 @@
 use std::{cell::Cell, collections::HashMap};
 
 use base::id::WebViewId;
-use constellation_traits::{ConstellationMsg, TraversalDirection};
+use constellation_traits::{EmbedderToConstellationMessage, TraversalDirection};
 use crossbeam_channel::Sender;
 use embedder_traits::{
     AlertResponse, AllowOrDeny, ConfirmResponse, ContextMenuResult, Cursor, EmbedderMsg, ImeEvent,
     InputEvent, MouseButton, MouseButtonAction, MouseButtonEvent, MouseMoveEvent, Notification,
-    PromptResponse, TouchEventType, WebDriverJSValue, WebResourceResponseMsg, WheelMode,
+    PromptResponse, TouchEventType, ViewportDetails, WebDriverJSValue, WebResourceResponseMsg,
+    WheelMode,
 };
-use euclid::{Point2D, Size2D};
+use euclid::{Point2D, Scale, Size2D};
 use glutin::{
     config::{ConfigTemplateBuilder, GlConfig},
     surface::{Surface, WindowSurface},
@@ -218,7 +219,7 @@ impl Window {
     /// Send the constellation message to start Panel UI
     pub fn create_panel(
         &mut self,
-        constellation_sender: &Sender<ConstellationMsg>,
+        constellation_sender: &Sender<EmbedderToConstellationMessage>,
         initial_url: url::Url,
     ) {
         let size = self.window.inner_size();
@@ -230,16 +231,25 @@ impl Window {
         });
 
         let url = ServoUrl::parse("verso://resources/components/panel.html").unwrap();
+        let hidpi_scale_factor = Scale::new(self.scale_factor() as f32);
+        let size = size.to_f32() / hidpi_scale_factor;
         send_to_constellation(
             constellation_sender,
-            ConstellationMsg::NewWebView(url, panel_id),
+            EmbedderToConstellationMessage::NewWebView(
+                url,
+                panel_id,
+                ViewportDetails {
+                    size,
+                    hidpi_scale_factor,
+                },
+            ),
         );
     }
 
     /// Create a new webview and send the constellation message to load the initial URL
     pub fn create_tab(
         &mut self,
-        constellation_sender: &Sender<ConstellationMsg>,
+        constellation_sender: &Sender<EmbedderToConstellationMessage>,
         initial_url: ServoUrl,
     ) {
         let webview_id = WebViewId::new();
@@ -264,9 +274,20 @@ impl Window {
 
         self.tab_manager.append_tab(webview, true);
 
+        let content_size = self.get_content_size(rect, show_tab);
+
+        let hidpi_scale_factor = Scale::new(self.scale_factor() as f32);
+        let size = content_size.size().to_f32() / hidpi_scale_factor;
         send_to_constellation(
             constellation_sender,
-            ConstellationMsg::NewWebView(initial_url, webview_id),
+            EmbedderToConstellationMessage::NewWebView(
+                initial_url,
+                webview_id,
+                ViewportDetails {
+                    size,
+                    hidpi_scale_factor,
+                },
+            ),
         );
         log::debug!("Verso Window {:?} adds webview {}", self.id(), webview_id);
     }
@@ -295,7 +316,7 @@ impl Window {
         }
         send_to_constellation(
             &compositor.constellation_chan,
-            ConstellationMsg::CloseWebView(tab_id),
+            EmbedderToConstellationMessage::CloseWebView(tab_id),
         );
     }
 
@@ -321,18 +342,18 @@ impl Window {
             if self.tab_manager.activate_tab(tab_id).is_some() {
                 // throttle the old tab to avoid unnecessary animation caclulations
                 if let Some(old_tab_id) = old_tab_id {
-                    let _ = compositor
-                        .constellation_chan
-                        .send(ConstellationMsg::SetWebViewThrottled(old_tab_id, true));
+                    let _ = compositor.constellation_chan.send(
+                        EmbedderToConstellationMessage::SetWebViewThrottled(old_tab_id, true),
+                    );
                 }
-                let _ = compositor
-                    .constellation_chan
-                    .send(ConstellationMsg::SetWebViewThrottled(tab_id, false));
+                let _ = compositor.constellation_chan.send(
+                    EmbedderToConstellationMessage::SetWebViewThrottled(tab_id, false),
+                );
 
                 self.focused_webview_id = Some(tab_id);
                 let _ = compositor
                     .constellation_chan
-                    .send(ConstellationMsg::FocusWebView(tab_id));
+                    .send(EmbedderToConstellationMessage::FocusWebView(tab_id));
 
                 // update painting order immediately to draw the active tab
                 compositor.send_root_pipeline_display_list(self);
@@ -343,7 +364,7 @@ impl Window {
     /// Handle Winit window event and return a boolean to indicate if the compositor should repaint immediately.
     pub fn handle_winit_window_event(
         &mut self,
-        sender: &Sender<ConstellationMsg>,
+        sender: &Sender<EmbedderToConstellationMessage>,
         compositor: &mut IOCompositor,
         event: &winit::event::WindowEvent,
     ) {
@@ -674,7 +695,7 @@ impl Window {
         &mut self,
         webview_id: WebViewId,
         message: EmbedderMsg,
-        sender: &Sender<ConstellationMsg>,
+        sender: &Sender<EmbedderToConstellationMessage>,
         to_controller_sender: &Option<IpcSender<ToControllerMessage>>,
         clipboard: Option<&mut Clipboard>,
         compositor: &mut IOCompositor,
@@ -748,7 +769,7 @@ impl Window {
         if self
             .context_menu
             .as_ref()
-            .map_or(false, |w| w.webview().webview_id == id)
+            .is_some_and(|w| w.webview().webview_id == id)
         {
             return true;
         }
@@ -803,7 +824,7 @@ impl Window {
             for tab_id in tab_ids {
                 send_to_constellation(
                     &compositor.constellation_chan,
-                    ConstellationMsg::CloseWebView(tab_id),
+                    EmbedderToConstellationMessage::CloseWebView(tab_id),
                 );
             }
             (self.panel.take().map(|panel| panel.webview), false)
@@ -971,7 +992,7 @@ impl Window {
     #[cfg(linux)]
     pub(crate) fn show_context_menu(
         &mut self,
-        sender: &Sender<ConstellationMsg>,
+        sender: &Sender<EmbedderToConstellationMessage>,
         servo_sender: IpcSender<ContextMenuResult>,
     ) -> ContextMenu {
         use crate::webview::context_menu::MenuItem;
@@ -1002,7 +1023,7 @@ impl Window {
     pub(crate) fn handle_context_menu_event(
         &self,
         mut context_menu: ContextMenu,
-        sender: &Sender<ConstellationMsg>,
+        sender: &Sender<EmbedderToConstellationMessage>,
         event: MenuEvent,
     ) {
         context_menu.send_result_to_servo(ContextMenuResult::Dismissed);
@@ -1012,20 +1033,26 @@ impl Window {
             "back" => {
                 send_to_constellation(
                     sender,
-                    ConstellationMsg::TraverseHistory(active_tab.id(), TraversalDirection::Back(1)),
+                    EmbedderToConstellationMessage::TraverseHistory(
+                        active_tab.id(),
+                        TraversalDirection::Back(1),
+                    ),
                 );
             }
             "forward" => {
                 send_to_constellation(
                     sender,
-                    ConstellationMsg::TraverseHistory(
+                    EmbedderToConstellationMessage::TraverseHistory(
                         active_tab.id(),
                         TraversalDirection::Forward(1),
                     ),
                 );
             }
             "reload" => {
-                send_to_constellation(sender, ConstellationMsg::Reload(active_tab.id()));
+                send_to_constellation(
+                    sender,
+                    EmbedderToConstellationMessage::Reload(active_tab.id()),
+                );
             }
             _ => {}
         }
@@ -1037,7 +1064,7 @@ impl Window {
     #[cfg(linux)]
     pub(crate) fn handle_context_menu_event(
         &mut self,
-        sender: &Sender<ConstellationMsg>,
+        sender: &Sender<EmbedderToConstellationMessage>,
         event: crate::webview::context_menu::ContextMenuUIResponse,
     ) {
         self.close_context_menu(sender);
@@ -1047,20 +1074,26 @@ impl Window {
                     "back" => {
                         send_to_constellation(
                             sender,
-                            ConstellationMsg::TraverseHistory(tab_id, TraversalDirection::Back(1)),
+                            EmbedderToConstellationMessage::TraverseHistory(
+                                tab_id,
+                                TraversalDirection::Back(1),
+                            ),
                         );
                     }
                     "forward" => {
                         send_to_constellation(
                             sender,
-                            ConstellationMsg::TraverseHistory(
+                            EmbedderToConstellationMessage::TraverseHistory(
                                 tab_id,
                                 TraversalDirection::Forward(1),
                             ),
                         );
                     }
                     "reload" => {
-                        send_to_constellation(sender, ConstellationMsg::Reload(tab_id));
+                        send_to_constellation(
+                            sender,
+                            EmbedderToConstellationMessage::Reload(tab_id),
+                        );
                     }
                     _ => {}
                 }
@@ -1071,13 +1104,13 @@ impl Window {
     }
 
     /// Close window's context menu
-    pub(crate) fn close_context_menu(&mut self, _sender: &Sender<ConstellationMsg>) {
+    pub(crate) fn close_context_menu(&mut self, _sender: &Sender<EmbedderToConstellationMessage>) {
         #[cfg(linux)]
         if let Some(context_menu) = &mut self.context_menu {
             context_menu.send_result_to_servo(ContextMenuResult::Dismissed);
             send_to_constellation(
                 _sender,
-                ConstellationMsg::CloseWebView(context_menu.webview().webview_id),
+                EmbedderToConstellationMessage::CloseWebView(context_menu.webview().webview_id),
             );
         }
     }
@@ -1233,7 +1266,7 @@ pub unsafe fn decorate_window(view: *mut AnyObject, _position: LogicalPosition<f
 fn forward_input_event(
     compositor: &mut IOCompositor,
     webview_id: WebViewId,
-    constellation_proxy: &Sender<ConstellationMsg>,
+    constellation_proxy: &Sender<EmbedderToConstellationMessage>,
     event: InputEvent,
 ) {
     // Events with a `point` first go to the compositor for hit testing.
@@ -1242,7 +1275,7 @@ fn forward_input_event(
         return;
     }
 
-    let _ = constellation_proxy.send(ConstellationMsg::ForwardInputEvent(
+    let _ = constellation_proxy.send(EmbedderToConstellationMessage::ForwardInputEvent(
         webview_id, event, None, /* hit_test */
     ));
 }

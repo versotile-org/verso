@@ -1,11 +1,13 @@
 use arboard::Clipboard;
 use base::id::WebViewId;
-use constellation_traits::{ConstellationMsg, TraversalDirection};
+use constellation_traits::{EmbedderToConstellationMessage, TraversalDirection};
 use crossbeam_channel::Sender;
 use embedder_traits::{
     AlertResponse, AllowOrDeny, ConfirmResponse, ContextMenuResult, EmbedderMsg, LoadStatus,
-    PromptResponse, SimpleDialog, WebDriverCommandMsg, WebDriverJSResult, WebDriverScriptCommand,
+    PromptResponse, SimpleDialog, ViewportDetails, WebDriverCommandMsg, WebDriverJSResult,
+    WebDriverScriptCommand,
 };
+use euclid::Scale;
 use ipc_channel::ipc;
 use servo_url::ServoUrl;
 use url::Url;
@@ -68,7 +70,7 @@ impl Window {
         &mut self,
         webview_id: WebViewId,
         message: EmbedderMsg,
-        sender: &Sender<ConstellationMsg>,
+        sender: &Sender<EmbedderToConstellationMessage>,
         to_controller_sender: &Option<ipc::IpcSender<ToControllerMessage>>,
         clipboard: Option<&mut Clipboard>,
         compositor: &mut IOCompositor,
@@ -95,7 +97,10 @@ impl Window {
             EmbedderMsg::NotifyLoadStatusChanged(_webview_id, status) => match status {
                 LoadStatus::Complete => {
                     self.window.request_redraw();
-                    send_to_constellation(sender, ConstellationMsg::FocusWebView(webview_id));
+                    send_to_constellation(
+                        sender,
+                        EmbedderToConstellationMessage::FocusWebView(webview_id),
+                    );
                 }
                 _ => {
                     log::trace!(
@@ -133,12 +138,15 @@ impl Window {
                             )
                         } else {
                             // We will handle a ToVersoMessage::OnNavigationStartingResponse
-                            // and send ConstellationMsg::AllowNavigationResponse there if the call succeed
+                            // and send EmbedderToConstellationMessage::AllowNavigationResponse there if the call succeed
                             return;
                         }
                     }
                 }
-                send_to_constellation(sender, ConstellationMsg::AllowNavigationResponse(id, true));
+                send_to_constellation(
+                    sender,
+                    EmbedderToConstellationMessage::AllowNavigationResponse(id, true),
+                );
             }
             EmbedderMsg::WebResourceRequested(_webview_id, request, sender) => {
                 if let Some(to_controller_sender) = to_controller_sender {
@@ -163,7 +171,6 @@ impl Window {
                                 request_map.insert(id, (request.url, sender));
                                 // We will handle a ToVersoMessage::WebResourceRequestResponse
                                 // and send the response through this sender there if the call succeed
-                                return;
                             }
                             Err(error) => {
                                 log::error!(
@@ -243,20 +250,39 @@ impl Window {
                             message,
                             response_sender,
                         } => {
-                            prompt.alert(sender, rect, message, response_sender);
+                            prompt.alert(
+                                sender,
+                                rect,
+                                self.scale_factor() as f32,
+                                message,
+                                response_sender,
+                            );
                         }
                         SimpleDialog::Confirm {
                             message,
                             response_sender,
                         } => {
-                            prompt.ok_cancel(sender, rect, message, response_sender);
+                            prompt.ok_cancel(
+                                sender,
+                                rect,
+                                self.scale_factor() as f32,
+                                message,
+                                response_sender,
+                            );
                         }
                         SimpleDialog::Prompt {
                             message,
                             default,
                             response_sender,
                         } => {
-                            prompt.input(sender, rect, message, Some(default), response_sender);
+                            prompt.input(
+                                sender,
+                                rect,
+                                self.scale_factor() as f32,
+                                message,
+                                Some(default),
+                                response_sender,
+                            );
                         }
                     }
 
@@ -278,6 +304,7 @@ impl Window {
                     prompt.allow_deny(
                         sender,
                         tab.webview().rect,
+                        self.scale_factor() as f32,
                         message,
                         PromptSender::AllowDenySender(prompt_sender),
                     );
@@ -290,7 +317,12 @@ impl Window {
                 if let Some(tab) = self.tab_manager.tab(webview_id) {
                     let mut prompt = PromptDialog::new();
                     let rect = tab.webview().rect;
-                    prompt.http_basic_auth(sender, rect, response_sender);
+                    prompt.http_basic_auth(
+                        sender,
+                        rect,
+                        self.scale_factor() as f32,
+                        response_sender,
+                    );
                     self.tab_manager.set_prompt(webview_id, prompt);
                 } else {
                     log::error!("Failed to get WebView {webview_id:?} in this window.");
@@ -352,7 +384,7 @@ impl Window {
         &mut self,
         panel_id: WebViewId,
         message: EmbedderMsg,
-        sender: &Sender<ConstellationMsg>,
+        sender: &Sender<EmbedderToConstellationMessage>,
         clipboard: Option<&mut Clipboard>,
         compositor: &mut IOCompositor,
     ) -> bool {
@@ -377,7 +409,10 @@ impl Window {
             EmbedderMsg::NotifyLoadStatusChanged(_webview_id, status) => {
                 if status == LoadStatus::Complete {
                     self.window.request_redraw();
-                    send_to_constellation(sender, ConstellationMsg::FocusWebView(panel_id));
+                    send_to_constellation(
+                        sender,
+                        EmbedderToConstellationMessage::FocusWebView(panel_id),
+                    );
 
                     self.create_tab(sender, self.panel.as_ref().unwrap().initial_url.clone());
                 } else {
@@ -386,7 +421,10 @@ impl Window {
             }
             EmbedderMsg::AllowNavigationRequest(_webview_id, id, _url) => {
                 // The panel shouldn't navigate to other pages.
-                send_to_constellation(sender, ConstellationMsg::AllowNavigationResponse(id, false));
+                send_to_constellation(
+                    sender,
+                    EmbedderToConstellationMessage::AllowNavigationResponse(id, false),
+                );
             }
             EmbedderMsg::HistoryChanged(..) | EmbedderMsg::ChangePageTitle(..) => {
                 log::trace!("Verso Panel ignores this message: {message:?}")
@@ -408,7 +446,7 @@ impl Window {
                             if self.tab_manager.tab(request.id).is_some() {
                                 send_to_constellation(
                                     sender,
-                                    ConstellationMsg::CloseWebView(request.id),
+                                    EmbedderToConstellationMessage::CloseWebView(request.id),
                                 );
                             }
 
@@ -435,11 +473,17 @@ impl Window {
 
                             self.tab_manager.append_tab(webview, true);
 
+                            let hidpi_scale_factor = Scale::new(self.scale_factor() as f32);
+                            let size = content_size.size().to_f32() / hidpi_scale_factor;
                             send_to_constellation(
                                 sender,
-                                ConstellationMsg::NewWebView(
+                                EmbedderToConstellationMessage::NewWebView(
                                     ServoUrl::parse("https://example.com").unwrap(),
                                     webview_id,
+                                    ViewportDetails {
+                                        size,
+                                        hidpi_scale_factor,
+                                    },
                                 ),
                             );
                             let result = TabCreateResponse {
@@ -493,14 +537,17 @@ impl Window {
 
                                 send_to_constellation(
                                     sender,
-                                    ConstellationMsg::LoadUrl(id, ServoUrl::from_url(url)),
+                                    EmbedderToConstellationMessage::LoadUrl(
+                                        id,
+                                        ServoUrl::from_url(url),
+                                    ),
                                 );
                             } else {
                                 match message.as_str() {
                                     "PREV" => {
                                         send_to_constellation(
                                             sender,
-                                            ConstellationMsg::TraverseHistory(
+                                            EmbedderToConstellationMessage::TraverseHistory(
                                                 id,
                                                 TraversalDirection::Back(1),
                                             ),
@@ -510,7 +557,7 @@ impl Window {
                                     "FORWARD" => {
                                         send_to_constellation(
                                             sender,
-                                            ConstellationMsg::TraverseHistory(
+                                            EmbedderToConstellationMessage::TraverseHistory(
                                                 id,
                                                 TraversalDirection::Forward(1),
                                             ),
@@ -518,7 +565,10 @@ impl Window {
                                         // TODO Set EmbedderMsg::Status to None
                                     }
                                     "REFRESH" => {
-                                        send_to_constellation(sender, ConstellationMsg::Reload(id));
+                                        send_to_constellation(
+                                            sender,
+                                            EmbedderToConstellationMessage::Reload(id),
+                                        );
                                     }
                                     e => log::trace!(
                                         "Verso Panel isn't supporting this prompt message yet: {e}"
@@ -579,7 +629,7 @@ impl Window {
         &mut self,
         webview_id: WebViewId,
         message: EmbedderMsg,
-        sender: &Sender<ConstellationMsg>,
+        sender: &Sender<EmbedderToConstellationMessage>,
         _clipboard: Option<&mut Clipboard>,
         _compositor: &mut IOCompositor,
     ) -> bool {
@@ -627,7 +677,7 @@ impl Window {
         &mut self,
         webview_id: WebViewId,
         message: EmbedderMsg,
-        _sender: &Sender<ConstellationMsg>,
+        _sender: &Sender<EmbedderToConstellationMessage>,
         _clipboard: Option<&mut Clipboard>,
         _compositor: &mut IOCompositor,
     ) -> bool {
@@ -738,14 +788,14 @@ impl Window {
 
 /// Blocking execute a script on this webview
 pub fn execute_script(
-    constellation_sender: &Sender<ConstellationMsg>,
+    constellation_sender: &Sender<EmbedderToConstellationMessage>,
     webview: &WebViewId,
     js: impl ToString,
 ) -> WebDriverJSResult {
     let (result_sender, result_receiver) = ipc::channel::<WebDriverJSResult>().unwrap();
     send_to_constellation(
         constellation_sender,
-        ConstellationMsg::WebDriverCommand(WebDriverCommandMsg::ScriptCommand(
+        EmbedderToConstellationMessage::WebDriverCommand(WebDriverCommandMsg::ScriptCommand(
             webview.0,
             WebDriverScriptCommand::ExecuteScript(js.to_string(), result_sender),
         )),
