@@ -57,11 +57,11 @@ jobs:
       - name: Install mako
         run: python -m pip install mako
 
-      - name: Install scroop
-        uses: MinoruSekine/setup-scoop@v3
+      - name: Install scoop
+        uses: MinoruSekine/setup-scoop@v4
       - name: Install dependencies
         run: |
-          scoop install llvm cmake
+          scoop install cmake
 
       - name: Build
         env:
