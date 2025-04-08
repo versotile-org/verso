@@ -986,20 +986,30 @@ impl IOCompositor {
 
         let root_clip_id = builder.define_clip_rect(zoom_reference_frame, scaled_viewport_rect);
         let root_clip_chain_id = builder.define_clip_chain(None, [root_clip_id]);
+        // Only decorate the webviews if we're in the browser mode
+        let should_decorate = window.panel.is_some();
         for webview in window.painting_order() {
             if let Some(pipeline_id) = self.webviews.get(&webview.webview_id) {
                 let scaled_webview_rect =
                     LayoutRect::from_untyped(&(webview.rect.to_f32() / zoom_factor).to_untyped());
-                let complex = ComplexClipRegion::new(
-                    scaled_webview_rect,
-                    BorderRadius::uniform(10.), // TODO: add fields to webview
-                    ClipMode::Clip,
-                );
-                let clip_id = builder.define_clip_rounded_rect(zoom_reference_frame, complex);
-                let clip_chain_id = builder.define_clip_chain(Some(root_clip_chain_id), [clip_id]);
-                let root_space_and_clip = SpaceAndClipInfo {
-                    spatial_id: zoom_reference_frame,
-                    clip_chain_id,
+                let root_space_and_clip = if should_decorate {
+                    let complex = ComplexClipRegion::new(
+                        scaled_webview_rect,
+                        BorderRadius::uniform(10.), // TODO: add fields to webview
+                        ClipMode::Clip,
+                    );
+                    let clip_id = builder.define_clip_rounded_rect(zoom_reference_frame, complex);
+                    let clip_chain_id =
+                        builder.define_clip_chain(Some(root_clip_chain_id), [clip_id]);
+                    SpaceAndClipInfo {
+                        spatial_id: zoom_reference_frame,
+                        clip_chain_id,
+                    }
+                } else {
+                    SpaceAndClipInfo {
+                        spatial_id: zoom_reference_frame,
+                        clip_chain_id: root_clip_chain_id,
+                    }
                 };
 
                 builder.push_iframe(
@@ -1010,26 +1020,28 @@ impl IOCompositor {
                     true,
                 );
 
-                let root_space = SpaceAndClipInfo {
-                    spatial_id: zoom_reference_frame,
-                    clip_chain_id: root_clip_chain_id,
-                };
-                let offset = vec2(0., 0.);
-                let color = ColorF::new(0.0, 0.0, 0.0, 0.4);
-                let blur_radius = 5.0;
-                let spread_radius = 0.0;
-                let box_shadow_type = BoxShadowClipMode::Outset;
+                if should_decorate {
+                    let root_space = SpaceAndClipInfo {
+                        spatial_id: zoom_reference_frame,
+                        clip_chain_id: root_clip_chain_id,
+                    };
+                    let offset = vec2(0., 0.);
+                    let color = ColorF::new(0.0, 0.0, 0.0, 0.4);
+                    let blur_radius = 5.0;
+                    let spread_radius = 0.0;
+                    let box_shadow_type = BoxShadowClipMode::Outset;
 
-                builder.push_box_shadow(
-                    &CommonItemProperties::new(scaled_viewport_rect, root_space),
-                    scaled_webview_rect,
-                    offset,
-                    color,
-                    blur_radius,
-                    spread_radius,
-                    BorderRadius::uniform(10.),
-                    box_shadow_type,
-                );
+                    builder.push_box_shadow(
+                        &CommonItemProperties::new(scaled_viewport_rect, root_space),
+                        scaled_webview_rect,
+                        offset,
+                        color,
+                        blur_radius,
+                        spread_radius,
+                        BorderRadius::uniform(10.),
+                        box_shadow_type,
+                    );
+                }
             }
         }
 
