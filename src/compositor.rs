@@ -7,17 +7,20 @@ use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 use base::cross_process_instant::CrossProcessInstant;
 use base::id::{PipelineId, WebViewId};
 use base::{Epoch, WebRenderEpochToU16};
+use compositing_traits::display_list::{HitTestInfo, ScrollTree};
 use compositing_traits::{
-    CompositionPipeline, CompositorMsg, CompositorProxy, CompositorReceiver, SendableFrameTree,
+    CompositionPipeline, CompositorMsg, CompositorProxy, CompositorReceiver,
+    CrossProcessCompositorMessage, ImageUpdate, SendableFrameTree,
 };
 use constellation_traits::{
-    AnimationTickType, CompositorHitTestResult, ConstellationMsg, PaintMetricEvent, ScrollState,
-    UntrustedNodeAddress, WindowSizeData, WindowSizeType,
+    AnimationTickType, EmbedderToConstellationMessage, PaintMetricEvent, ScrollState,
+    WindowSizeType,
 };
 use crossbeam_channel::Sender;
 use embedder_traits::{
-    Cursor, InputEvent, MouseButton, MouseButtonAction, MouseButtonEvent, MouseMoveEvent,
-    TouchEvent, TouchEventType, TouchId,
+    AnimationState, CompositorHitTestResult, Cursor, InputEvent, MouseButton, MouseButtonAction,
+    MouseButtonEvent, MouseMoveEvent, TouchEvent, TouchEventType, TouchId, UntrustedNodeAddress,
+    ViewportDetails,
 };
 use euclid::{Point2D, Scale, Size2D, Transform3D, Vector2D, vec2};
 use gleam::gl;
@@ -25,7 +28,6 @@ use ipc_channel::ipc::{self, IpcSharedMemory};
 use log::{debug, error, trace, warn};
 use profile_traits::time::{self as profile_time, ProfilerCategory};
 use profile_traits::{mem, time, time_profile};
-use script_traits::AnimationState;
 use servo_geometry::{DeviceIndependentIntSize, DeviceIndependentPixel};
 use style_traits::{CSSPixel, PinchZoomFactor};
 use webrender::{RenderApi, Transaction};
@@ -41,8 +43,6 @@ use webrender_api::{
     RenderReasons, SampledScrollOffset, ScrollLocation, SpaceAndClipInfo, SpatialId,
     SpatialTreeItemKey, TransformStyle,
 };
-use webrender_traits::display_list::{HitTestInfo, ScrollTree};
-use webrender_traits::{CrossProcessCompositorMessage, ImageUpdate};
 use winit::window::WindowId;
 
 use crate::rendering::RenderingContext;
@@ -56,7 +56,7 @@ pub struct InitialCompositorState {
     /// A port on which messages inbound to the compositor can be received.
     pub receiver: CompositorReceiver,
     /// A channel to the constellation.
-    pub constellation_chan: Sender<ConstellationMsg>,
+    pub constellation_chan: Sender<EmbedderToConstellationMessage>,
     /// A channel to the time profiler thread.
     pub time_profiler_chan: time::ProfilerChan,
     /// A channel to the memory profiler thread.
@@ -155,7 +155,7 @@ pub struct IOCompositor {
     frame_tree_id: FrameTreeId,
 
     /// The channel on which messages can be sent to the constellation.
-    pub constellation_chan: Sender<ConstellationMsg>,
+    pub constellation_chan: Sender<EmbedderToConstellationMessage>,
 
     /// The channel on which messages can be sent to the time profiler.
     time_profiler_chan: profile_time::ProfilerChan,
@@ -429,7 +429,7 @@ impl IOCompositor {
             return;
         };
         self.cursor = cursor;
-        let msg = ConstellationMsg::SetCursor(webview_id, cursor);
+        let msg = EmbedderToConstellationMessage::SetCursor(webview_id, cursor);
         if let Err(e) = self.constellation_chan.send(msg) {
             warn!("Sending event to constellation failed ({:?}).", e);
         }
@@ -445,7 +445,10 @@ impl IOCompositor {
 
     fn start_shutting_down(&mut self) {
         debug!("Compositor sending Exit message to Constellation");
-        if let Err(e) = self.constellation_chan.send(ConstellationMsg::Exit) {
+        if let Err(e) = self
+            .constellation_chan
+            .send(EmbedderToConstellationMessage::Exit)
+        {
             warn!("Sending exit message to constellation failed ({:?}).", e);
         }
 
@@ -799,24 +802,30 @@ impl IOCompositor {
                 let _ = result_sender.send((font_keys, font_instance_keys));
             }
 
-            CrossProcessCompositorMessage::GetClientWindowRect(req) => {
-                if let Err(e) = req.send(self.device_independent_int_size_viewport().into()) {
-                    warn!("Sending response to get client window failed ({:?}).", e);
+            CrossProcessCompositorMessage::GetClientWindowRect(_webview_id, response_sender) => {
+                // TODO: use ScreenGeometry and bring webviews to compositor. https://github.com/servo/servo/pull/36223
+                if let Err(error) =
+                    response_sender.send(self.device_independent_int_size_viewport().into())
+                {
+                    warn!("Sending response to get client window failed ({error:?}).");
                 }
             }
 
-            CrossProcessCompositorMessage::GetScreenSize(req) => {
-                if let Err(e) = req.send(self.device_independent_int_size_viewport()) {
-                    warn!("Sending response to get screen size failed ({:?}).", e);
+            CrossProcessCompositorMessage::GetScreenSize(_webview_id, response_sender) => {
+                // TODO: use ScreenGeometry and bring webviews to compositor. https://github.com/servo/servo/pull/36223
+                if let Err(error) =
+                    response_sender.send(self.device_independent_int_size_viewport())
+                {
+                    warn!("Sending response to get screen size failed ({error:?}).");
                 }
             }
 
-            CrossProcessCompositorMessage::GetAvailableScreenSize(req) => {
-                if let Err(e) = req.send(self.device_independent_int_size_viewport()) {
-                    warn!(
-                        "Sending response to get screen avail size failed ({:?}).",
-                        e
-                    );
+            CrossProcessCompositorMessage::GetAvailableScreenSize(_webview_id, response_sender) => {
+                // TODO: use ScreenGeometry and bring webviews to compositor. https://github.com/servo/servo/pull/36223
+                if let Err(error) =
+                    response_sender.send(self.device_independent_int_size_viewport())
+                {
+                    warn!("Sending response to get screen size failed ({error:?}).");
                 }
             }
         }
@@ -857,25 +866,27 @@ impl IOCompositor {
                 let _ = result_sender.send((font_keys, font_instance_keys));
             }
             CompositorMsg::CrossProcess(CrossProcessCompositorMessage::GetClientWindowRect(
-                req,
+                _,
+                response_sender,
             )) => {
-                if let Err(e) = req.send(self.device_independent_int_size_viewport().into()) {
-                    warn!("Sending response to get client window failed ({:?}).", e);
+                if let Err(error) = response_sender.send(Default::default()) {
+                    warn!("Sending response to get client window failed ({error:?}).");
                 }
             }
-            CompositorMsg::CrossProcess(CrossProcessCompositorMessage::GetScreenSize(req)) => {
-                if let Err(e) = req.send(self.device_independent_int_size_viewport()) {
-                    warn!("Sending response to get screen size failed ({:?}).", e);
+            CompositorMsg::CrossProcess(CrossProcessCompositorMessage::GetScreenSize(
+                _,
+                response_sender,
+            )) => {
+                if let Err(error) = response_sender.send(Default::default()) {
+                    warn!("Sending response to get client window failed ({error:?}).");
                 }
             }
             CompositorMsg::CrossProcess(CrossProcessCompositorMessage::GetAvailableScreenSize(
-                req,
+                _,
+                response_sender,
             )) => {
-                if let Err(e) = req.send(self.device_independent_int_size_viewport()) {
-                    warn!(
-                        "Sending response to get screen avail size failed ({:?}).",
-                        e
-                    );
+                if let Err(error) = response_sender.send(Default::default()) {
+                    warn!("Sending response to get client window failed ({error:?}).");
                 }
             }
             CompositorMsg::NewWebRenderFrameReady(..) => {
@@ -1149,13 +1160,13 @@ impl IOCompositor {
     ) {
         // The device pixel ratio used by the style system should include the scale from page pixels
         // to device pixels, but not including any pinch zoom.
-        let device_pixel_ratio = self.device_pixels_per_page_pixel_not_including_page_zoom();
-        let initial_viewport = rect.size().to_f32() / device_pixel_ratio;
-        let msg = ConstellationMsg::WindowSize(
+        let hidpi_scale_factor = self.device_pixels_per_page_pixel_not_including_page_zoom();
+        let size = rect.size().to_f32() / hidpi_scale_factor;
+        let msg = EmbedderToConstellationMessage::ChangeViewportDetails(
             webview_id,
-            WindowSizeData {
-                device_pixel_ratio,
-                initial_viewport,
+            ViewportDetails {
+                size,
+                hidpi_scale_factor,
             },
             WindowSizeType::Resize,
         );
@@ -1318,13 +1329,13 @@ impl IOCompositor {
 
         self.update_cursor(point, &result);
 
-        if let Err(error) = self
-            .constellation_chan
-            .send(ConstellationMsg::ForwardInputEvent(
-                webview_id,
-                event,
-                Some(result),
-            ))
+        if let Err(error) =
+            self.constellation_chan
+                .send(EmbedderToConstellationMessage::ForwardInputEvent(
+                    webview_id,
+                    event,
+                    Some(result),
+                ))
         {
             warn!("Sending event to constellation failed ({error:?}).");
         }
@@ -1419,13 +1430,13 @@ impl IOCompositor {
         };
 
         let event = InputEvent::Touch(event);
-        if let Err(e) = self
-            .constellation_chan
-            .send(ConstellationMsg::ForwardInputEvent(
-                webview_id,
-                event,
-                Some(result),
-            ))
+        if let Err(e) =
+            self.constellation_chan
+                .send(EmbedderToConstellationMessage::ForwardInputEvent(
+                    webview_id,
+                    event,
+                    Some(result),
+                ))
         {
             warn!("Sending event to constellation failed ({:?}).", e);
         }
@@ -1729,7 +1740,7 @@ impl IOCompositor {
             tick_type.insert(AnimationTickType::REQUEST_ANIMATION_FRAME);
         }
 
-        let msg = ConstellationMsg::TickAnimation(pipeline_id, tick_type);
+        let msg = EmbedderToConstellationMessage::TickAnimation(pipeline_id, tick_type);
         if let Err(e) = self.constellation_chan.send(msg) {
             warn!("Sending tick to constellation failed ({:?}).", e);
         }
@@ -1809,7 +1820,7 @@ impl IOCompositor {
             }
         });
 
-        let message = ConstellationMsg::SetScrollStates(*pipeline_id, scroll_states);
+        let message = EmbedderToConstellationMessage::SetScrollStates(*pipeline_id, scroll_states);
         let _ = self.constellation_chan.send(message);
     }
 
@@ -1862,7 +1873,7 @@ impl IOCompositor {
 
                 // Pass the pipeline/epoch states to the constellation and check
                 // if it's safe to output the image.
-                let msg = ConstellationMsg::IsReadyToSaveImage(pipeline_epochs);
+                let msg = EmbedderToConstellationMessage::IsReadyToSaveImage(pipeline_epochs);
                 if let Err(e) = self.constellation_chan.send(msg) {
                     warn!("Sending ready to save to constellation failed ({:?}).", e);
                 }
@@ -2145,10 +2156,13 @@ impl IOCompositor {
                 // the first "real" display list.
                 PaintMetricState::Seen(epoch, first_reflow) if epoch <= current_epoch => {
                     assert!(epoch <= current_epoch);
-                    if let Err(error) = self.constellation_chan.send(ConstellationMsg::PaintMetric(
-                        *pipeline_id,
-                        PaintMetricEvent::FirstPaint(paint_time, first_reflow),
-                    )) {
+                    if let Err(error) =
+                        self.constellation_chan
+                            .send(EmbedderToConstellationMessage::PaintMetric(
+                                *pipeline_id,
+                                PaintMetricEvent::FirstPaint(paint_time, first_reflow),
+                            ))
+                    {
                         warn!("Sending paint metric event to constellation failed ({error:?}).");
                     }
                     pipeline.first_paint_metric = PaintMetricState::Sent;
@@ -2158,10 +2172,13 @@ impl IOCompositor {
 
             match pipeline.first_contentful_paint_metric {
                 PaintMetricState::Seen(epoch, first_reflow) if epoch <= current_epoch => {
-                    if let Err(error) = self.constellation_chan.send(ConstellationMsg::PaintMetric(
-                        *pipeline_id,
-                        PaintMetricEvent::FirstContentfulPaint(paint_time, first_reflow),
-                    )) {
+                    if let Err(error) =
+                        self.constellation_chan
+                            .send(EmbedderToConstellationMessage::PaintMetric(
+                                *pipeline_id,
+                                PaintMetricEvent::FirstContentfulPaint(paint_time, first_reflow),
+                            ))
+                    {
                         warn!("Sending paint metric event to constellation failed ({error:?}).");
                     }
                     pipeline.first_contentful_paint_metric = PaintMetricState::Sent;

@@ -1,5 +1,4 @@
 use std::{
-    borrow::Cow,
     collections::HashMap,
     fmt::Debug,
     sync::{Arc, atomic::Ordering},
@@ -10,9 +9,12 @@ use base::id::{PipelineNamespace, PipelineNamespaceId, WebViewId};
 use bluetooth::BluetoothThreadFactory;
 use bluetooth_traits::BluetoothRequest;
 use canvas::canvas_paint_thread::CanvasPaintThread;
-use compositing_traits::{CompositorMsg, CompositorProxy, CompositorReceiver};
-use constellation::{Constellation, FromCompositorLogger, InitialConstellationState};
-use constellation_traits::{ConstellationMsg, WindowSizeData};
+use compositing_traits::{
+    CompositorMsg, CompositorProxy, CompositorReceiver, CrossProcessCompositorApi,
+    WebrenderExternalImageHandlers, WebrenderImageHandlerType,
+};
+use constellation::{Constellation, FromEmbedderLogger, InitialConstellationState};
+use constellation_traits::EmbedderToConstellationMessage;
 use crossbeam_channel::{Receiver, Sender, unbounded};
 use devtools;
 use embedder_traits::{
@@ -35,7 +37,6 @@ use versoview_messages::{ToControllerMessage, ToVersoMessage};
 use webgpu;
 use webrender::{ShaderPrecacheFlags, WebRenderOptions, create_webrender_instance};
 use webrender_api::*;
-use webrender_traits::*;
 use winit::{
     event::WindowEvent,
     event_loop::{ActiveEventLoop, ControlFlow, EventLoopProxy},
@@ -53,7 +54,7 @@ use crate::{
 pub struct Verso {
     windows: HashMap<WindowId, (Window, DocumentId)>,
     compositor: Option<IOCompositor>,
-    constellation_sender: Sender<ConstellationMsg>,
+    constellation_sender: Sender<EmbedderToConstellationMessage>,
     to_controller_sender: Option<IpcSender<ToControllerMessage>>,
     embedder_receiver: Receiver<EmbedderMsg>,
     /// For single-process Servo instances, this field controls the initialization
@@ -90,7 +91,6 @@ impl Verso {
         let initial_url = config.url.clone();
         let with_panel = config.with_panel;
         let window_settings = config.window_attributes.clone();
-        let user_agent: Cow<'static, str> = config.user_agent.clone().into();
         let user_scripts = config.user_scripts.clone();
         let zoom_level = config.zoom_level;
 
@@ -252,7 +252,6 @@ impl Verso {
         // Create resource thread pool
         let (public_resource_threads, private_resource_threads) =
             resource_thread::new_resource_threads(
-                user_agent.clone(),
                 devtools_sender.clone(),
                 time_profiler_sender.clone(),
                 mem_profiler_sender.clone(),
@@ -297,17 +296,9 @@ impl Verso {
             webrender_api_sender,
             webxr_registry: None,
             webgl_threads: None,
-            user_agent,
             webrender_external_images: external_images,
             wgpu_image_map,
             user_content_manager,
-        };
-
-        // The division by 1 represents the page's default zoom of 100%,
-        // and gives us the appropriate CSSPixel type for the viewport.
-        let window_size = WindowSizeData {
-            initial_viewport: window.size().to_f32() / Scale::new(1.0),
-            device_pixel_ratio: Scale::new(window.scale_factor() as f32),
         };
 
         // Create constellation thread
@@ -315,7 +306,6 @@ impl Verso {
             Constellation::<script::ScriptThread, script::ServiceWorkerManager>::start(
                 initial_state,
                 layout_factory,
-                window_size,
                 opts.random_pipeline_closure_probability,
                 opts.random_pipeline_closure_seed,
                 opts.hard_fail,
@@ -601,6 +591,7 @@ impl Verso {
             EmbedderMsg::PlayGamepadHapticEffect(webview_id, _, _, _) => Some(webview_id),
             EmbedderMsg::StopGamepadHapticEffect(webview_id, _, _) => Some(webview_id),
             EmbedderMsg::ShowNotification(opt_webview_id, _) => opt_webview_id.as_ref(),
+            EmbedderMsg::ShowSelectElementMenu(webview_id, _, _, _, _) => Some(webview_id),
             EmbedderMsg::ShutdownComplete => None,
         }
     }
@@ -634,7 +625,10 @@ impl Verso {
                 if let Some(webview_id) = self.first_webview_id() {
                     send_to_constellation(
                         &self.constellation_sender,
-                        ConstellationMsg::LoadUrl(webview_id, ServoUrl::from_url(to_url)),
+                        EmbedderToConstellationMessage::LoadUrl(
+                            webview_id,
+                            ServoUrl::from_url(to_url),
+                        ),
                     );
                 }
             }
@@ -646,7 +640,7 @@ impl Verso {
             ToVersoMessage::OnNavigationStartingResponse(id, allow) => {
                 send_to_constellation(
                     &self.constellation_sender,
-                    ConstellationMsg::AllowNavigationResponse(
+                    EmbedderToConstellationMessage::AllowNavigationResponse(
                         bincode::deserialize(&id).unwrap(),
                         allow,
                     ),
@@ -868,7 +862,7 @@ impl Verso {
         let constellation_chan = self.constellation_sender.clone();
         let env = env_logger::Env::default();
         let env_logger = env_logger::Builder::from_env(env).build();
-        let con_logger = FromCompositorLogger::new(constellation_chan);
+        let con_logger = FromEmbedderLogger::new(constellation_chan);
 
         let filter = std::cmp::max(env_logger.filter(), con_logger.filter());
         let logger = BothLogger(env_logger, con_logger);
@@ -1005,7 +999,10 @@ where
     }
 }
 
-pub(crate) fn send_to_constellation(sender: &Sender<ConstellationMsg>, msg: ConstellationMsg) {
+pub(crate) fn send_to_constellation(
+    sender: &Sender<EmbedderToConstellationMessage>,
+    msg: EmbedderToConstellationMessage,
+) {
     let variant_name: &str = (&msg).into();
     if let Err(e) = sender.send(msg) {
         log::warn!("Sending {variant_name} to constellation failed: {e:?}");

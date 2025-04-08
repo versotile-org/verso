@@ -1,9 +1,11 @@
 use base::id::WebViewId;
-use constellation_traits::ConstellationMsg;
+use constellation_traits::EmbedderToConstellationMessage;
 use crossbeam_channel::Sender;
 use embedder_traits::{
     AlertResponse, AllowOrDeny, AuthenticationResponse, ConfirmResponse, PromptResponse,
+    ViewportDetails,
 };
+use euclid::Scale;
 use ipc_channel::ipc::IpcSender;
 use serde::{Deserialize, Serialize};
 use servo_url::ServoUrl;
@@ -138,13 +140,14 @@ impl PromptDialog {
     /// ```
     pub fn alert(
         &mut self,
-        sender: &Sender<ConstellationMsg>,
+        sender: &Sender<EmbedderToConstellationMessage>,
         rect: DeviceIntRect,
+        scale_factor: f32,
         message: String,
         prompt_sender: IpcSender<AlertResponse>,
     ) {
         self.prompt_sender = Some(PromptSender::AlertSender(prompt_sender));
-        self.show(sender, rect, PromptType::Alert(message));
+        self.show(sender, rect, scale_factor, PromptType::Alert(message));
     }
 
     /// Show Ok/Cancel confirm prompt
@@ -161,13 +164,14 @@ impl PromptDialog {
     /// ```
     pub fn ok_cancel(
         &mut self,
-        sender: &Sender<ConstellationMsg>,
+        sender: &Sender<EmbedderToConstellationMessage>,
         rect: DeviceIntRect,
+        scale_factor: f32,
         message: String,
         prompt_sender: IpcSender<ConfirmResponse>,
     ) {
         self.prompt_sender = Some(PromptSender::ConfirmSender(prompt_sender));
-        self.show(sender, rect, PromptType::OkCancel(message));
+        self.show(sender, rect, scale_factor, PromptType::OkCancel(message));
     }
 
     /// Show Yes/No confirm prompt
@@ -186,13 +190,14 @@ impl PromptDialog {
     /// ```
     pub fn allow_deny(
         &mut self,
-        sender: &Sender<ConstellationMsg>,
+        sender: &Sender<EmbedderToConstellationMessage>,
         rect: DeviceIntRect,
+        scale_factor: f32,
         message: String,
         prompt_sender: PromptSender,
     ) {
         self.prompt_sender = Some(prompt_sender);
-        self.show(sender, rect, PromptType::AllowDeny(message));
+        self.show(sender, rect, scale_factor, PromptType::AllowDeny(message));
     }
 
     /// Show input prompt
@@ -209,14 +214,20 @@ impl PromptDialog {
     /// ```
     pub fn input(
         &mut self,
-        sender: &Sender<ConstellationMsg>,
+        sender: &Sender<EmbedderToConstellationMessage>,
         rect: DeviceIntRect,
+        scale_factor: f32,
         message: String,
         default_value: Option<String>,
         prompt_sender: IpcSender<PromptResponse>,
     ) {
         self.prompt_sender = Some(PromptSender::InputSender(prompt_sender));
-        self.show(sender, rect, PromptType::Input(message, default_value));
+        self.show(
+            sender,
+            rect,
+            scale_factor,
+            PromptType::Input(message, default_value),
+        );
     }
 
     /// Show input prompt
@@ -236,24 +247,36 @@ impl PromptDialog {
     /// ```
     pub fn http_basic_auth(
         &mut self,
-        sender: &Sender<ConstellationMsg>,
+        sender: &Sender<EmbedderToConstellationMessage>,
         rect: DeviceIntRect,
+        scale_factor: f32,
         prompt_sender: IpcSender<Option<AuthenticationResponse>>,
     ) {
         self.prompt_sender = Some(PromptSender::HttpBasicAuthSender(prompt_sender));
-        self.show(sender, rect, PromptType::HttpBasicAuth);
+        self.show(sender, rect, scale_factor, PromptType::HttpBasicAuth);
     }
 
     fn show(
         &mut self,
-        sender: &Sender<ConstellationMsg>,
+        sender: &Sender<EmbedderToConstellationMessage>,
         rect: DeviceIntRect,
+        scale_factor: f32,
         prompt_type: PromptType,
     ) {
         self.webview.set_size(rect);
+
+        let hidpi_scale_factor = Scale::new(scale_factor);
+        let size = rect.size().to_f32() / hidpi_scale_factor;
         send_to_constellation(
             sender,
-            ConstellationMsg::NewWebView(self.resource_url(prompt_type), self.webview.webview_id),
+            EmbedderToConstellationMessage::NewWebView(
+                self.resource_url(prompt_type),
+                self.webview.webview_id,
+                ViewportDetails {
+                    size,
+                    hidpi_scale_factor,
+                },
+            ),
         );
     }
 
@@ -280,5 +303,11 @@ impl PromptDialog {
             }
         };
         ServoUrl::parse(&url).unwrap()
+    }
+}
+
+impl Default for PromptDialog {
+    fn default() -> Self {
+        Self::new()
     }
 }
