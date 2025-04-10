@@ -503,6 +503,15 @@ impl Verso {
                             //         window.0.set_cursor_icon(cursor);
                             //     }
                             // }
+                            EmbedderMsg::OnDevtoolsStarted(port, _token) => {
+                                if let Ok(port) = port {
+                                    // We use level error by default so this won't show
+                                    // log::info!("Devtools server listening on port {port}");
+                                    println!("Devtools server listening on port {port}");
+                                } else {
+                                    log::error!("Failed to start devtools server");
+                                }
+                            }
                             EmbedderMsg::RequestDevtoolsConnection(sender) => {
                                 if let Err(err) = sender.send(AllowOrDeny::Allow) {
                                     log::error!(
