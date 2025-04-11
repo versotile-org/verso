@@ -7944,6 +7944,7 @@ dependencies = [
  "serde",
  "url",
  "uuid",
+ "versoview_build",
  "versoview_messages",
 ]
 
@@ -8017,6 +8018,10 @@ dependencies = [
  "webrender_api",
  "winit",
 ]
+
+[[package]]
+name = "versoview_build"
+version = "0.0.1"
 
 [[package]]
 name = "versoview_messages"

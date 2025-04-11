@@ -13,3 +13,6 @@ log = { workspace = true }
 dpi = { workspace = true }
 uuid = { workspace = true }
 versoview_messages = { path = "../versoview_messages" }
+
+[build-dependencies]
+versoview_build = { path = "../versoview_build" }
