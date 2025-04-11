@@ -1,5 +1,5 @@
 [workspace]
-members = ["verso", "versoview_messages"]
+members = ["verso", "versoview_messages", "versoview_build"]
 
 [workspace.dependencies]
 serde = { version = "1.0", features = ["derive"] }
