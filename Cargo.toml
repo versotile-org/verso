@@ -1,6 +1,13 @@
 [workspace]
 members = ["verso", "versoview_messages", "versoview_build"]
 
+[workspace.package]
+version = "0.0.1"
+edition = "2024"
+license = "Apache-2.0 OR MIT"
+homepage = "https://versotile.org/verso"
+repository = "https://github.com/versotile-org/verso"
+
 [workspace.dependencies]
 serde = { version = "1.0", features = ["derive"] }
 ipc-channel = "0.19"
@@ -14,14 +21,14 @@ dpi = { version = "0.1", features = ["serde"] }
 
 [package]
 name = "versoview"
-version = "0.0.1"
+version.workspace = true
+edition.workspace = true
 authors = ["Wu Yu Wei"]
-edition = "2024"
-license = "Apache-2.0 OR MIT"
+license.workspace = true
 description = "An innovative web browser"
 readme = "README.md"
-homepage = "https://versotile.org/verso"
-repository = "https://github.com/versotile-org/verso"
+homepage.workspace = true
+repository.workspace = true
 documentation = "https://docs.versotile.org/verso"
 categories = ["web-programming"]
 
