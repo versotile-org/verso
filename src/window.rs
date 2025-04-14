@@ -72,10 +72,17 @@ pub(crate) struct EventListeners {
     pub(crate) on_close_requested: bool,
 }
 
+#[derive(Debug, Default)]
+struct CursorState {
+    current_cursor: CursorIcon,
+    cursor_resizing: bool,
+}
+
 /// A Verso window is a Winit window containing several web views.
 pub struct Window {
     /// Access to Winit window
     pub(crate) window: WinitWindow,
+    cursor_state: CursorState,
     /// GL surface of the window
     pub(crate) surface: Surface<WindowSurface>,
     /// The main panel of this window.
@@ -138,6 +145,7 @@ impl Window {
         (
             Self {
                 window,
+                cursor_state: CursorState::default(),
                 surface,
                 panel: None,
                 event_listeners: Default::default(),
@@ -182,6 +190,7 @@ impl Window {
 
         let mut window = Self {
             window,
+            cursor_state: CursorState::default(),
             surface,
             panel: None,
             // webview: None,
@@ -700,6 +709,11 @@ impl Window {
         clipboard: Option<&mut Clipboard>,
         compositor: &mut IOCompositor,
     ) -> bool {
+        if let EmbedderMsg::SetCursor(_, cursor) = message {
+            self.set_cursor_icon(cursor);
+            return false;
+        }
+
         // Handle message in Verso Panel
         if let Some(panel) = &self.panel {
             if panel.webview.webview_id == webview_id {
@@ -863,7 +877,7 @@ impl Window {
     }
 
     /// Set cursor icon of the window.
-    pub fn set_cursor_icon(&self, cursor: Cursor) {
+    pub fn set_cursor_icon(&mut self, cursor: Cursor) {
         let winit_cursor = match cursor {
             Cursor::Default => CursorIcon::Default,
             Cursor::Pointer => CursorIcon::Pointer,
@@ -899,9 +913,14 @@ impl Window {
             Cursor::AllScroll => CursorIcon::AllScroll,
             Cursor::ZoomIn => CursorIcon::ZoomIn,
             Cursor::ZoomOut => CursorIcon::ZoomOut,
-            _ => CursorIcon::Default,
+            Cursor::None => {
+                self.window.set_cursor_visible(false);
+                return;
+            }
         };
+        self.cursor_state.current_cursor = winit_cursor.clone();
         self.window.set_cursor(winit_cursor);
+        self.window.set_cursor_visible(true);
     }
 
     /// This method enables IME and set the IME cursor area of the window.
@@ -1218,9 +1237,9 @@ impl Window {
     }
 
     /// Set drag-resize cursor when mouse is hover on the border of the window.
-    fn set_drag_resize_cursor(&self, direction: Option<ResizeDirection>) {
-        let cursor = match direction {
-            Some(direction) => match direction {
+    fn set_drag_resize_cursor(&mut self, direction: Option<ResizeDirection>) {
+        if let Some(direction) = direction {
+            let cursor = match direction {
                 ResizeDirection::East => CursorIcon::EResize,
                 ResizeDirection::West => CursorIcon::WResize,
                 ResizeDirection::South => CursorIcon::SResize,
@@ -1229,11 +1248,13 @@ impl Window {
                 ResizeDirection::NorthWest => CursorIcon::NwResize,
                 ResizeDirection::SouthEast => CursorIcon::SeResize,
                 ResizeDirection::SouthWest => CursorIcon::SwResize,
-            },
-            None => CursorIcon::Default,
-        };
-
-        self.window.set_cursor(cursor);
+            };
+            self.cursor_state.cursor_resizing = true;
+            self.window.set_cursor(cursor);
+        } else if self.cursor_state.cursor_resizing {
+            self.cursor_state.cursor_resizing = false;
+            self.window.set_cursor(self.cursor_state.current_cursor);
+        }
     }
 }
 

@@ -497,12 +497,6 @@ impl Verso {
                         // Handle message in Verso Window
                         log::trace!("Verso Window is handling Embedder message: {msg:?}");
                         match msg {
-                            // EmbedderMsg::SetCursor(_, cursor) => {
-                            //     // TODO: This should move to compositor
-                            //     if let Some(window) = self.windows.get(&compositor.current_window) {
-                            //         window.0.set_cursor_icon(cursor);
-                            //     }
-                            // }
                             EmbedderMsg::OnDevtoolsStarted(port, _token) => {
                                 if let Ok(port) = port {
                                     // We use level error by default so this won't show
