@@ -10,31 +10,41 @@ env:
 
 jobs:
   build-linux:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-22.04
     steps:
       - uses: actions/checkout@v4
-      - uses: nixbuild/nix-quick-install-action@v28
 
-      - name: Restore and cache Nix store
-        uses: nix-community/cache-nix-action@v5
-        with:
-          paths: |
-            ~/.cargo
-            target/release/
-          primary-key: nix-${{ runner.os }}-${{ hashFiles('**/*.nix', 'Cargo.lock', 'Cargo.toml') }}
-          restore-prefixes-first-match: nix-${{ runner.os }}-
-          gc-max-store-size-linux: 1073741824
+      - name: Run sccache-cache
+        uses: mozilla-actions/sccache-action@v0.0.4
 
-      - name: Add Nix channel
+      # https://github.com/servo/servo/blob/a0730d7154e183a9b2d9a9282061e6c67d87a263/.github/workflows/linux.yml#L141
+      - name: Set LIBCLANG_PATH # This is needed for bindgen in mozangle.
+        run: echo "LIBCLANG_PATH=/usr/lib/llvm-14/lib" >> $GITHUB_ENV
+
+      - name: Install dependencies
         run: |
-          nix-channel --add https://nixos.org/channels/nixos-24.05 nixpkgs
-          nix-channel --update nixpkgs
+          sudo apt-get update
+          sudo apt install build-essential python3-pip ccache clang cmake curl \
+            g++ git gperf libdbus-1-dev libfreetype6-dev libgl1-mesa-dri \
+            libgles2-mesa-dev libglib2.0-dev libgstreamer-plugins-base1.0-dev \
+            gstreamer1.0-plugins-good libgstreamer-plugins-good1.0-dev \
+            gstreamer1.0-plugins-bad libgstreamer-plugins-bad1.0-dev \
+            gstreamer1.0-plugins-ugly gstreamer1.0-plugins-base \
+            libgstreamer-plugins-base1.0-dev gstreamer1.0-libav \
+            libgstrtspserver-1.0-dev gstreamer1.0-tools libges-1.0-dev \
+            libharfbuzz-dev liblzma-dev libunwind-dev libvulkan1 \
+            libx11-dev libxcb-render0-dev libxcb-shape0-dev libxcb-xfixes0-dev \
+            libxmu-dev libxmu6 libegl1-mesa-dev llvm-dev m4 xorg-dev sway \
+            python3-mako
 
       - name: Build
-        run: nix-shell shell.nix --run 'cargo build --release'
+        env:
+          SCCACHE_GHA_ENABLED: true
+          RUSTC_WRAPPER: 'sccache'
+        run: cargo build --features embed-useragent-stylesheets --release
 
       - name: Make archive
-        run: nix-shell shell.nix --run 'cd ./target/release && tar -czvf verso-x86_64-unknown-linux-gnu.tar.gz versoview'
+        run: cd ./target/release && tar -czvf verso-x86_64-unknown-linux-gnu.tar.gz versoview
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
@@ -67,7 +77,7 @@ jobs:
         env:
           SCCACHE_GHA_ENABLED: true
           RUSTC_WRAPPER: "sccache"
-        run: cargo build --release
+        run: cargo build --features embed-useragent-stylesheets --release
 
       - name: Make archive
         working-directory: ./target/release
@@ -80,6 +90,11 @@ jobs:
           path: ./target/release/verso-x86_64-pc-windows-msvc.tar.gz
 
   build-mac:
+    strategy:
+      matrix:
+        include:
+          - target: aarch64-apple-darwin
+          - target: x86_64-apple-darwin
     runs-on: macos-latest
     steps:
       - uses: actions/checkout@v4
@@ -102,25 +117,31 @@ jobs:
           curl https://gstreamer.freedesktop.org/data/pkg/osx/1.24.6/gstreamer-1.0-devel-1.24.6-universal.pkg -o develop.pkg
           sudo installer -pkg develop.pkg -target /
 
+      - name: Add rust target
+        run: rustup target add ${{ matrix.target }}
+
       - name: Build
         env:
           SCCACHE_GHA_ENABLED: true
           RUSTC_WRAPPER: "sccache"
-        run: cargo build --release
+        run: cargo build --target ${{ matrix.target }} --features embed-useragent-stylesheets --release
 
       - name: Make archive
-        working-directory: ./target/release
-        run: tar -czvf verso-aarch64-apple-darwin.tar.gz versoview
+        working-directory: ./target/${{ matrix.target }}/release
+        run: tar -czvf verso-${{ matrix.target }}.tar.gz versoview
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
-          name: verso-aarch64-apple-darwin
-          path: ./target/release/verso-aarch64-apple-darwin.tar.gz
+          name: verso-${{ matrix.target }}
+          path: ./target/${{ matrix.target }}/release/verso-${{ matrix.target }}.tar.gz
 
   publish-release:
     runs-on: ubuntu-latest
-    needs: [build-linux, build-windows, build-mac]
+    needs:
+      - build-linux
+      - build-windows
+      - build-mac
     steps:
       - uses: actions/checkout@v4
       - uses: actions/download-artifact@v4
