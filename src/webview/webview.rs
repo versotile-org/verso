@@ -18,7 +18,10 @@ use crate::{
     compositor::IOCompositor,
     tab::{TabActivateRequest, TabCloseRequest, TabCreateResponse},
     verso::send_to_constellation,
-    webview::prompt::{HttpBasicAuthInputResult, PromptDialog, PromptInputResult, PromptSender},
+    webview::{
+        history_menu::{HistoryMenuUIResponse, OpenHistoryMenuRequest},
+        prompt::{HttpBasicAuthInputResult, PromptDialog, PromptInputResult, PromptSender},
+    },
     window::Window,
 };
 
@@ -83,11 +86,28 @@ impl Window {
             }
             EmbedderMsg::WebViewBlurred => {
                 self.focused_webview_id = None;
-                self.close_context_menu(sender);
+                self.close_webview_menu(sender);
             }
             EmbedderMsg::WebViewFocused(w) => {
                 self.focused_webview_id = Some(webview_id);
-                self.close_context_menu(sender);
+                self.close_webview_menu(sender);
+
+                // set navigation button enabled state
+                // FIXME: should place in Window::activate_tab, but it somehow stuck with execute_script
+                if let Some(panel) = self.panel.as_ref() {
+                    let history = self.tab_manager.history(w).unwrap();
+                    let prev_btn_enabled = history.current_idx > 0;
+                    let next_btn_enabled = history.current_idx < history.list.len() - 1;
+                    let _ = execute_script(
+                        &compositor.constellation_chan,
+                        &panel.webview.webview_id,
+                        format!(
+                            "window.navbar.setNavBtnEnabled({}, {})",
+                            prev_btn_enabled, next_btn_enabled
+                        ),
+                    );
+                }
+
                 log::debug!(
                     "Verso Window {:?}'s webview {} has loaded completely.",
                     self.id(),
@@ -212,23 +232,36 @@ impl Window {
             }
             EmbedderMsg::HistoryChanged(_webview_id, list, index) => {
                 self.close_prompt_dialog(webview_id);
+                self.close_webview_menu(sender);
+
                 compositor.send_root_pipeline_display_list(self);
 
                 self.tab_manager
                     .set_history(webview_id, list.clone(), index);
                 let url = list.get(index).unwrap();
+                let prev_btn_enabled = index > 0;
+                let next_btn_enabled = index < list.len() - 1;
                 if let Some(panel) = self.panel.as_ref() {
                     let _ = execute_script(
                         sender,
                         &panel.webview.webview_id,
                         format!("window.navbar.setNavbarUrl('{}')", url.as_str()),
                     );
+                    let _ = execute_script(
+                        sender,
+                        &panel.webview.webview_id,
+                        format!(
+                            "window.navbar.setNavBtnEnabled({}, {})",
+                            prev_btn_enabled, next_btn_enabled
+                        ),
+                    );
                 }
             }
             EmbedderMsg::ShowContextMenu(_webview_id, servo_sender, _title, _options) => {
                 #[cfg(linux)]
-                if self.context_menu.is_none() {
-                    self.context_menu = Some(self.show_context_menu(sender, servo_sender));
+                if self.webview_menu.is_none() {
+                    self.webview_menu =
+                        Some(Box::new(self.show_context_menu(sender, servo_sender)));
                 } else {
                     let _ = servo_sender.send(ContextMenuResult::Ignored);
                 }
@@ -399,7 +432,7 @@ impl Window {
             }
             EmbedderMsg::WebViewFocused(webview_id) => {
                 self.focused_webview_id = Some(webview_id);
-                self.close_context_menu(sender);
+                self.close_webview_menu(sender);
                 log::debug!(
                     "Verso Window {:?}'s panel {} has loaded completely.",
                     self.id(),
@@ -491,6 +524,17 @@ impl Window {
                                 id: webview_id,
                             };
                             let _ = response_sender.send(PromptResponse::Ok(result.to_json()));
+                            return false;
+                        } else if message.starts_with("OPEN_HISTORY_MENU") {
+                            let request_str = message.strip_prefix("OPEN_HISTORY_MENU:").unwrap();
+                            let request: OpenHistoryMenuRequest = serde_json::from_str(request_str)
+                                .expect("Failed to parse OpenHistoryMenuRequest");
+                            let _ = response_sender.send(PromptResponse::default());
+
+                            if let Some(menu) = self.show_history_menu(sender, request) {
+                                self.webview_menu = Some(Box::new(menu));
+                            }
+
                             return false;
                         }
 
@@ -602,8 +646,9 @@ impl Window {
             }
             EmbedderMsg::ShowContextMenu(_, servo_sender, _, _) => {
                 #[cfg(linux)]
-                if self.context_menu.is_none() {
-                    self.context_menu = Some(self.show_context_menu(sender, servo_sender));
+                if self.webview_menu.is_none() {
+                    self.webview_menu =
+                        Some(Box::new(self.show_context_menu(sender, servo_sender)));
                 } else {
                     let _ = servo_sender.send(ContextMenuResult::Ignored);
                 }
@@ -623,9 +668,8 @@ impl Window {
         false
     }
 
-    /// Handle servo messages with main panel. Return true it requests a new window.
-    #[cfg(linux)]
-    pub fn handle_servo_messages_with_context_menu(
+    /// Handle servo messages with webview menu. Return true it requests a new window.
+    pub fn handle_servo_messages_with_webview_menu(
         &mut self,
         webview_id: WebViewId,
         message: EmbedderMsg,
@@ -633,7 +677,7 @@ impl Window {
         _clipboard: Option<&mut Clipboard>,
         _compositor: &mut IOCompositor,
     ) -> bool {
-        log::trace!("Verso Context Menu {webview_id:?} is handling Embedder message: {message:?}",);
+        log::trace!("Verso WebView Menu {webview_id:?} is handling Embedder message: {message:?}",);
         match message {
             EmbedderMsg::WebViewBlurred => {
                 self.focused_webview_id = None;
@@ -648,6 +692,8 @@ impl Window {
                     response_sender,
                 } => {
                     let _ = response_sender.send(PromptResponse::default());
+
+                    #[cfg(linux)]
                     if message.starts_with("CONTEXT_MENU:") {
                         let json_str_msg = message.strip_prefix("CONTEXT_MENU:").unwrap();
                         let result =
@@ -655,12 +701,21 @@ impl Window {
 
                         self.handle_context_menu_event(sender, result);
                     }
+                    if message.starts_with("HISTORY_MENU:") {
+                        let json_str_msg = message.strip_prefix("HISTORY_MENU:").unwrap();
+                        let result =
+                            serde_json::from_str::<HistoryMenuUIResponse>(json_str_msg).unwrap();
+
+                        self.handle_history_menu_event(sender, result);
+                    }
                 }
                 _ => log::trace!("Verso context menu isn't supporting this prompt yet"),
             },
+            #[cfg(linux)]
             EmbedderMsg::ShowContextMenu(_webview_id, servo_sender, _title, _options) => {
-                if self.context_menu.is_none() {
-                    self.context_menu = Some(self.show_context_menu(sender, servo_sender));
+                if self.webview_menu.is_none() {
+                    self.webview_menu =
+                        Some(Box::new(self.show_context_menu(sender, servo_sender)));
                 } else {
                     let _ = servo_sender.send(ContextMenuResult::Ignored);
                 }

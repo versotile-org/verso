@@ -1276,10 +1276,10 @@ impl IOCompositor {
             }
         }
         #[cfg(linux)]
-        if let Some(context_menu) = &mut window.context_menu {
+        if let Some(webview_menu) = &mut window.webview_menu {
             let rect = DeviceIntRect::from_size(size);
-            context_menu.webview.rect = rect;
-            self.on_resize_webview_event(context_menu.webview.webview_id, rect);
+            webview_menu.set_webview_rect(rect);
+            self.on_resize_webview_event(webview_menu.webview().webview_id, rect);
         }
 
         self.send_root_pipeline_display_list(window);
