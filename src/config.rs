@@ -445,15 +445,32 @@ fn load_userscripts(
 struct ResourceReader(PathBuf);
 
 impl ResourceReaderMethods for ResourceReader {
-    fn read(&self, file: Resource) -> Vec<u8> {
-        let path = self.0.join(file.filename());
-        // Rigppy image is the only one needs to be valid bytes.
-        // Others can be empty and Servo will set to default.
-        if let Resource::RippyPNG = file {
-            fs::read(path).unwrap_or(include_bytes!("../resources/rippy.png").to_vec())
-        } else {
-            fs::read(path).unwrap_or_default()
-        }
+    fn read(&self, resource: Resource) -> Vec<u8> {
+        let path = self.0.join(resource.filename());
+        fs::read(&path).unwrap_or_else(|_| {
+            match resource {
+                // Rigppy image is the only one needs to be valid bytes.
+                // Others can be empty and Servo will set to default.
+                Resource::RippyPNG => &include_bytes!("../resources/rippy.png")[..],
+                #[cfg(feature = "embed-useragent-stylesheets")]
+                Resource::UserAgentCSS => &include_bytes!("../resources/user-agent.css")[..],
+                #[cfg(feature = "embed-useragent-stylesheets")]
+                Resource::ServoCSS => &include_bytes!("../resources/servo.css")[..],
+                #[cfg(feature = "embed-useragent-stylesheets")]
+                Resource::PresentationalHintsCSS => {
+                    &include_bytes!("../resources/presentational-hints.css")[..]
+                }
+                Resource::HstsPreloadList => {
+                    log::warn!(
+                        "HSTS preload list not found, falling back to an empty list, to set this, put the list at '{}'",
+                        path.display()
+                    );
+                    r###"{ "entries": [] }"###.as_bytes()
+                }
+                _ => &[],
+            }
+            .to_vec()
+        })
     }
 
     fn sandbox_access_files(&self) -> Vec<PathBuf> {

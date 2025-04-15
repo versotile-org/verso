@@ -2,7 +2,7 @@
 members = ["verso", "versoview_messages", "versoview_build"]
 
 [workspace.package]
-version = "0.0.1"
+version = "0.0.2"
 edition = "2024"
 license = "Apache-2.0 OR MIT"
 homepage = "https://versotile.org/verso"
@@ -62,6 +62,7 @@ default = []
 packager = ["dep:cargo-packager-resource-resolver"]
 flatpak = []
 tracing = []
+embed-useragent-stylesheets = []
 
 [build-dependencies]
 cfg_aliases = "0.2"
