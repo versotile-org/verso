@@ -12,7 +12,7 @@ use ipc_channel::ipc;
 use servo_url::ServoUrl;
 use url::Url;
 use versoview_messages::ToControllerMessage;
-use webrender_api::units::DeviceIntRect;
+use webrender_api::units::{DevicePoint, DeviceRect};
 
 use crate::{
     compositor::IOCompositor,
@@ -34,17 +34,22 @@ pub struct WebView {
     /// Webview ID
     pub webview_id: WebViewId,
     /// The position and size of the webview.
-    pub rect: DeviceIntRect,
+    pub rect: DeviceRect,
 }
 
 impl WebView {
     /// Create a web view.
-    pub fn new(webview_id: WebViewId, rect: DeviceIntRect) -> Self {
-        Self { webview_id, rect }
+    // TODO: use ViewportDetails instead of hidpi_scale_factor
+    pub fn new(webview_id: WebViewId, viewport_details: ViewportDetails) -> Self {
+        let size = viewport_details.size * viewport_details.hidpi_scale_factor;
+        Self {
+            webview_id,
+            rect: DeviceRect::from_origin_and_size(DevicePoint::origin(), size),
+        }
     }
 
     /// Set the webview size.
-    pub fn set_size(&mut self, rect: DeviceIntRect) {
+    pub fn set_size(&mut self, rect: DeviceRect) {
         self.rect = rect;
     }
 }
@@ -498,15 +503,23 @@ impl Window {
                             let _ = response_sender.send(PromptResponse::default());
                             return false;
                         } else if message == "NEW_TAB" {
+                            let hidpi_scale_factor = Scale::new(self.scale_factor() as f32);
+
                             let webview_id = WebViewId::new();
                             let size = self.size();
-                            let rect = DeviceIntRect::from_size(size);
+                            let rect = DeviceRect::from_size(size);
                             let content_size = self.get_content_size(rect, true);
-                            let webview = WebView::new(webview_id, content_size);
+                            let size = content_size.size().to_f32() / hidpi_scale_factor;
+                            let webview = WebView::new(
+                                webview_id,
+                                ViewportDetails {
+                                    size,
+                                    hidpi_scale_factor,
+                                },
+                            );
 
                             self.tab_manager.append_tab(webview, true);
 
-                            let hidpi_scale_factor = Scale::new(self.scale_factor() as f32);
                             let size = content_size.size().to_f32() / hidpi_scale_factor;
                             send_to_constellation(
                                 sender,

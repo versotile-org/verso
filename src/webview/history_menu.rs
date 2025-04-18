@@ -4,11 +4,12 @@ use crate::{verso::send_to_constellation, window::Window};
 use base::id::WebViewId;
 use constellation_traits::{EmbedderToConstellationMessage, TraversalDirection};
 use crossbeam_channel::Sender;
+use embedder_traits::ViewportDetails;
 use serde::{Deserialize, Serialize};
 use servo_url::ServoUrl;
 use std::fmt;
 use url::Url;
-use webrender_api::units::DeviceIntRect;
+use webrender_api::units::DeviceRect;
 use winit::dpi::LogicalPosition;
 
 /// The Previous/Next History Menu of the Window. It will be opened when users left long click on panel's previous/next button.
@@ -28,7 +29,7 @@ impl HistoryMenu {
     /// Create history menu with custom items
     pub fn new_with_menu(action: HistoryMenuAction, menu_items: Vec<HistoryMenuItem>) -> Self {
         let webview_id = WebViewId::new();
-        let webview = WebView::new(webview_id, DeviceIntRect::zero());
+        let webview = WebView::new(webview_id, ViewportDetails::default());
 
         Self {
             action,
@@ -57,7 +58,7 @@ impl WebViewMenu for HistoryMenu {
         ServoUrl::from_url(url)
     }
 
-    fn set_webview_rect(&mut self, rect: DeviceIntRect) {
+    fn set_webview_rect(&mut self, rect: DeviceRect) {
         self.webview.set_size(rect);
     }
 

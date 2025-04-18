@@ -4,7 +4,7 @@ use crate::webview::{WebView, prompt::PromptDialog};
 use base::id::WebViewId;
 use serde::{Deserialize, Serialize};
 use servo_url::ServoUrl;
-use webrender_api::units::DeviceIntRect;
+use webrender_api::units::DeviceRect;
 
 /// Tab state
 pub struct Tab {
@@ -43,7 +43,7 @@ impl Tab {
     }
 
     /// Set tab WebView size.
-    pub fn set_webview_size(&mut self, rect: DeviceIntRect) {
+    pub fn set_webview_size(&mut self, rect: DeviceRect) {
         self.webview.set_size(rect);
     }
 
@@ -83,7 +83,7 @@ impl Tab {
     }
 
     /// Set prompt webview size.
-    pub fn set_prompt_size(&mut self, rect: DeviceIntRect) {
+    pub fn set_prompt_size(&mut self, rect: DeviceRect) {
         if let Some(prompt) = self.prompt.as_mut() {
             prompt.set_size(rect);
         }
@@ -164,7 +164,7 @@ impl TabManager {
     pub fn set_size(
         &mut self,
         tab_id: WebViewId,
-        rect: DeviceIntRect,
+        rect: DeviceRect,
     ) -> (Option<WebViewId>, Option<WebViewId>) {
         if let Some(tab) = self.tab_map.get_mut(&tab_id) {
             tab.set_webview_size(rect);

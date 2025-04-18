@@ -1,7 +1,7 @@
 use crate::verso::send_to_constellation;
 use crate::window::Window;
 use constellation_traits::{EmbedderToConstellationMessage, TraversalDirection};
-use embedder_traits::ContextMenuResult;
+use embedder_traits::{ContextMenuResult, ViewportDetails};
 use ipc_channel::ipc::IpcSender;
 
 /* macOS, Windows Native Implementation */
@@ -30,7 +30,7 @@ use servo_url::ServoUrl;
 #[cfg(linux)]
 use url::Url;
 #[cfg(linux)]
-use webrender_api::units::DeviceIntRect;
+use webrender_api::units::DeviceRect;
 #[cfg(linux)]
 use winit::dpi::LogicalPosition;
 
@@ -82,7 +82,7 @@ impl ContextMenu {
         #[cfg(linux)]
         {
             let webview_id = WebViewId::new();
-            let webview = WebView::new(webview_id, DeviceIntRect::zero());
+            let webview = WebView::new(webview_id, ViewportDetails::default());
 
             Self {
                 servo_result_sender: Some(servo_result_sender),
@@ -157,7 +157,7 @@ impl WebViewMenu for ContextMenu {
         ServoUrl::from_url(url)
     }
 
-    fn set_webview_rect(&mut self, rect: DeviceIntRect) {
+    fn set_webview_rect(&mut self, rect: DeviceRect) {
         self.webview.set_size(rect);
     }
 

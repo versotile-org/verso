@@ -9,7 +9,7 @@ use euclid::Scale;
 use ipc_channel::ipc::IpcSender;
 use serde::{Deserialize, Serialize};
 use servo_url::ServoUrl;
-use webrender_api::units::DeviceIntRect;
+use webrender_api::units::DeviceRect;
 
 use crate::{verso::send_to_constellation, webview::WebView};
 
@@ -96,7 +96,7 @@ impl PromptDialog {
     /// New prompt dialog
     pub fn new() -> Self {
         PromptDialog {
-            webview: WebView::new(WebViewId::new(), DeviceIntRect::zero()),
+            webview: WebView::new(WebViewId::new(), ViewportDetails::default()),
             prompt_sender: None,
         }
     }
@@ -122,7 +122,7 @@ impl PromptDialog {
     /// let content_size = window.get_content_size(rect);
     /// prompt.set_size(content_size);
     /// ```
-    pub fn set_size(&mut self, rect: DeviceIntRect) {
+    pub fn set_size(&mut self, rect: DeviceRect) {
         self.webview.set_size(rect);
     }
 
@@ -141,7 +141,7 @@ impl PromptDialog {
     pub fn alert(
         &mut self,
         sender: &Sender<EmbedderToConstellationMessage>,
-        rect: DeviceIntRect,
+        rect: DeviceRect,
         scale_factor: f32,
         message: String,
         prompt_sender: IpcSender<AlertResponse>,
@@ -165,7 +165,7 @@ impl PromptDialog {
     pub fn ok_cancel(
         &mut self,
         sender: &Sender<EmbedderToConstellationMessage>,
-        rect: DeviceIntRect,
+        rect: DeviceRect,
         scale_factor: f32,
         message: String,
         prompt_sender: IpcSender<ConfirmResponse>,
@@ -191,7 +191,7 @@ impl PromptDialog {
     pub fn allow_deny(
         &mut self,
         sender: &Sender<EmbedderToConstellationMessage>,
-        rect: DeviceIntRect,
+        rect: DeviceRect,
         scale_factor: f32,
         message: String,
         prompt_sender: PromptSender,
@@ -215,7 +215,7 @@ impl PromptDialog {
     pub fn input(
         &mut self,
         sender: &Sender<EmbedderToConstellationMessage>,
-        rect: DeviceIntRect,
+        rect: DeviceRect,
         scale_factor: f32,
         message: String,
         default_value: Option<String>,
@@ -248,7 +248,7 @@ impl PromptDialog {
     pub fn http_basic_auth(
         &mut self,
         sender: &Sender<EmbedderToConstellationMessage>,
-        rect: DeviceIntRect,
+        rect: DeviceRect,
         scale_factor: f32,
         prompt_sender: IpcSender<Option<AuthenticationResponse>>,
     ) {
@@ -259,7 +259,7 @@ impl PromptDialog {
     fn show(
         &mut self,
         sender: &Sender<EmbedderToConstellationMessage>,
-        rect: DeviceIntRect,
+        rect: DeviceRect,
         scale_factor: f32,
         prompt_type: PromptType,
     ) {
