@@ -69,6 +69,7 @@ pub(crate) struct EventListeners {
 #[derive(Debug, Default)]
 struct CursorState {
     current_cursor: CursorIcon,
+    #[cfg(any(linux, target_os = "windows"))]
     cursor_resizing: bool,
 }
 
@@ -353,6 +354,19 @@ impl Window {
                 let _ = compositor
                     .constellation_chan
                     .send(EmbedderToConstellationMessage::FocusWebView(tab_id));
+
+                // Set navigation button enabled state
+                let history = self.tab_manager.history(tab_id).unwrap();
+                let prev_btn_enabled = history.current_idx > 0;
+                let next_btn_enabled = history.current_idx < history.list.len() - 1;
+                let _ = execute_script(
+                    &compositor.constellation_chan,
+                    &self.panel.as_ref().unwrap().webview.webview_id,
+                    format!(
+                        "window.navbar.setNavBtnEnabled({}, {})",
+                        prev_btn_enabled, next_btn_enabled
+                    ),
+                );
 
                 // update painting order immediately to draw the active tab
                 compositor.send_root_pipeline_display_list(self);
