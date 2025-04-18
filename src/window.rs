@@ -28,7 +28,7 @@ use servo_url::ServoUrl;
 use versoview_messages::ToControllerMessage;
 use webrender_api::{
     ScrollLocation,
-    units::{DeviceIntPoint, DeviceIntRect, DeviceIntSize, DevicePoint, LayoutVector2D},
+    units::{DeviceIntPoint, DevicePoint, DeviceRect, DeviceSize, LayoutVector2D},
 };
 #[cfg(any(linux, target_os = "windows"))]
 use winit::window::ResizeDirection;
@@ -69,6 +69,7 @@ pub(crate) struct EventListeners {
 #[derive(Debug, Default)]
 struct CursorState {
     current_cursor: CursorIcon,
+    #[cfg(any(linux, target_os = "windows"))]
     cursor_resizing: bool,
 }
 
@@ -130,8 +131,9 @@ impl Window {
                 );
             }
         }
-        let (rendering_context, surface) = RenderingContext::create(&window, &gl_config)
-            .expect("Failed to create rendering context");
+        let (rendering_context, surface) =
+            RenderingContext::create(&window, &gl_config, window.inner_size())
+                .expect("Failed to create rendering context");
         log::trace!("Created rendering context for window {:?}", window);
 
         (
@@ -200,17 +202,17 @@ impl Window {
     }
 
     /// Get the content area size for the webview to draw on
-    pub fn get_content_size(&self, mut size: DeviceIntRect, include_tab: bool) -> DeviceIntRect {
+    pub fn get_content_size(&self, mut size: DeviceRect, include_tab: bool) -> DeviceRect {
         if self.panel.is_some() {
             let height: f64 = if include_tab {
                 (PANEL_HEIGHT + TAB_HEIGHT + PANEL_PADDING) * self.scale_factor()
             } else {
                 (PANEL_HEIGHT + PANEL_PADDING) * self.scale_factor()
             };
-            size.min.y = size.max.y.min(height as i32);
-            size.min.x += 10;
-            size.max.y -= 10;
-            size.max.x -= 10;
+            size.min.y = size.max.y.min(height as f32);
+            size.min.x += 10.0;
+            size.max.y -= 10.0;
+            size.max.x -= 10.0;
         }
         size
     }
@@ -221,27 +223,26 @@ impl Window {
         constellation_sender: &Sender<EmbedderToConstellationMessage>,
         initial_url: url::Url,
     ) {
+        let hidpi_scale_factor = Scale::new(self.scale_factor() as f32);
         let size = self.window.inner_size();
-        let size = Size2D::new(size.width as i32, size.height as i32);
+        let size = Size2D::new(size.width as f32, size.height as f32);
+        let size = size.to_f32() / hidpi_scale_factor;
+        let viewport_details = ViewportDetails {
+            size,
+            hidpi_scale_factor,
+        };
+
         let panel_id = WebViewId::new();
         self.panel = Some(Panel {
-            webview: WebView::new(panel_id, DeviceIntRect::from_size(size)),
+            webview: WebView::new(panel_id, viewport_details),
             initial_url: ServoUrl::from_url(initial_url),
         });
 
         let url = ServoUrl::parse("verso://resources/components/panel.html").unwrap();
-        let hidpi_scale_factor = Scale::new(self.scale_factor() as f32);
-        let size = size.to_f32() / hidpi_scale_factor;
+
         send_to_constellation(
             constellation_sender,
-            EmbedderToConstellationMessage::NewWebView(
-                url,
-                panel_id,
-                ViewportDetails {
-                    size,
-                    hidpi_scale_factor,
-                },
-            ),
+            EmbedderToConstellationMessage::NewWebView(url, panel_id, viewport_details),
         );
     }
 
@@ -252,13 +253,20 @@ impl Window {
         initial_url: ServoUrl,
     ) {
         let webview_id = WebViewId::new();
-        let size = self.size();
-        let rect = DeviceIntRect::from_size(size);
+        let size = self.size().to_f32();
+        let rect = DeviceRect::from_size(size);
 
         let show_tab = self.tab_manager.count() >= 1;
         let content_size = self.get_content_size(rect, show_tab);
 
-        let mut webview = WebView::new(webview_id, rect);
+        let hidpi_scale_factor = Scale::new(self.scale_factor() as f32);
+        let size = content_size.size().to_f32() / hidpi_scale_factor;
+        let viewport_details = ViewportDetails {
+            size,
+            hidpi_scale_factor,
+        };
+
+        let mut webview = WebView::new(webview_id, viewport_details);
         webview.set_size(content_size);
 
         if let Some(panel) = &self.panel {
@@ -273,20 +281,9 @@ impl Window {
 
         self.tab_manager.append_tab(webview, true);
 
-        let content_size = self.get_content_size(rect, show_tab);
-
-        let hidpi_scale_factor = Scale::new(self.scale_factor() as f32);
-        let size = content_size.size().to_f32() / hidpi_scale_factor;
         send_to_constellation(
             constellation_sender,
-            EmbedderToConstellationMessage::NewWebView(
-                initial_url,
-                webview_id,
-                ViewportDetails {
-                    size,
-                    hidpi_scale_factor,
-                },
-            ),
+            EmbedderToConstellationMessage::NewWebView(initial_url, webview_id, viewport_details),
         );
         log::debug!("Verso Window {:?} adds webview {}", self.id(), webview_id);
     }
@@ -300,6 +297,7 @@ impl Window {
                     "window.navbar.closeTab('{}')",
                     serde_json::to_string(&tab_id).unwrap()
                 );
+
                 let active_tab_id = execute_script(
                     &compositor.constellation_chan,
                     &panel.webview.webview_id,
@@ -326,8 +324,8 @@ impl Window {
         tab_id: WebViewId,
         show_tab: bool,
     ) {
-        let size = self.size();
-        let rect = DeviceIntRect::from_size(size);
+        let size = self.size().to_f32();
+        let rect = DeviceRect::from_size(size);
         let content_size = self.get_content_size(rect, show_tab);
         let (tab_id, prompt_id) = self.tab_manager.set_size(tab_id, content_size);
 
@@ -387,7 +385,7 @@ impl Window {
                     self.resizing = true;
                 }
                 let size = Size2D::new(size.width, size.height);
-                compositor.resize(size.to_i32(), self);
+                compositor.resize(size.to_f32(), self);
             }
             WindowEvent::ScaleFactorChanged { scale_factor, .. } => {
                 compositor.on_scale_factor_event(*scale_factor as f32, self);
@@ -745,15 +743,15 @@ impl Window {
     }
 
     /// Size of the window that's used by webrender.
-    pub fn size(&self) -> DeviceIntSize {
+    pub fn size(&self) -> DeviceSize {
         let size = self.window.inner_size();
-        Size2D::new(size.width as i32, size.height as i32)
+        Size2D::new(size.width as f32, size.height as f32)
     }
 
     /// Size of the window, including the window decorations.
-    pub fn outer_size(&self) -> DeviceIntSize {
+    pub fn outer_size(&self) -> DeviceSize {
         let size = self.window.outer_size();
-        Size2D::new(size.width as i32, size.height as i32)
+        Size2D::new(size.width as f32, size.height as f32)
     }
 
     /// Get Winit window ID of the window.

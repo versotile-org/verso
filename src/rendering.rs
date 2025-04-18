@@ -1,8 +1,9 @@
-use std::ffi::CString;
 use std::num::NonZeroU32;
 use std::rc::Rc;
+use std::{cell::Cell, ffi::CString};
 
-use euclid::default::Size2D;
+use dpi::PhysicalSize;
+use euclid::Size2D;
 use gleam::gl;
 use glutin::{
     config::{Config, GetGlConfig, GlConfig},
@@ -15,12 +16,14 @@ use glutin::{
 };
 use glutin_winit::GlWindow;
 use raw_window_handle::HasWindowHandle;
+use webrender_api::units::DevicePixel;
 use winit::window::Window;
 
 /// A Verso rendering context, which holds all of the information needed
 /// to render Servo's layout, and bridges WebRender and glutin.
 pub struct RenderingContext {
     context: PossiblyCurrentContext,
+    size: Cell<PhysicalSize<u32>>,
     pub(crate) gl: Rc<dyn gl::Gl>,
 }
 
@@ -29,6 +32,7 @@ impl RenderingContext {
     pub fn create(
         window: &Window,
         gl_config: &Config,
+        size: PhysicalSize<u32>,
     ) -> Result<(Self, Surface<WindowSurface>), Box<dyn std::error::Error>> {
         // XXX This will panic on Android, but we care about Desktop for now.
         let raw_window_handle = window.window_handle().ok().map(|handle| handle.as_raw());
@@ -104,7 +108,14 @@ impl RenderingContext {
             gl.get_string(gl::SHADING_LANGUAGE_VERSION)
         );
 
-        Ok((Self { context, gl }, surface))
+        Ok((
+            Self {
+                size: Cell::new(size),
+                context,
+                gl,
+            },
+            surface,
+        ))
     }
 
     /// Create a surface based on provided window.
@@ -132,14 +143,15 @@ impl RenderingContext {
     pub fn resize(
         &self,
         surface: &Surface<impl SurfaceTypeTrait + ResizeableSurface>,
-        size: Size2D<i32>,
+        size: PhysicalSize<u32>,
     ) {
         surface.resize(
             &self.context,
-            NonZeroU32::new(size.width as u32).unwrap(),
-            NonZeroU32::new(size.height as u32).unwrap(),
+            NonZeroU32::new(size.width).unwrap(),
+            NonZeroU32::new(size.height).unwrap(),
         );
-        self.gl.viewport(0, 0, size.width, size.height);
+        self.gl
+            .viewport(0, 0, size.width as i32, size.height as i32);
     }
 
     /// Present the surface of the rendering context.
@@ -150,6 +162,17 @@ impl RenderingContext {
         self.context.make_current(surface)?;
         surface.swap_buffers(&self.context)?;
         Ok(())
+    }
+
+    /// Get the current size of this [`RenderingContext`].
+    pub fn size(&self) -> PhysicalSize<u32> {
+        self.size.get()
+    }
+
+    /// Get the current size of this [`RenderingContext`] as [`Size2D`].
+    pub fn size2d(&self) -> Size2D<u32, DevicePixel> {
+        let size = self.size();
+        Size2D::new(size.width, size.height)
     }
 }
 

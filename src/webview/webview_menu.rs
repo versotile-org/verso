@@ -4,7 +4,7 @@ use dpi::{LogicalPosition, PhysicalPosition};
 use embedder_traits::ViewportDetails;
 use euclid::Scale;
 use servo_url::ServoUrl;
-use webrender_api::units::DeviceIntRect;
+use webrender_api::units::DeviceRect;
 
 use crate::{verso::send_to_constellation, window::Window};
 
@@ -15,7 +15,7 @@ pub trait WebViewMenu {
     /// Get the webview of the menu
     fn webview(&self) -> &WebView;
     /// Set the webview rect of the menu
-    fn set_webview_rect(&mut self, rect: DeviceIntRect);
+    fn set_webview_rect(&mut self, rect: DeviceRect);
     /// Get the position of the menu
     fn position(&self) -> LogicalPosition<f64>;
     /// Set the position of the menu
@@ -30,7 +30,7 @@ pub trait WebViewMenu {
         position: PhysicalPosition<f64>,
     ) {
         self.set_position(position.to_logical(window.scale_factor()));
-        self.set_webview_rect(DeviceIntRect::from_size(window.outer_size()));
+        self.set_webview_rect(DeviceRect::from_size(window.outer_size()));
 
         let hidpi_scale_factor = Scale::new(window.scale_factor() as f32);
         let size = window.outer_size().to_f32() / hidpi_scale_factor;

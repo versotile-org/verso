@@ -10,8 +10,8 @@ use bluetooth::BluetoothThreadFactory;
 use bluetooth_traits::BluetoothRequest;
 use canvas::canvas_paint_thread::CanvasPaintThread;
 use compositing_traits::{
-    CompositorMsg, CompositorProxy, CompositorReceiver, CrossProcessCompositorApi,
-    WebrenderExternalImageHandlers, WebrenderImageHandlerType,
+    CompositorMsg, CompositorProxy, CrossProcessCompositorApi, WebrenderExternalImageHandlers,
+    WebrenderImageHandlerType,
 };
 use constellation::{Constellation, FromEmbedderLogger, InitialConstellationState};
 use constellation_traits::EmbedderToConstellationMessage;
@@ -126,38 +126,9 @@ impl Verso {
         let mem_profiler_sender = profile::mem::Profiler::create();
 
         // Create compositor and embedder channels
-        let (compositor_sender, compositor_receiver) = {
-            let (sender, receiver) = unbounded();
-            let (compositor_ipc_sender, compositor_ipc_receiver) =
-                ipc::channel().expect("ipc channel failure");
-            let cross_process_compositor_api = CrossProcessCompositorApi(compositor_ipc_sender);
-            let compositor_proxy = CompositorProxy {
-                sender,
-                cross_process_compositor_api,
-                event_loop_waker: event_loop_waker.clone(),
-            };
-
-            let compositor_proxy_clone = compositor_proxy.clone();
-            ROUTER.add_typed_route(
-                compositor_ipc_receiver,
-                Box::new(move |message| {
-                    compositor_proxy_clone.send(CompositorMsg::CrossProcess(
-                        message.expect("Could not convert Compositor message"),
-                    ));
-                }),
-            );
-            (compositor_proxy, CompositorReceiver { receiver })
-        };
-        let (embedder_proxy, embedder_receiver) = {
-            let (sender, receiver) = unbounded();
-            (
-                EmbedderProxy {
-                    sender,
-                    event_loop_waker: event_loop_waker.clone(),
-                },
-                receiver,
-            )
-        };
+        let (compositor_proxy, compositor_receiver) =
+            create_compositor_channel(event_loop_waker.clone());
+        let (embedder_proxy, embedder_receiver) = create_embedder_channel(event_loop_waker.clone());
 
         // Create dev tools thread
         let devtools_sender = if pref!(devtools_server_enabled) {
@@ -174,7 +145,7 @@ impl Verso {
             let mut debug_flags = DebugFlags::empty();
             debug_flags.set(DebugFlags::PROFILER_DBG, opts.debug.webrender_stats);
 
-            let render_notifier = Box::new(RenderNotifier::new(compositor_sender.clone()));
+            let render_notifier = Box::new(RenderNotifier::new(compositor_proxy.clone()));
             let clear_color = ColorF::new(0., 0., 0., 0.);
             create_webrender_instance(
                 webrender_gl.clone(),
@@ -203,8 +174,8 @@ impl Verso {
             .expect("Unable to initialize webrender!")
         };
         let webrender_api = webrender_api_sender.create_api();
-        let webrender_document =
-            webrender_api.add_document_with_id(window.size(), u64::from(window.id()) as u32);
+        let webrender_document = webrender_api
+            .add_document_with_id(window.size().to_i32(), u64::from(window.id()) as u32);
 
         // Initialize js engine if it's single process mode
         let js_engine_setup = if !opts.multiprocess {
@@ -237,7 +208,6 @@ impl Verso {
 
         // Set webrender external image handler for WebGPU textures
         let wgpu_image_handler = webgpu::WGPUExternalImages::default();
-        let wgpu_image_map = wgpu_image_handler.images.clone();
         external_image_handlers.set_handler(
             Box::new(wgpu_image_handler),
             WebrenderImageHandlerType::WebGPU,
@@ -264,13 +234,13 @@ impl Verso {
 
         // Create font cache thread
         let system_font_service = Arc::new(
-            SystemFontService::spawn(compositor_sender.cross_process_compositor_api.clone())
+            SystemFontService::spawn(compositor_proxy.cross_process_compositor_api.clone())
                 .to_proxy(),
         );
 
         // Create canvas thread
         let (canvas_create_sender, canvas_ipc_sender) = CanvasPaintThread::start(
-            compositor_sender.cross_process_compositor_api.clone(),
+            compositor_proxy.cross_process_compositor_api.clone(),
             system_font_service.clone(),
             public_resource_threads.clone(),
         );
@@ -283,7 +253,7 @@ impl Verso {
         // Create layout factory
         let layout_factory = Arc::new(layout_thread_2020::LayoutFactoryImpl());
         let initial_state = InitialConstellationState {
-            compositor_proxy: compositor_sender.clone(),
+            compositor_proxy: compositor_proxy.clone(),
             embedder_proxy,
             devtools_sender,
             bluetooth_thread,
@@ -297,7 +267,6 @@ impl Verso {
             webxr_registry: None,
             webgl_threads: None,
             webrender_external_images: external_images,
-            wgpu_image_map,
             user_content_manager,
         };
 
@@ -325,7 +294,7 @@ impl Verso {
             window.size(),
             Scale::new(window.scale_factor() as f32),
             InitialCompositorState {
-                sender: compositor_sender,
+                sender: compositor_proxy,
                 receiver: compositor_receiver,
                 constellation_chan: constellation_sender.clone(),
                 time_profiler_chan: time_profiler_sender,
@@ -1010,4 +979,43 @@ pub(crate) fn send_to_constellation(
     if let Err(e) = sender.send(msg) {
         log::warn!("Sending {variant_name} to constellation failed: {e:?}");
     }
+}
+
+fn create_embedder_channel(
+    event_loop_waker: Box<dyn EventLoopWaker>,
+) -> (EmbedderProxy, Receiver<EmbedderMsg>) {
+    let (sender, receiver) = unbounded();
+    (
+        EmbedderProxy {
+            sender,
+            event_loop_waker,
+        },
+        receiver,
+    )
+}
+
+fn create_compositor_channel(
+    event_loop_waker: Box<dyn EventLoopWaker>,
+) -> (CompositorProxy, Receiver<CompositorMsg>) {
+    let (sender, receiver) = unbounded();
+
+    let (compositor_ipc_sender, compositor_ipc_receiver) =
+        ipc::channel().expect("ipc channel failure");
+
+    let cross_process_compositor_api = CrossProcessCompositorApi(compositor_ipc_sender);
+    let compositor_proxy = CompositorProxy {
+        sender,
+        cross_process_compositor_api,
+        event_loop_waker,
+    };
+
+    let compositor_proxy_clone = compositor_proxy.clone();
+    ROUTER.add_typed_route(
+        compositor_ipc_receiver,
+        Box::new(move |message| {
+            compositor_proxy_clone.send(message.expect("Could not convert Compositor message"));
+        }),
+    );
+
+    (compositor_proxy, receiver)
 }
