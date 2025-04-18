@@ -97,22 +97,6 @@ impl Window {
                 self.focused_webview_id = Some(webview_id);
                 self.close_webview_menu(sender);
 
-                // set navigation button enabled state
-                // FIXME: should place in Window::activate_tab, but it somehow stuck with execute_script
-                if let Some(panel) = self.panel.as_ref() {
-                    let history = self.tab_manager.history(w).unwrap();
-                    let prev_btn_enabled = history.current_idx > 0;
-                    let next_btn_enabled = history.current_idx < history.list.len() - 1;
-                    let _ = execute_script(
-                        &compositor.constellation_chan,
-                        &panel.webview.webview_id,
-                        format!(
-                            "window.navbar.setNavBtnEnabled({}, {})",
-                            prev_btn_enabled, next_btn_enabled
-                        ),
-                    );
-                }
-
                 log::debug!(
                     "Verso Window {:?}'s webview {} has loaded completely.",
                     self.id(),
@@ -497,10 +481,11 @@ impl Window {
 
                             let tab_id = request.id;
 
+                            let _ = response_sender.send(PromptResponse::default());
+
                             // FIXME: set dirty flag, and only resize when flag is set
                             self.activate_tab(compositor, tab_id, self.tab_manager.count() > 1);
 
-                            let _ = response_sender.send(PromptResponse::default());
                             return false;
                         } else if message == "NEW_TAB" {
                             let hidpi_scale_factor = Scale::new(self.scale_factor() as f32);
