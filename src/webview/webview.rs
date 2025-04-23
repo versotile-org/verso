@@ -15,6 +15,7 @@ use versoview_messages::ToControllerMessage;
 use webrender_api::units::{DevicePoint, DeviceRect};
 
 use crate::{
+    bookmark::BookmarkManager,
     compositor::IOCompositor,
     tab::{TabActivateRequest, TabCloseRequest, TabCreateResponse},
     verso::send_to_constellation,
@@ -119,9 +120,12 @@ impl Window {
             },
             EmbedderMsg::ChangePageTitle(_webview_id, title) => {
                 if let Some(panel) = self.panel.as_ref() {
+                    let tab = self.tab_manager.current_tab_mut().unwrap();
                     let title = if let Some(title) = title {
+                        tab.set_title(title.clone());
                         format!("'{title}'")
                     } else {
+                        tab.set_title("null".to_string());
                         "null".to_string()
                     };
 
@@ -387,7 +391,13 @@ impl Window {
                 }
             }
             EmbedderMsg::ShowIME(_webview_id, input_method_type, text, multiline, position) => {
-                self.show_ime(input_method_type, text, multiline, position);
+                self.show_ime(
+                    input_method_type,
+                    text,
+                    multiline,
+                    position,
+                    compositor.show_bookmark,
+                );
             }
             EmbedderMsg::HideIME(_webview_id) => {
                 self.hide_ime();
@@ -409,6 +419,7 @@ impl Window {
         sender: &Sender<EmbedderToConstellationMessage>,
         clipboard: Option<&mut Clipboard>,
         compositor: &mut IOCompositor,
+        bookmark_manager: &mut BookmarkManager,
     ) -> bool {
         log::trace!("Verso Panel {panel_id:?} is handling Embedder message: {message:?}",);
         match message {
@@ -436,7 +447,11 @@ impl Window {
                         EmbedderToConstellationMessage::FocusWebView(panel_id),
                     );
 
-                    self.create_tab(sender, self.panel.as_ref().unwrap().initial_url.clone());
+                    self.create_tab(
+                        sender,
+                        self.panel.as_ref().unwrap().initial_url.clone(),
+                        compositor.show_bookmark,
+                    );
                 } else {
                     log::trace!("Verso Panel ignores NotifyLoadStatusChanged status: {status:?}");
                 }
@@ -493,7 +508,8 @@ impl Window {
                             let webview_id = WebViewId::new();
                             let size = self.size();
                             let rect = DeviceRect::from_size(size);
-                            let content_size = self.get_content_size(rect, true);
+                            let content_size =
+                                self.get_content_size(rect, true, compositor.show_bookmark);
                             let size = content_size.size().to_f32() / hidpi_scale_factor;
                             let webview = WebView::new(
                                 webview_id,
@@ -555,6 +571,47 @@ impl Window {
                             }
                             "DRAG_WINDOW" => {
                                 let _ = self.window.drag_window();
+                                return false;
+                            }
+                            "BOOKMARK" => {
+                                if let Some(tab) = self.tab_manager.current_tab() {
+                                    if let Some(url) =
+                                        tab.history().list.get(tab.history().current_idx)
+                                    {
+                                        let url = url.to_string();
+                                        let bookmark_previously_shown =
+                                            !bookmark_manager.bookmarks().is_empty();
+                                        if let Some(index) = bookmark_manager
+                                            .bookmarks()
+                                            .iter()
+                                            .position(|b| b.url == url)
+                                        {
+                                            let _ = bookmark_manager.remove_bookmark(index);
+                                        } else {
+                                            bookmark_manager.append_bookmark(tab.title(), url);
+                                        }
+                                        let script = format!(
+                                            "window.navbar.setBookmarks('{}')",
+                                            serde_json::to_string(bookmark_manager.bookmarks())
+                                                .unwrap()
+                                        );
+                                        if let Some(panel) = self.panel.as_ref() {
+                                            let _ = execute_script(
+                                                sender,
+                                                &panel.webview.webview_id,
+                                                script,
+                                            );
+                                        }
+
+                                        compositor.show_bookmark =
+                                            !bookmark_manager.bookmarks().is_empty();
+                                        // We need to refresh the window if the need for bookmark to be displayed
+                                        // has changed.
+                                        if bookmark_previously_shown != compositor.show_bookmark {
+                                            compositor.resize(self.size(), self);
+                                        }
+                                    }
+                                }
                                 return false;
                             }
                             _ => {}

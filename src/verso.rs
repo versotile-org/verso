@@ -44,6 +44,7 @@ use winit::{
 };
 
 use crate::{
+    bookmark::BookmarkManager,
     compositor::{IOCompositor, InitialCompositorState, ShutdownState},
     config::{Config, parse_cli_args},
     webview::execute_script,
@@ -64,6 +65,7 @@ pub struct Verso {
     /// FIXME: It's None on wayland in Flatpak. Find a way to support this.
     clipboard: Option<Clipboard>,
     config: Config,
+    bookmark_manager: BookmarkManager,
 }
 
 impl Verso {
@@ -316,7 +318,11 @@ impl Verso {
         if with_panel {
             window.create_panel(&constellation_sender, initial_url);
         } else {
-            window.create_tab(&constellation_sender, initial_url.into());
+            window.create_tab(
+                &constellation_sender,
+                initial_url.into(),
+                compositor.show_bookmark,
+            );
         }
 
         let mut windows = HashMap::new();
@@ -332,6 +338,7 @@ impl Verso {
             _js_engine_setup: js_engine_setup,
             clipboard: Clipboard::new().ok(),
             config,
+            bookmark_manager: BookmarkManager::new(),
         };
 
         verso.setup_logging();
@@ -445,6 +452,7 @@ impl Verso {
                                     &self.to_controller_sender,
                                     self.clipboard.as_mut(),
                                     compositor,
+                                    &mut self.bookmark_manager,
                                 ) {
                                     let mut window = Window::new_with_compositor(
                                         evl,

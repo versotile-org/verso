@@ -187,6 +187,9 @@ pub struct IOCompositor {
     /// will want to avoid blocking on UI events, and just
     /// run the event loop at the vsync interval.
     pub is_animating: bool,
+
+    /// Show the bookmark bar or not
+    pub show_bookmark: bool,
 }
 
 #[derive(Clone, Copy)]
@@ -370,6 +373,7 @@ impl IOCompositor {
             last_animation_tick: Instant::now(),
             is_animating: false,
             ready_to_present: false,
+            show_bookmark: false,
         };
 
         // Make sure the GL state is OK
@@ -1255,7 +1259,7 @@ impl IOCompositor {
 
         let rect = DeviceRect::from_size(size);
         let show_tab_bar = window.tab_manager.count() > 1;
-        let content_size = window.get_content_size(rect, show_tab_bar);
+        let content_size = window.get_content_size(rect, show_tab_bar, self.show_bookmark);
         if let Some(tab_id) = window.tab_manager.current_tab_id() {
             let (tab_id, prompt_id) = window.tab_manager.set_size(tab_id, content_size);
             if let Some(tab_id) = tab_id {
