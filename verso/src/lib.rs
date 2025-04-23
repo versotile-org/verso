@@ -9,7 +9,9 @@ use std::{
     process::Command,
     sync::{Arc, Mutex, mpsc::Sender as MpscSender},
 };
-pub use versoview_messages::{ConfigFromController as VersoviewSettings, ProfilerSettings};
+pub use versoview_messages::{
+    ConfigFromController as VersoviewSettings, Icon, ProfilerSettings, UserScript,
+};
 use versoview_messages::{
     PositionType, SizeType, ToControllerMessage, ToVersoMessage, WebResourceRequest,
     WebResourceRequestResponse,

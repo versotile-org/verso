@@ -136,6 +136,8 @@ pub struct ConfigFromController {
     pub transparent: bool,
     /// Title of the initial winit window in the title bar.
     pub title: Option<String>,
+    /// Window icon of the initial winit window.
+    pub icon: Option<Icon>,
     /// Port number to start a server to listen to remote Firefox devtools connections. 0 for random port.
     pub devtools_port: Option<u16>,
     /// Servo time profile settings
@@ -164,6 +166,7 @@ impl Default for ConfigFromController {
             decorated: false,
             transparent: true,
             title: None,
+            icon: None,
             fullscreen: false,
             devtools_port: None,
             profiler_settings: None,
@@ -173,6 +176,16 @@ impl Default for ConfigFromController {
             resources_directory: None,
         }
     }
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize)]
+pub struct Icon {
+    /// RGBA bytes of the icon.
+    pub rgba: Vec<u8>,
+    /// Icon width.
+    pub width: u32,
+    /// Icon height.
+    pub height: u32,
 }
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
