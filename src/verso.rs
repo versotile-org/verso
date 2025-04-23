@@ -33,7 +33,7 @@ use script::{self, JSEngineSetup};
 use servo_config::{opts, pref};
 use servo_url::ServoUrl;
 use style;
-use versoview_messages::{ToControllerMessage, ToVersoMessage};
+use versoview_messages::{PositionType, SizeType, ToControllerMessage, ToVersoMessage};
 use webgpu;
 use webrender::{ShaderPrecacheFlags, WebRenderOptions, create_webrender_instance};
 use webrender_api::*;
@@ -697,21 +697,31 @@ impl Verso {
                     let _ = window.window.drag_window();
                 }
             }
-            ToVersoMessage::GetSize(id) => {
+            ToVersoMessage::GetSize(id, size_type) => {
                 if let Some(window) = self.first_window() {
                     if let Err(error) = self.to_controller_sender.as_ref().unwrap().send(
-                        ToControllerMessage::GetSizeResponse(id, window.window.inner_size()),
+                        ToControllerMessage::GetSizeResponse(
+                            id,
+                            match size_type {
+                                SizeType::Inner => window.window.inner_size(),
+                                SizeType::Outer => window.window.outer_size(),
+                            },
+                        ),
                     ) {
                         log::error!("Verso failed to send GetSizeReponse to controller: {error}")
                     }
                 }
             }
-            ToVersoMessage::GetPosition(id) => {
+            ToVersoMessage::GetPosition(id, position_type) => {
                 if let Some(window) = self.first_window() {
                     if let Err(error) = self.to_controller_sender.as_ref().unwrap().send(
                         ToControllerMessage::GetPositionResponse(
                             id,
-                            window.window.inner_position().ok(),
+                            match position_type {
+                                PositionType::Inner => window.window.inner_position(),
+                                PositionType::Outer => window.window.outer_position(),
+                            }
+                            .ok(),
                         ),
                     ) {
                         log::error!(

@@ -7925,7 +7925,7 @@ checksum = "0b928f33d975fc6ad9f86c8f283853ad26bdd5b10b7f1542aa2fa15e2289105a"
 
 [[package]]
 name = "verso"
-version = "0.0.2"
+version = "0.0.3"
 dependencies = [
  "bincode",
  "dpi",
@@ -7941,7 +7941,7 @@ dependencies = [
 
 [[package]]
 name = "versoview"
-version = "0.0.2"
+version = "0.0.3"
 dependencies = [
  "arboard",
  "background_hang_monitor",
@@ -8014,7 +8014,7 @@ dependencies = [
 
 [[package]]
 name = "versoview_build"
-version = "0.0.2"
+version = "0.0.3"
 
 [[package]]
 name = "versoview_messages"

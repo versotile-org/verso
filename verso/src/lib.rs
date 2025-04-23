@@ -11,7 +11,8 @@ use std::{
 };
 pub use versoview_messages::{ConfigFromController as VersoviewSettings, ProfilerSettings};
 use versoview_messages::{
-    ToControllerMessage, ToVersoMessage, WebResourceRequest, WebResourceRequestResponse,
+    PositionType, SizeType, ToControllerMessage, ToVersoMessage, WebResourceRequest,
+    WebResourceRequestResponse,
 };
 
 use ipc_channel::{
@@ -298,7 +299,10 @@ impl VersoviewController {
     }
 
     /// Get the window's size
-    pub fn get_size(&self) -> Result<PhysicalSize<u32>, Box<ipc_channel::ErrorKind>> {
+    fn get_size(
+        &self,
+        size_type: SizeType,
+    ) -> Result<PhysicalSize<u32>, Box<ipc_channel::ErrorKind>> {
         let id = uuid::Uuid::new_v4();
         let (sender, receiver) = std::sync::mpsc::channel();
         self.event_listeners
@@ -306,7 +310,7 @@ impl VersoviewController {
             .lock()
             .unwrap()
             .insert(id, sender);
-        if let Err(error) = self.sender.send(ToVersoMessage::GetSize(id)) {
+        if let Err(error) = self.sender.send(ToVersoMessage::GetSize(id, size_type)) {
             self.event_listeners
                 .size_response
                 .lock()
@@ -317,10 +321,26 @@ impl VersoviewController {
         Ok(receiver.recv().unwrap())
     }
 
+    /// Returns the physical size of the window's client area.
+    ///
+    /// The client area is the content of the window, excluding the title bar and borders.
+    pub fn get_inner_size(&self) -> Result<PhysicalSize<u32>, Box<ipc_channel::ErrorKind>> {
+        self.get_size(SizeType::Inner)
+    }
+
+    /// Returns the physical size of the entire window.
+    ///
+    /// These dimensions include the title bar and borders.
+    /// If you don't want that (and you usually don't), use [`Self::get_inner_size`] instead.
+    pub fn get_outer_size(&self) -> Result<PhysicalSize<u32>, Box<ipc_channel::ErrorKind>> {
+        self.get_size(SizeType::Outer)
+    }
+
     /// Get the window's position,
     /// returns [`None`] on unsupported platforms (currently only Wayland)
-    pub fn get_position(
+    fn get_position(
         &self,
+        position_type: PositionType,
     ) -> Result<Option<PhysicalPosition<i32>>, Box<ipc_channel::ErrorKind>> {
         let id = uuid::Uuid::new_v4();
         let (sender, receiver) = std::sync::mpsc::channel();
@@ -329,7 +349,10 @@ impl VersoviewController {
             .lock()
             .unwrap()
             .insert(id, sender);
-        if let Err(error) = self.sender.send(ToVersoMessage::GetPosition(id)) {
+        if let Err(error) = self
+            .sender
+            .send(ToVersoMessage::GetPosition(id, position_type))
+        {
             self.event_listeners
                 .position_response
                 .lock()
@@ -338,6 +361,22 @@ impl VersoviewController {
             return Err(error);
         };
         Ok(receiver.recv().unwrap())
+    }
+
+    /// Get the window's inner position,
+    /// returns [`None`] on unsupported platforms (currently only Wayland)
+    pub fn get_inner_position(
+        &self,
+    ) -> Result<Option<PhysicalPosition<i32>>, Box<ipc_channel::ErrorKind>> {
+        self.get_position(PositionType::Inner)
+    }
+
+    /// Get the window's outer position,
+    /// returns [`None`] on unsupported platforms (currently only Wayland)
+    pub fn get_outer_position(
+        &self,
+    ) -> Result<Option<PhysicalPosition<i32>>, Box<ipc_channel::ErrorKind>> {
+        self.get_position(PositionType::Outer)
     }
 
     /// Get if the window is currently maximized or not

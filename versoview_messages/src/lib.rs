@@ -51,9 +51,9 @@ pub enum ToVersoMessage {
     /// Moves the window with the left mouse button until the button is released
     StartDragging,
     /// Get the window's size, need a response with [`ToControllerMessage::GetSizeResponse`]
-    GetSize(uuid::Uuid),
+    GetSize(uuid::Uuid, SizeType),
     /// Get the window's position, need a response with [`ToControllerMessage::GetPositionResponse`]
-    GetPosition(uuid::Uuid),
+    GetPosition(uuid::Uuid, PositionType),
     /// Get if the window is currently maximized or not, need a response with [`ToControllerMessage::GetMaximizedResponse`]
     GetMaximized(uuid::Uuid),
     /// Get if the window is currently minimized or not, need a response with [`ToControllerMessage::GetMinimizedResponse`]
@@ -66,6 +66,18 @@ pub enum ToVersoMessage {
     GetScaleFactor(uuid::Uuid),
     /// Get the current URL of the webview, need a response with [`ToControllerMessage::GetCurrentUrlResponse`]
     GetCurrentUrl(uuid::Uuid),
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub enum PositionType {
+    Inner,
+    Outer,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub enum SizeType {
+    Inner,
+    Outer,
 }
 
 /// Message sent from versoview to the controller
