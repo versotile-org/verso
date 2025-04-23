@@ -2,6 +2,10 @@ mod builder;
 pub use builder::VersoBuilder;
 
 use dpi::{PhysicalPosition, PhysicalSize, Position, Size};
+use ipc_channel::{
+    ipc::{IpcOneShotServer, IpcSender},
+    router::ROUTER,
+};
 use log::error;
 use std::{
     collections::HashMap,
@@ -13,13 +17,7 @@ pub use versoview_messages::{
     ConfigFromController as VersoviewSettings, Icon, ProfilerSettings, UserScript,
 };
 use versoview_messages::{
-    PositionType, SizeType, ToControllerMessage, ToVersoMessage, WebResourceRequest,
-    WebResourceRequestResponse,
-};
-
-use ipc_channel::{
-    ipc::{IpcOneShotServer, IpcSender},
-    router::ROUTER,
+    PositionType, SizeType, ToControllerMessage, ToVersoMessage, WebResourceRequestResponse,
 };
 
 type ResponseFunction = Box<dyn FnOnce(Option<http::Response<Vec<u8>>>) + Send>;
@@ -31,7 +29,7 @@ struct EventListeners {
     on_close_requested: Listener<Box<dyn Fn() + Send + 'static>>,
     on_navigation_starting: Listener<Box<dyn Fn(url::Url) -> bool + Send + 'static>>,
     on_web_resource_requested:
-        Listener<Box<dyn Fn(WebResourceRequest, ResponseFunction) + Send + 'static>>,
+        Listener<Box<dyn Fn(http::Request<Vec<u8>>, ResponseFunction) + Send + 'static>>,
     size_response: ResponseListener<MpscSender<PhysicalSize<u32>>>,
     position_response: ResponseListener<MpscSender<Option<PhysicalPosition<i32>>>>,
     maximized_response: ResponseListener<MpscSender<bool>>,
@@ -114,7 +112,7 @@ impl VersoviewController {
                             let sender_clone = to_verso_sender.clone();
                             let id = request.id;
                             callback(
-                                request,
+                                request.request,
                                 Box::new(move |response| {
                                     if let Err(error) = sender_clone.send(ToVersoMessage::WebResourceRequestResponse(
                                         WebResourceRequestResponse { id, response },
@@ -238,7 +236,7 @@ impl VersoviewController {
     /// return a boolean in the callback to decide whether or not allowing this navigation
     pub fn on_web_resource_requested(
         &self,
-        callback: impl Fn(WebResourceRequest, ResponseFunction) + Send + 'static,
+        callback: impl Fn(http::Request<Vec<u8>>, ResponseFunction) + Send + 'static,
     ) -> Result<(), Box<ipc_channel::ErrorKind>> {
         let old_listener = self
             .event_listeners
