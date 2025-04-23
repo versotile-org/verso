@@ -29,5 +29,7 @@ pub use errors::{Error, Result};
 pub use verso::Verso;
 /// Re-exporting Winit for the sake of convenience.
 pub use winit;
+/// Bookmark manager
+pub mod bookmark;
 /// Window tabs manager
 pub mod tab;

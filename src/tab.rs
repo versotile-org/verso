@@ -16,6 +16,8 @@ pub struct Tab {
     history: TabHistory,
     /// Prompt
     prompt: Option<PromptDialog>,
+    /// Title
+    title: String,
 }
 
 impl Tab {
@@ -29,6 +31,7 @@ impl Tab {
                 current_idx: 0,
             },
             prompt: None,
+            title: "null".to_string(),
         }
     }
 
@@ -88,6 +91,16 @@ impl Tab {
             prompt.set_size(rect);
         }
     }
+
+    /// Set tab title.
+    pub fn set_title(&mut self, title: String) {
+        self.title = title;
+    }
+
+    /// Get tab title.
+    pub fn title(&self) -> String {
+        self.title.clone()
+    }
 }
 
 /// Tab manager to handle multiple tab in a window.
@@ -121,6 +134,14 @@ impl TabManager {
     pub fn current_tab(&self) -> Option<&Tab> {
         if let Some(tab_id) = self.active_tab_id {
             self.tab_map.get(&tab_id)
+        } else {
+            None
+        }
+    }
+    /// Get current active tab as mutable.
+    pub fn current_tab_mut(&mut self) -> Option<&mut Tab> {
+        if let Some(tab_id) = self.active_tab_id {
+            self.tab_map.get_mut(&tab_id)
         } else {
             None
         }

@@ -41,6 +41,7 @@ use winit::{
 };
 
 use crate::{
+    bookmark::BookmarkManager,
     compositor::IOCompositor,
     keyboard::keyboard_event_from_winit,
     rendering::{RenderingContext, gl_config_picker},
@@ -53,6 +54,7 @@ use arboard::Clipboard;
 
 const PANEL_HEIGHT: f64 = 50.0;
 const TAB_HEIGHT: f64 = 30.0;
+const BOOKMARK_HEIGHT: f64 = 30.0;
 const PANEL_PADDING: f64 = 4.0;
 
 #[derive(Default)]
@@ -202,13 +204,21 @@ impl Window {
     }
 
     /// Get the content area size for the webview to draw on
-    pub fn get_content_size(&self, mut size: DeviceRect, include_tab: bool) -> DeviceRect {
+    pub fn get_content_size(
+        &self,
+        mut size: DeviceRect,
+        include_tab: bool,
+        include_bookmark: bool,
+    ) -> DeviceRect {
         if self.panel.is_some() {
-            let height: f64 = if include_tab {
-                (PANEL_HEIGHT + TAB_HEIGHT + PANEL_PADDING) * self.scale_factor()
-            } else {
-                (PANEL_HEIGHT + PANEL_PADDING) * self.scale_factor()
-            };
+            let mut height: f64 = PANEL_HEIGHT + PANEL_PADDING;
+            if include_tab {
+                height += TAB_HEIGHT;
+            }
+            if include_bookmark {
+                height += BOOKMARK_HEIGHT;
+            }
+            height *= self.scale_factor();
             size.min.y = size.max.y.min(height as f32);
             size.min.x += 10.0;
             size.max.y -= 10.0;
@@ -251,13 +261,14 @@ impl Window {
         &mut self,
         constellation_sender: &Sender<EmbedderToConstellationMessage>,
         initial_url: ServoUrl,
+        show_bookmark: bool,
     ) {
         let webview_id = WebViewId::new();
         let size = self.size().to_f32();
         let rect = DeviceRect::from_size(size);
 
         let show_tab = self.tab_manager.count() >= 1;
-        let content_size = self.get_content_size(rect, show_tab);
+        let content_size = self.get_content_size(rect, show_tab, show_bookmark);
 
         let hidpi_scale_factor = Scale::new(self.scale_factor() as f32);
         let size = content_size.size().to_f32() / hidpi_scale_factor;
@@ -326,7 +337,7 @@ impl Window {
     ) {
         let size = self.size().to_f32();
         let rect = DeviceRect::from_size(size);
-        let content_size = self.get_content_size(rect, show_tab);
+        let content_size = self.get_content_size(rect, show_tab, compositor.show_bookmark);
         let (tab_id, prompt_id) = self.tab_manager.set_size(tab_id, content_size);
 
         if let Some(prompt_id) = prompt_id {
@@ -684,6 +695,7 @@ impl Window {
                     (*self).create_tab(
                         &compositor.constellation_chan,
                         ServoUrl::parse("https://example.com").unwrap(),
+                        compositor.show_bookmark,
                     );
                     return true;
                 }
@@ -709,6 +721,7 @@ impl Window {
         to_controller_sender: &Option<IpcSender<ToControllerMessage>>,
         clipboard: Option<&mut Clipboard>,
         compositor: &mut IOCompositor,
+        bookmark_manager: &mut BookmarkManager,
     ) -> bool {
         if let EmbedderMsg::SetCursor(_, cursor) = message {
             self.set_cursor_icon(cursor);
@@ -719,7 +732,12 @@ impl Window {
         if let Some(panel) = &self.panel {
             if panel.webview.webview_id == webview_id {
                 return self.handle_servo_messages_with_panel(
-                    webview_id, message, sender, clipboard, compositor,
+                    webview_id,
+                    message,
+                    sender,
+                    clipboard,
+                    compositor,
+                    bookmark_manager,
                 );
             }
         }
@@ -928,13 +946,16 @@ impl Window {
         _text: Option<(String, i32)>,
         _multilinee: bool,
         position: euclid::Box2D<i32, webrender_api::units::DevicePixel>,
+        show_bookmark: bool,
     ) {
         self.window.set_ime_allowed(true);
-        let height: f64 = if self.tab_manager.count() > 1 {
-            PANEL_HEIGHT + TAB_HEIGHT + PANEL_PADDING
-        } else {
-            PANEL_HEIGHT + PANEL_PADDING
-        };
+        let mut height: f64 = PANEL_HEIGHT + PANEL_PADDING;
+        if self.tab_manager.count() > 1 {
+            height += TAB_HEIGHT;
+        }
+        if show_bookmark {
+            height += BOOKMARK_HEIGHT;
+        }
         self.window.set_ime_cursor_area(
             LogicalPosition::new(position.min.x, position.min.y + height as i32),
             LogicalSize::new(0, position.max.y - position.min.y),
