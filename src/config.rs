@@ -323,7 +323,10 @@ impl Config {
         let mut window_attributes = winit::window::Window::default_attributes()
             .with_transparent(config.transparent)
             .with_decorations(config.decorated)
-            .with_title(config.title.unwrap_or("Verso".to_owned()));
+            .with_title(config.title.unwrap_or("Verso".to_owned()))
+            .with_window_icon(config.icon.and_then(|icon| {
+                winit::window::Icon::from_rgba(icon.rgba, icon.width, icon.height).ok()
+            }));
         // set min inner size
         // should be at least able to show the whole control panel
         // FIXME: url input has weird behavior that will expand lager when having long text

@@ -74,6 +74,12 @@ impl VersoBuilder {
         self
     }
 
+    /// Sets the window icon.
+    pub fn icon(mut self, icon: versoview_messages::Icon) -> Self {
+        self.0.icon = Some(icon);
+        self
+    }
+
     /// Port number to start a server to listen to remote Firefox devtools connections. 0 for random port.
     pub fn devtools_port(mut self, port: u16) -> Self {
         self.0.devtools_port = Some(port);
