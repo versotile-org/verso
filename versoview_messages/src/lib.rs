@@ -25,6 +25,8 @@ pub enum ToVersoMessage {
     ListenToOnCloseRequested,
     /// Navigate to this URL
     NavigateTo(url::Url),
+    /// Reload the current webview
+    Reload,
     /// Register a listener on versoview for getting notified on navigation starting,
     /// veroview will send a [`ToControllerMessage::OnNavigationStarting`] when that happens
     ListenToOnNavigationStarting,
@@ -50,6 +52,8 @@ pub enum ToVersoMessage {
     SetVisible(bool),
     /// Moves the window with the left mouse button until the button is released
     StartDragging,
+    /// Bring the window to the front, and capture input focus
+    Focus,
     /// Get the window's size, need a response with [`ToControllerMessage::GetSizeResponse`]
     GetSize(uuid::Uuid, SizeType),
     /// Get the window's position, need a response with [`ToControllerMessage::GetPositionResponse`]
