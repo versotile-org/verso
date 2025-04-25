@@ -396,7 +396,7 @@ impl Window {
                     text,
                     multiline,
                     position,
-                    compositor.show_bookmark,
+                    self.show_bookmark,
                 );
             }
             EmbedderMsg::HideIME(_webview_id) => {
@@ -450,7 +450,6 @@ impl Window {
                     self.create_tab(
                         sender,
                         self.panel.as_ref().unwrap().initial_url.clone(),
-                        compositor.show_bookmark,
                     );
                 } else {
                     log::trace!("Verso Panel ignores NotifyLoadStatusChanged status: {status:?}");
@@ -509,7 +508,7 @@ impl Window {
                             let size = self.size();
                             let rect = DeviceRect::from_size(size);
                             let content_size =
-                                self.get_content_size(rect, true, compositor.show_bookmark);
+                                self.get_content_size(rect, true, self.show_bookmark);
                             let size = content_size.size().to_f32() / hidpi_scale_factor;
                             let webview = WebView::new(
                                 webview_id,
@@ -603,11 +602,11 @@ impl Window {
                                             );
                                         }
 
-                                        compositor.show_bookmark =
+                                        self.show_bookmark =
                                             !bookmark_manager.bookmarks().is_empty();
                                         // We need to refresh the window if the need for bookmark to be displayed
                                         // has changed.
-                                        if bookmark_previously_shown != compositor.show_bookmark {
+                                        if bookmark_previously_shown != self.show_bookmark {
                                             compositor.resize(self.size(), self);
                                         }
                                     }

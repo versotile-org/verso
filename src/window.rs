@@ -102,6 +102,8 @@ pub struct Window {
     pub(crate) focused_webview_id: Option<WebViewId>,
     /// Window-wide menu. e.g. context menu(Wayland) and browsing history menu.
     pub(crate) webview_menu: Option<Box<dyn WebViewMenu>>,
+    /// Show the bookmark bar or not
+    pub show_bookmark: bool,
 }
 
 impl Window {
@@ -153,6 +155,7 @@ impl Window {
                 tab_manager: TabManager::new(),
                 focused_webview_id: None,
                 webview_menu: None,
+                show_bookmark: false
             },
             rendering_context,
         )
@@ -198,6 +201,7 @@ impl Window {
             tab_manager: TabManager::new(),
             focused_webview_id: None,
             webview_menu: None,
+            show_bookmark: false
         };
         compositor.swap_current_window(&mut window);
         window
@@ -261,14 +265,13 @@ impl Window {
         &mut self,
         constellation_sender: &Sender<EmbedderToConstellationMessage>,
         initial_url: ServoUrl,
-        show_bookmark: bool,
     ) {
         let webview_id = WebViewId::new();
         let size = self.size().to_f32();
         let rect = DeviceRect::from_size(size);
 
         let show_tab = self.tab_manager.count() >= 1;
-        let content_size = self.get_content_size(rect, show_tab, show_bookmark);
+        let content_size = self.get_content_size(rect, show_tab, self.show_bookmark);
 
         let hidpi_scale_factor = Scale::new(self.scale_factor() as f32);
         let size = content_size.size().to_f32() / hidpi_scale_factor;
@@ -337,7 +340,7 @@ impl Window {
     ) {
         let size = self.size().to_f32();
         let rect = DeviceRect::from_size(size);
-        let content_size = self.get_content_size(rect, show_tab, compositor.show_bookmark);
+        let content_size = self.get_content_size(rect, show_tab, self.show_bookmark);
         let (tab_id, prompt_id) = self.tab_manager.set_size(tab_id, content_size);
 
         if let Some(prompt_id) = prompt_id {
@@ -695,7 +698,6 @@ impl Window {
                     (*self).create_tab(
                         &compositor.constellation_chan,
                         ServoUrl::parse("https://example.com").unwrap(),
-                        compositor.show_bookmark,
                     );
                     return true;
                 }

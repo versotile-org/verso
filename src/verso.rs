@@ -321,7 +321,6 @@ impl Verso {
             window.create_tab(
                 &constellation_sender,
                 initial_url.into(),
-                compositor.show_bookmark,
             );
         }
 
