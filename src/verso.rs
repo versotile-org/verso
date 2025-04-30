@@ -894,13 +894,14 @@ fn try_connect_ipc_and_get_config(
         else {
             panic!("The initial message sent from versoview is not a `ToVersoMessage::SetConfig`")
         };
-        let proxy_clone = proxy.clone();
+        let proxy_clone = EventLoopProxyDropGuard(proxy.clone());
         ROUTER.add_typed_route(
             receiver,
             Box::new(move |message| match message {
                 Ok(message) => {
-                    if let Err(e) =
-                        proxy_clone.send_event(EventLoopProxyMessage::IpcMessage(Box::new(message)))
+                    if let Err(e) = proxy_clone
+                        .0
+                        .send_event(EventLoopProxyMessage::IpcMessage(Box::new(message)))
                     {
                         log::error!("Failed to send controller message to Verso: {e}");
                     }
@@ -918,6 +919,23 @@ fn try_connect_ipc_and_get_config(
         Config::from_cli_args(cli_args)
     };
     (config, to_controller_sender)
+}
+
+/// Signal the event loop to exit when dropped,
+/// this is used for when we lose the connection with our host controller
+struct EventLoopProxyDropGuard(EventLoopProxy<EventLoopProxyMessage>);
+
+impl Drop for EventLoopProxyDropGuard {
+    fn drop(&mut self) {
+        if let Err(error) = self
+            .0
+            .send_event(EventLoopProxyMessage::IpcMessage(Box::new(
+                ToVersoMessage::Exit,
+            )))
+        {
+            log::error!("Failed to send exit message to event loop on IPC disconnect: {error}");
+        }
+    }
 }
 
 /// Message send to the event loop
