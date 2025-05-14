@@ -38,6 +38,7 @@ stdenv.mkDerivation {
     libGL
     mold
     wayland
+    openssl
     nixgl.auto.nixGLDefault
     (python3.withPackages (ps: with ps; [pip dbus mako]))
   ];
