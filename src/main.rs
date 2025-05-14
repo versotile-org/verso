@@ -41,12 +41,16 @@ impl ApplicationHandler<EventLoopProxyMessage> for App {
                 EventLoopProxyMessage::IpcMessage(message) => {
                     v.handle_incoming_webview_message(*message);
                 }
+                EventLoopProxyMessage::VersoInternalMessage(message) => {
+                    v.handle_verso_internal_message(message);
+                }
             }
         }
     }
 }
 
-fn main() -> Result<()> {
+#[tokio::main]
+async fn main() -> Result<()> {
     init_crypto();
 
     let event_loop = EventLoop::<EventLoopProxyMessage>::with_user_event().build()?;

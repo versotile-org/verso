@@ -417,6 +417,7 @@ impl Config {
 
         // Set the preferences of Servo.
         servo_config::prefs::set(Preferences {
+            dom_svg_enabled: true, // Some pages fail to render if this is disabled
             devtools_server_enabled,
             devtools_server_port: devtools_port as i64,
             dom_notification_enabled: true, // experimental feature

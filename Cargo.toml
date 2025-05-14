@@ -104,6 +104,8 @@ bincode = { workspace = true }
 mime = "0.3"
 uuid = { workspace = true }
 rfd = "0.15"
+reqwest = { version = "0.12", features = ["json", "blocking"] }
+tokio = { version = "1", features = ["full"] }
 # Servo repo crates
 background_hang_monitor = { git = "https://github.com/servo/servo.git", rev = "5e2d42e" }
 base = { git = "https://github.com/servo/servo.git", rev = "5e2d42e" }
@@ -143,6 +145,8 @@ wr_malloc_size_of = { git = "https://github.com/servo/webrender", branch = "0.66
 cargo-packager-resource-resolver = { version = "0.1.1", features = [
   "auto-detect-format",
 ], optional = true }
+chrono = "0.4.41"
+percent-encoding = "2.3.1"
 
 [target.'cfg(all(unix, not(target_os = "macos"), not(target_os = "ios"), not(target_os = "android")))'.dependencies]
 notify-rust = { version = "4.11.5", features = ["images"] }

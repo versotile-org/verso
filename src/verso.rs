@@ -18,7 +18,7 @@ use constellation_traits::EmbedderToConstellationMessage;
 use crossbeam_channel::{Receiver, Sender, unbounded};
 use devtools;
 use embedder_traits::{
-    AllowOrDeny, EmbedderMsg, EmbedderProxy, EventLoopWaker, WebResourceResponse,
+    AllowOrDeny, EmbedderMsg, EmbedderProxy, EventLoopWaker, PromptResponse, WebResourceResponse,
     WebResourceResponseMsg, user_content_manager::UserContentManager,
 };
 use euclid::Scale;
@@ -30,6 +30,7 @@ use log::{Log, Metadata, Record};
 use net::resource_thread;
 use profile;
 use script::{self, JSEngineSetup};
+use serde::{Deserialize, Serialize};
 use servo_config::{opts, pref};
 use servo_url::ServoUrl;
 use style;
@@ -47,6 +48,7 @@ use crate::{
     bookmark::BookmarkManager,
     compositor::{IOCompositor, InitialCompositorState, ShutdownState},
     config::{Config, parse_cli_args},
+    download::{DownloadId, DownloadItem, UpdateDownloadState},
     webview::execute_script,
     window::Window,
 };
@@ -58,6 +60,7 @@ pub struct Verso {
     constellation_sender: Sender<EmbedderToConstellationMessage>,
     to_controller_sender: Option<IpcSender<ToControllerMessage>>,
     embedder_receiver: Receiver<EmbedderMsg>,
+    verso_internal_sender: IpcSender<VersoInternalMsg>,
     /// For single-process Servo instances, this field controls the initialization
     /// and deinitialization of the JS Engine. Multiprocess Servo instances have their
     /// own instance that exists in the content process instead.
@@ -66,6 +69,33 @@ pub struct Verso {
     clipboard: Option<Clipboard>,
     config: Config,
     bookmark_manager: BookmarkManager,
+    downloads: HashMap<DownloadId, DownloadItem>,
+}
+
+/// Message for Verso internal communication
+#[derive(Serialize, Deserialize)]
+pub enum VersoInternalMsg {
+    /// Abort a download
+    AbortDownload(DownloadId),
+    /// Create a download state in Verso.
+    CreateDownload(DownloadItem),
+    /// Update a specific download state.
+    UpdateDownload(DownloadId, UpdateDownloadState),
+    /// Send current downloads' states to the frontend Downloads page.
+    UpdateDownloadsPage(IpcSender<PromptResponse>),
+}
+
+impl Debug for VersoInternalMsg {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            VersoInternalMsg::AbortDownload(_) => write!(f, "AbortDownload"),
+            VersoInternalMsg::CreateDownload(_) => write!(f, "CreateDownload"),
+            VersoInternalMsg::UpdateDownload(_, _) => write!(f, "UpdateDownload"),
+            VersoInternalMsg::UpdateDownloadsPage(_) => {
+                write!(f, "UpdateDownloadsPageStatus")
+            }
+        }
+    }
 }
 
 impl Verso {
@@ -87,6 +117,7 @@ impl Verso {
     /// - Image Cache: Enabled
     pub fn new(evl: &ActiveEventLoop, proxy: EventLoopProxy<EventLoopProxyMessage>) -> Self {
         let (config, to_controller_sender) = try_connect_ipc_and_get_config(&proxy);
+        let (verso_internal_sender, verso_internal_receiver) = ipc_channel::ipc::channel().unwrap();
 
         // Initialize configurations and Verso window
         let protocols = config.create_protocols();
@@ -99,8 +130,9 @@ impl Verso {
         config.init();
         // Reserving a namespace to create WebViewId.
         PipelineNamespace::install(PipelineNamespaceId(0));
-        let (mut window, rendering_context) = Window::new(evl, window_settings);
-        let event_loop_waker = Box::new(Waker(proxy));
+        let (mut window, rendering_context) =
+            Window::new(evl, window_settings, verso_internal_sender.clone());
+        let event_loop_waker = Box::new(Waker(proxy.clone()));
         let opts = opts::get();
 
         // Set Stylo flags
@@ -318,14 +350,26 @@ impl Verso {
         if with_panel {
             window.create_panel(&constellation_sender, initial_url);
         } else {
-            window.create_tab(
-                &constellation_sender,
-                initial_url.into(),
-            );
+            window.create_tab(&constellation_sender, initial_url.into());
         }
 
         let mut windows = HashMap::new();
         windows.insert(window.id(), (window, webrender_document));
+
+        let proxy_clone = proxy.clone();
+        ROUTER.add_typed_route(
+            verso_internal_receiver,
+            Box::new(move |message| match message {
+                Ok(message) => {
+                    if let Err(e) =
+                        proxy_clone.send_event(EventLoopProxyMessage::VersoInternalMessage(message))
+                    {
+                        log::error!("Failed to send controller message to Verso: {e}");
+                    }
+                }
+                Err(e) => log::error!("Failed to receive controller message: {e}"),
+            }),
+        );
 
         // Create Verso instance
         let verso = Verso {
@@ -338,6 +382,8 @@ impl Verso {
             clipboard: Clipboard::new().ok(),
             config,
             bookmark_manager: BookmarkManager::new(),
+            downloads: HashMap::new(),
+            verso_internal_sender,
         };
 
         verso.setup_logging();
@@ -447,7 +493,7 @@ impl Verso {
                                 if window.handle_servo_message(
                                     *webview_id,
                                     msg,
-                                    &self.constellation_sender,
+                                    self.constellation_sender.clone(),
                                     &self.to_controller_sender,
                                     self.clipboard.as_mut(),
                                     compositor,
@@ -457,6 +503,7 @@ impl Verso {
                                         evl,
                                         self.config.window_attributes.clone(),
                                         compositor,
+                                        self.verso_internal_sender.clone(),
                                     );
                                     window.create_panel(
                                         &self.constellation_sender,
@@ -529,6 +576,54 @@ impl Verso {
             evl.set_control_flow(ControlFlow::Poll);
         } else {
             evl.set_control_flow(ControlFlow::Wait);
+        }
+    }
+
+    /// Handle message from the Verso internal channel
+    pub fn handle_verso_internal_message(&mut self, message: VersoInternalMsg) {
+        match message {
+            VersoInternalMsg::AbortDownload(id) => {
+                let download = self.downloads.get_mut(&id);
+                if let Some(download) = download {
+                    download.abort();
+                }
+            }
+            VersoInternalMsg::CreateDownload(download) => {
+                let _ = self.downloads.insert(download.id().clone(), download);
+
+                // update all window's panel status
+                for (window, _) in self.windows.values() {
+                    if let Some(panel) = &window.panel {
+                        let _ = execute_script(
+                            &self.constellation_sender,
+                            &panel.webview.webview_id,
+                            "window.navbar.showDownloadBtn(true)".to_string(),
+                        );
+                    }
+                }
+            }
+            VersoInternalMsg::UpdateDownload(id, new_state) => {
+                if let Some(download) = self.downloads.get_mut(&id) {
+                    if let Some(status) = new_state.status {
+                        download.status = status;
+                    }
+                    if let Some(progress) = new_state.progress {
+                        download.progress = progress;
+                    }
+                    if let Some(stopped) = new_state.stopped {
+                        download.stopped = stopped;
+                    }
+                }
+            }
+            VersoInternalMsg::UpdateDownloadsPage(sender) => {
+                let download_status = self.downloads.clone();
+                if let Ok(download_status_json) = serde_json::to_string(&download_status) {
+                    let _ = sender.send(PromptResponse::Ok(download_status_json));
+                } else {
+                    log::error!("Failed to serialize download status");
+                    let _ = sender.send(PromptResponse::Cancel);
+                }
+            }
         }
     }
 
@@ -927,6 +1022,8 @@ pub enum EventLoopProxyMessage {
     Wake,
     /// Message coming from the webview controller
     IpcMessage(Box<ToVersoMessage>),
+    /// Message coming from the internal channel
+    VersoInternalMessage(VersoInternalMsg),
 }
 
 #[derive(Debug, Clone)]

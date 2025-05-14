@@ -1,3 +1,5 @@
+use std::str::FromStr;
+
 use arboard::Clipboard;
 use base::id::WebViewId;
 use constellation_traits::{EmbedderToConstellationMessage, TraversalDirection};
@@ -17,8 +19,9 @@ use webrender_api::units::{DevicePoint, DeviceRect};
 use crate::{
     bookmark::BookmarkManager,
     compositor::IOCompositor,
+    download::{DownloadId, check_should_download, download_body},
     tab::{TabActivateRequest, TabCloseRequest, TabCreateResponse},
-    verso::send_to_constellation,
+    verso::{VersoInternalMsg, send_to_constellation},
     webview::{
         history_menu::{HistoryMenuUIResponse, OpenHistoryMenuRequest},
         prompt::{HttpBasicAuthInputResult, PromptDialog, PromptInputResult, PromptSender},
@@ -143,7 +146,7 @@ impl Window {
                         if let Err(error) =
                             to_controller_sender.send(ToControllerMessage::OnNavigationStarting(
                                 bincode::serialize(&id).unwrap(),
-                                url.into_url(),
+                                url.clone().into_url(),
                             ))
                         {
                             log::error!(
@@ -156,10 +159,32 @@ impl Window {
                         }
                     }
                 }
-                send_to_constellation(
-                    sender,
-                    EmbedderToConstellationMessage::AllowNavigationResponse(id, true),
-                );
+
+                // If it's in Verso Browser, check if we should download the url
+                if self.panel.is_some() {
+                    let sender = sender.clone();
+                    let url = url.into_url();
+                    let client = self.reqwest_client.clone();
+                    let verso_internal_sender = self.verso_internal_sender.clone();
+
+                    tokio::spawn(async move {
+                        let (should_download, resp) = check_should_download(&client, &url).await;
+                        if should_download && resp.is_some() {
+                            download_body(url, resp.unwrap(), verso_internal_sender).await;
+                        } else {
+                            send_to_constellation(
+                                &sender,
+                                EmbedderToConstellationMessage::AllowNavigationResponse(id, true),
+                            );
+                        }
+                    });
+                } else {
+                    // If it's not in Verso Browser, just allow the navigation
+                    send_to_constellation(
+                        sender,
+                        EmbedderToConstellationMessage::AllowNavigationResponse(id, true),
+                    );
+                }
             }
             EmbedderMsg::WebResourceRequested(_webview_id, request, sender) => {
                 if let Some(to_controller_sender) = to_controller_sender {
@@ -301,6 +326,24 @@ impl Window {
                             default,
                             response_sender,
                         } => {
+                            // If the prompt is come from Verso's Downloads page, update the status
+                            if message == "VERSO::DOWNLOAD_STATUS_GET" {
+                                let _ = self
+                                    .verso_internal_sender
+                                    .send(VersoInternalMsg::UpdateDownloadsPage(response_sender));
+                                return;
+                            } else if message.starts_with("VERSO::ABORT_DOWNLOAD::") {
+                                if let Some(id) = message.strip_prefix("VERSO::ABORT_DOWNLOAD::") {
+                                    let _ = response_sender.send(PromptResponse::Cancel);
+                                    let _ = self.verso_internal_sender.send(
+                                        VersoInternalMsg::AbortDownload(
+                                            DownloadId::from_str(id).unwrap(),
+                                        ),
+                                    );
+                                }
+                                return;
+                            }
+
                             prompt.input(
                                 sender,
                                 rect,
@@ -416,7 +459,7 @@ impl Window {
         &mut self,
         panel_id: WebViewId,
         message: EmbedderMsg,
-        sender: &Sender<EmbedderToConstellationMessage>,
+        sender: Sender<EmbedderToConstellationMessage>,
         clipboard: Option<&mut Clipboard>,
         compositor: &mut IOCompositor,
         bookmark_manager: &mut BookmarkManager,
@@ -432,7 +475,7 @@ impl Window {
             }
             EmbedderMsg::WebViewFocused(webview_id) => {
                 self.focused_webview_id = Some(webview_id);
-                self.close_webview_menu(sender);
+                self.close_webview_menu(&sender);
                 log::debug!(
                     "Verso Window {:?}'s panel {} has loaded completely.",
                     self.id(),
@@ -443,14 +486,11 @@ impl Window {
                 if status == LoadStatus::Complete {
                     self.window.request_redraw();
                     send_to_constellation(
-                        sender,
+                        &sender,
                         EmbedderToConstellationMessage::FocusWebView(panel_id),
                     );
 
-                    self.create_tab(
-                        sender,
-                        self.panel.as_ref().unwrap().initial_url.clone(),
-                    );
+                    self.create_tab(&sender, self.panel.as_ref().unwrap().initial_url.clone());
                 } else {
                     log::trace!("Verso Panel ignores NotifyLoadStatusChanged status: {status:?}");
                 }
@@ -458,7 +498,7 @@ impl Window {
             EmbedderMsg::AllowNavigationRequest(_webview_id, id, _url) => {
                 // The panel shouldn't navigate to other pages.
                 send_to_constellation(
-                    sender,
+                    &sender,
                     EmbedderToConstellationMessage::AllowNavigationResponse(id, false),
                 );
             }
@@ -481,7 +521,7 @@ impl Window {
                             // close the tab
                             if self.tab_manager.tab(request.id).is_some() {
                                 send_to_constellation(
-                                    sender,
+                                    &sender,
                                     EmbedderToConstellationMessage::CloseWebView(request.id),
                                 );
                             }
@@ -522,7 +562,7 @@ impl Window {
 
                             let size = content_size.size().to_f32() / hidpi_scale_factor;
                             send_to_constellation(
-                                sender,
+                                &sender,
                                 EmbedderToConstellationMessage::NewWebView(
                                     ServoUrl::parse("https://example.com").unwrap(),
                                     webview_id,
@@ -544,7 +584,7 @@ impl Window {
                                 .expect("Failed to parse OpenHistoryMenuRequest");
                             let _ = response_sender.send(PromptResponse::default());
 
-                            if let Some(menu) = self.show_history_menu(sender, request) {
+                            if let Some(menu) = self.show_history_menu(&sender, request) {
                                 self.webview_menu = Some(Box::new(menu));
                             }
 
@@ -572,6 +612,13 @@ impl Window {
                                 let _ = self.window.drag_window();
                                 return false;
                             }
+                            "DOWNLOAD" => {
+                                self.create_tab(
+                                    &sender,
+                                    ServoUrl::parse("verso://resources/components/downloads.html")
+                                        .unwrap(),
+                                );
+                            }
                             "BOOKMARK" => {
                                 if let Some(tab) = self.tab_manager.current_tab() {
                                     if let Some(url) =
@@ -596,7 +643,7 @@ impl Window {
                                         );
                                         if let Some(panel) = self.panel.as_ref() {
                                             let _ = execute_script(
-                                                sender,
+                                                &sender,
                                                 &panel.webview.webview_id,
                                                 script,
                                             );
@@ -633,18 +680,29 @@ impl Window {
                                     }
                                 };
 
-                                send_to_constellation(
-                                    sender,
-                                    EmbedderToConstellationMessage::LoadUrl(
-                                        id,
-                                        ServoUrl::from_url(url),
-                                    ),
-                                );
+                                let client = self.reqwest_client.clone();
+                                let verso_internal_sender = self.verso_internal_sender.clone();
+                                tokio::spawn(async move {
+                                    let (should_download, resp) =
+                                        check_should_download(&client, &url).await;
+                                    if should_download && resp.is_some() {
+                                        download_body(url, resp.unwrap(), verso_internal_sender)
+                                            .await;
+                                    } else {
+                                        send_to_constellation(
+                                            &sender,
+                                            EmbedderToConstellationMessage::LoadUrl(
+                                                id,
+                                                ServoUrl::from_url(url.clone()),
+                                            ),
+                                        );
+                                    }
+                                });
                             } else {
                                 match message.as_str() {
                                     "PREV" => {
                                         send_to_constellation(
-                                            sender,
+                                            &sender,
                                             EmbedderToConstellationMessage::TraverseHistory(
                                                 id,
                                                 TraversalDirection::Back(1),
@@ -654,7 +712,7 @@ impl Window {
                                     }
                                     "FORWARD" => {
                                         send_to_constellation(
-                                            sender,
+                                            &sender,
                                             EmbedderToConstellationMessage::TraverseHistory(
                                                 id,
                                                 TraversalDirection::Forward(1),
@@ -664,7 +722,7 @@ impl Window {
                                     }
                                     "REFRESH" => {
                                         send_to_constellation(
-                                            sender,
+                                            &sender,
                                             EmbedderToConstellationMessage::Reload(id),
                                         );
                                     }
@@ -702,7 +760,7 @@ impl Window {
                 #[cfg(linux)]
                 if self.webview_menu.is_none() {
                     self.webview_menu =
-                        Some(Box::new(self.show_context_menu(sender, servo_sender)));
+                        Some(Box::new(self.show_context_menu(&sender, servo_sender)));
                 } else {
                     let _ = servo_sender.send(ContextMenuResult::Ignored);
                 }
@@ -711,7 +769,7 @@ impl Window {
                     let context_menu = self.show_context_menu(servo_sender);
                     // FIXME: there's chance to lose the event since the channel is async.
                     if let Ok(event) = self.menu_event_receiver.try_recv() {
-                        self.handle_context_menu_event(context_menu, sender, event);
+                        self.handle_context_menu_event(context_menu, &sender, event);
                     }
                 }
             }

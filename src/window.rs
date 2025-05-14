@@ -24,6 +24,7 @@ use muda::{MenuEvent, MenuEventReceiver};
 use notify_rust::Image;
 #[cfg(target_os = "macos")]
 use raw_window_handle::HasWindowHandle;
+use reqwest::Client;
 use servo_url::ServoUrl;
 use versoview_messages::ToControllerMessage;
 use webrender_api::{
@@ -46,7 +47,7 @@ use crate::{
     keyboard::keyboard_event_from_winit,
     rendering::{RenderingContext, gl_config_picker},
     tab::TabManager,
-    verso::send_to_constellation,
+    verso::{VersoInternalMsg, send_to_constellation},
     webview::{Panel, WebView, execute_script, prompt::PromptSender, webview_menu::WebViewMenu},
 };
 
@@ -104,6 +105,10 @@ pub struct Window {
     pub(crate) webview_menu: Option<Box<dyn WebViewMenu>>,
     /// Show the bookmark bar or not
     pub show_bookmark: bool,
+    /// The reqwest client
+    pub(crate) reqwest_client: Client,
+    /// The sender for the Verso internal channel
+    pub(crate) verso_internal_sender: IpcSender<VersoInternalMsg>,
 }
 
 impl Window {
@@ -111,6 +116,7 @@ impl Window {
     pub fn new(
         evl: &ActiveEventLoop,
         window_attributes: WindowAttributes,
+        verso_internal_sender: IpcSender<VersoInternalMsg>,
     ) -> (Self, RenderingContext) {
         let template = ConfigTemplateBuilder::new()
             .with_alpha_size(8)
@@ -155,7 +161,9 @@ impl Window {
                 tab_manager: TabManager::new(),
                 focused_webview_id: None,
                 webview_menu: None,
-                show_bookmark: false
+                show_bookmark: false,
+                reqwest_client: Client::new(),
+                verso_internal_sender,
             },
             rendering_context,
         )
@@ -166,6 +174,7 @@ impl Window {
         evl: &ActiveEventLoop,
         window_attributes: WindowAttributes,
         compositor: &mut IOCompositor,
+        verso_internal_sender: IpcSender<VersoInternalMsg>,
     ) -> Self {
         let window = evl
             .create_window(window_attributes)
@@ -201,7 +210,9 @@ impl Window {
             tab_manager: TabManager::new(),
             focused_webview_id: None,
             webview_menu: None,
-            show_bookmark: false
+            show_bookmark: false,
+            reqwest_client: Client::new(),
+            verso_internal_sender,
         };
         compositor.swap_current_window(&mut window);
         window
@@ -719,7 +730,7 @@ impl Window {
         &mut self,
         webview_id: WebViewId,
         message: EmbedderMsg,
-        sender: &Sender<EmbedderToConstellationMessage>,
+        sender: Sender<EmbedderToConstellationMessage>,
         to_controller_sender: &Option<IpcSender<ToControllerMessage>>,
         clipboard: Option<&mut Clipboard>,
         compositor: &mut IOCompositor,
@@ -736,7 +747,7 @@ impl Window {
                 return self.handle_servo_messages_with_panel(
                     webview_id,
                     message,
-                    sender,
+                    sender.clone(),
                     clipboard,
                     compositor,
                     bookmark_manager,
@@ -746,14 +757,14 @@ impl Window {
         if let Some(webview_menu) = &self.webview_menu {
             if webview_menu.webview().webview_id == webview_id {
                 self.handle_servo_messages_with_webview_menu(
-                    webview_id, message, sender, clipboard, compositor,
+                    webview_id, message, &sender, clipboard, compositor,
                 );
                 return false;
             }
         }
         if self.tab_manager.has_prompt(webview_id) {
             self.handle_servo_messages_with_prompt(
-                webview_id, message, sender, clipboard, compositor,
+                webview_id, message, &sender, clipboard, compositor,
             );
             return false;
         }
@@ -762,7 +773,7 @@ impl Window {
         self.handle_servo_messages_with_webview(
             webview_id,
             message,
-            sender,
+            &sender,
             to_controller_sender,
             clipboard,
             compositor,
