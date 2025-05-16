@@ -38,8 +38,9 @@ cargo run
 - Install [Homebrew](https://brew.sh/) and then install other tools:
 
 ```sh
-brew install cmake pkg-config harfbuzz
-pip install mako
+brew install cmake pkg-config harfbuzz python@3 # Install required dependencies CMake, pkg-config, HarfBuzz, and Python 3.
+pip3 install mako # Install the Mako templating engine
+curl https://sh.rustup.rs -sSf | sh # Install Rust and Cargo
 ```
 
 - Build & run:
