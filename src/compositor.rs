@@ -1328,11 +1328,21 @@ impl IOCompositor {
             self.constellation_chan
                 .send(EmbedderToConstellationMessage::ForwardInputEvent(
                     webview_id,
-                    event,
+                    event.clone(),
                     Some(result),
                 ))
         {
             warn!("Sending event to constellation failed ({error:?}).");
+        }
+
+        // If the event is a mouse button, send FocusWebView event to the constellation.
+        // the webview will update current focused webview_id in the EmbedderMsg::WebViewFocused event.
+        if let InputEvent::MouseButton(event) = &event {
+            if event.action == MouseButtonAction::Click {
+                let _ = self
+                    .constellation_chan
+                    .send(EmbedderToConstellationMessage::FocusWebView(webview_id));
+            }
         }
     }
 
@@ -1368,6 +1378,15 @@ impl IOCompositor {
             }
         }
         self.dispatch_input_event(webview_id, event);
+    }
+
+    /// Get the webview id from a point.
+    pub(crate) fn webview_id_from_point(&self, point: DevicePoint) -> Option<WebViewId> {
+        self.hit_test_at_point(point)
+            .map(|result| result.pipeline_id)
+            .and_then(|pipeline_id| self.pipeline_details.get(&pipeline_id))
+            .and_then(|details| details.pipeline.clone())
+            .map(|pipeline| pipeline.webview_id)
     }
 
     fn hit_test_at_point(&self, point: DevicePoint) -> Option<CompositorHitTestResult> {
