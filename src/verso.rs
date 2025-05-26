@@ -45,7 +45,7 @@ use winit::{
 };
 
 use crate::{
-    bookmark::BookmarkManager,
+    bookmark::{BookmarkId, BookmarkManager},
     compositor::{IOCompositor, InitialCompositorState, ShutdownState},
     config::{Config, parse_cli_args},
     download::{DownloadId, DownloadItem, UpdateDownloadState},
@@ -83,6 +83,12 @@ pub enum VersoInternalMsg {
     UpdateDownload(DownloadId, UpdateDownloadState),
     /// Send current downloads' states to the frontend Downloads page.
     UpdateDownloadsPage(IpcSender<PromptResponse>),
+    /// Propagate bookmark manager update to the frontend.
+    UpdateBookmarkManager(IpcSender<PromptResponse>),
+    /// Remove a bookmark from the bookmark manager.
+    BookmarkRemove(BookmarkId),
+    /// Rename a bookmark in the bookmark manager.
+    BookmarkRename(BookmarkId, String),
 }
 
 impl Debug for VersoInternalMsg {
@@ -91,9 +97,10 @@ impl Debug for VersoInternalMsg {
             VersoInternalMsg::AbortDownload(_) => write!(f, "AbortDownload"),
             VersoInternalMsg::CreateDownload(_) => write!(f, "CreateDownload"),
             VersoInternalMsg::UpdateDownload(_, _) => write!(f, "UpdateDownload"),
-            VersoInternalMsg::UpdateDownloadsPage(_) => {
-                write!(f, "UpdateDownloadsPageStatus")
-            }
+            VersoInternalMsg::UpdateDownloadsPage(_) => write!(f, "UpdateDownloadsPageStatus"),
+            VersoInternalMsg::UpdateBookmarkManager(_) => write!(f, "UpdateBookmarkManager"),
+            VersoInternalMsg::BookmarkRemove(_) => write!(f, "BookmarkRemove"),
+            VersoInternalMsg::BookmarkRename(_, _) => write!(f, "BookmarkRename"),
         }
     }
 }
@@ -622,6 +629,26 @@ impl Verso {
                 } else {
                     log::error!("Failed to serialize download status");
                     let _ = sender.send(PromptResponse::Cancel);
+                }
+            }
+            VersoInternalMsg::UpdateBookmarkManager(sender) => {
+                let bookmarks = self.bookmark_manager.bookmarks().clone();
+                if let Ok(bookmark_json) = serde_json::to_string(&bookmarks) {
+                    let _ = sender.send(PromptResponse::Ok(bookmark_json));
+                } else {
+                    log::error!("Failed to serialize bookmarks");
+                    let _ = sender.send(PromptResponse::Cancel);
+                }
+            }
+            VersoInternalMsg::BookmarkRemove(id) => {
+                if let Err(_) = self.bookmark_manager.remove_bookmark(id) {
+                    log::error!("Failed to remove bookmarks");
+                }
+            }
+            VersoInternalMsg::BookmarkRename(id, name) => 
+            {
+                if let Err(_) = self.bookmark_manager.rename_bookmark(id, name) {
+                    log::error!("Failed to rename bookmarks");
                 }
             }
         }
