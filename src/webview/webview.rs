@@ -10,17 +10,17 @@ use embedder_traits::{
     WebDriverScriptCommand,
 };
 use euclid::Scale;
-use ipc_channel::ipc;
+use ipc_channel::ipc::{self, IpcSender};
 use servo_url::ServoUrl;
 use url::Url;
 use versoview_messages::ToControllerMessage;
 use webrender_api::units::{DevicePoint, DeviceRect};
 
 use crate::{
-    bookmark::BookmarkManager,
+    bookmark::{BookmarkId, BookmarkManager},
     compositor::IOCompositor,
     download::{DownloadId, check_should_download, download_body},
-    tab::{TabActivateRequest, TabCloseRequest, TabCreateResponse},
+    tab::{Tab, TabActivateRequest, TabCloseRequest, TabCreateResponse},
     verso::{VersoInternalMsg, send_to_constellation},
     webview::{
         history_menu::{HistoryMenuUIResponse, OpenHistoryMenuRequest},
@@ -326,21 +326,13 @@ impl Window {
                             default,
                             response_sender,
                         } => {
-                            // If the prompt is come from Verso's Downloads page, update the status
-                            if message == "VERSO::DOWNLOAD_STATUS_GET" {
-                                let _ = self
-                                    .verso_internal_sender
-                                    .send(VersoInternalMsg::UpdateDownloadsPage(response_sender));
-                                return;
-                            } else if message.starts_with("VERSO::ABORT_DOWNLOAD::") {
-                                if let Some(id) = message.strip_prefix("VERSO::ABORT_DOWNLOAD::") {
-                                    let _ = response_sender.send(PromptResponse::Cancel);
-                                    let _ = self.verso_internal_sender.send(
-                                        VersoInternalMsg::AbortDownload(
-                                            DownloadId::from_str(id).unwrap(),
-                                        ),
-                                    );
-                                }
+                            if message.starts_with("VERSO::") {
+                                self.handle_verso_internal_messages_with_webview(
+                                    &message.strip_prefix("VERSO::").unwrap(),
+                                    response_sender,
+                                    sender,
+                                    tab,
+                                );
                                 return;
                             }
 
@@ -589,6 +581,49 @@ impl Window {
                             }
 
                             return false;
+                        } else if message == "UPDATE_BOOKMARK" {
+                            self.show_bookmark = !bookmark_manager.bookmarks().is_empty();
+                            compositor.resize(self.size(), self);
+                            let _ = response_sender.send(PromptResponse::Ok(
+                                serde_json::to_string(bookmark_manager.bookmarks()).unwrap(),
+                            ));
+                            return false;
+                        } else if message == "BOOKMARK" {
+                            if let Some(tab) = self.tab_manager.current_tab() {
+                                if let Some(url) = tab.history().list.get(tab.history().current_idx)
+                                {
+                                    let url = url.to_string();
+                                    // Ignore the bookmark if it starts with "verso://"
+                                    if url.starts_with("verso://") {
+                                        return false;
+                                    }
+                                    let bookmark_previously_shown =
+                                        !bookmark_manager.bookmarks().is_empty();
+                                    if let Some(_) = bookmark_manager
+                                        .bookmarks()
+                                        .iter()
+                                        .position(|b| b.url == url)
+                                    {
+                                        let _ = bookmark_manager.remove_bookmark(
+                                            BookmarkId::from_str(url.as_str()).unwrap(),
+                                        );
+                                    } else {
+                                        bookmark_manager.append_bookmark(tab.title(), url);
+                                    }
+                                    let _ = response_sender.send(PromptResponse::Ok(
+                                        serde_json::to_string(bookmark_manager.bookmarks())
+                                            .unwrap(),
+                                    ));
+
+                                    self.show_bookmark = !bookmark_manager.bookmarks().is_empty();
+                                    // We need to refresh the window if the need for bookmark to be displayed
+                                    // has changed.
+                                    if bookmark_previously_shown != self.show_bookmark {
+                                        compositor.resize(self.size(), self);
+                                    }
+                                }
+                            }
+                            return false;
                         }
 
                         let _ = response_sender.send(PromptResponse::default());
@@ -618,47 +653,6 @@ impl Window {
                                     ServoUrl::parse("verso://resources/components/downloads.html")
                                         .unwrap(),
                                 );
-                            }
-                            "BOOKMARK" => {
-                                if let Some(tab) = self.tab_manager.current_tab() {
-                                    if let Some(url) =
-                                        tab.history().list.get(tab.history().current_idx)
-                                    {
-                                        let url = url.to_string();
-                                        let bookmark_previously_shown =
-                                            !bookmark_manager.bookmarks().is_empty();
-                                        if let Some(index) = bookmark_manager
-                                            .bookmarks()
-                                            .iter()
-                                            .position(|b| b.url == url)
-                                        {
-                                            let _ = bookmark_manager.remove_bookmark(index);
-                                        } else {
-                                            bookmark_manager.append_bookmark(tab.title(), url);
-                                        }
-                                        let script = format!(
-                                            "window.navbar.setBookmarks('{}')",
-                                            serde_json::to_string(bookmark_manager.bookmarks())
-                                                .unwrap()
-                                        );
-                                        if let Some(panel) = self.panel.as_ref() {
-                                            let _ = execute_script(
-                                                &sender,
-                                                &panel.webview.webview_id,
-                                                script,
-                                            );
-                                        }
-
-                                        self.show_bookmark =
-                                            !bookmark_manager.bookmarks().is_empty();
-                                        // We need to refresh the window if the need for bookmark to be displayed
-                                        // has changed.
-                                        if bookmark_previously_shown != self.show_bookmark {
-                                            compositor.resize(self.size(), self);
-                                        }
-                                    }
-                                }
-                                return false;
                             }
                             _ => {}
                         }
@@ -698,6 +692,14 @@ impl Window {
                                         );
                                     }
                                 });
+                            } else if message == "OPEN_BOOKMARK_MANAGER" {
+                                self.create_tab(
+                                    &sender,
+                                    ServoUrl::parse(
+                                        "verso://resources/components/bookmark.html"
+                                    )
+                                    .unwrap(),
+                                );
                             } else {
                                 match message.as_str() {
                                     "PREV" => {
@@ -950,6 +952,85 @@ impl Window {
             }
         }
         false
+    }
+    /// Handle Verso internal messages with webview.
+    pub fn handle_verso_internal_messages_with_webview(
+        &self,
+        message: &str,
+        response_sender: IpcSender<PromptResponse>,
+        sender: &Sender<EmbedderToConstellationMessage>,
+        tab: &Tab,
+    ) {
+        // If the prompt is come from Verso's Downloads or Bookmark page, update the status
+        if message == "DOWNLOAD_STATUS_GET" {
+            let _ = self
+                .verso_internal_sender
+                .send(VersoInternalMsg::UpdateDownloadsPage(response_sender));
+            return;
+        } else if message.starts_with("ABORT_DOWNLOAD::") {
+            if let Some(id) = message.strip_prefix("ABORT_DOWNLOAD::") {
+                let _ = response_sender.send(PromptResponse::Cancel);
+                let _ = self
+                    .verso_internal_sender
+                    .send(VersoInternalMsg::AbortDownload(
+                        DownloadId::from_str(id).unwrap(),
+                    ));
+            }
+            return;
+        } else if message.starts_with("BOOKMARK_LIST_GET") {
+            let _ = self
+                .verso_internal_sender
+                .send(VersoInternalMsg::UpdateBookmarkManager(response_sender));
+            return;
+        } else if message.starts_with("BOOKMARK_RENAME::") {
+            if let Some(id) = message.strip_prefix("BOOKMARK_RENAME::") {
+                let params: Vec<&str> = id.split("::").collect();
+                if params.len() != 2 {
+                    log::error!("Invalid parameters for BOOKMARK_RENAME");
+                    return;
+                }
+                let _ = response_sender.send(PromptResponse::Cancel);
+                let _ = self.verso_internal_sender.send(
+                    if let Ok(id) = BookmarkId::from_str(params[0]) {
+                        VersoInternalMsg::BookmarkRename(id, params[1].to_string())
+                    } else {
+                        log::error!("Invalid bookmark ID: {}", id);
+                        return;
+                    },
+                );
+            }
+            return;
+        } else if message.starts_with("BOOKMARK_REMOVE::") {
+            if let Some(id) = message.strip_prefix("BOOKMARK_REMOVE::") {
+                let _ = response_sender.send(PromptResponse::Cancel);
+                let _ = self
+                    .verso_internal_sender
+                    .send(if let Ok(id) = BookmarkId::from_str(id) {
+                        VersoInternalMsg::BookmarkRemove(id)
+                    } else {
+                        log::error!("Invalid bookmark ID: {}", id);
+                        return;
+                    });
+            }
+            return;
+        } else if message.starts_with("NAVIGATE_TO::") {
+            let url = message.strip_prefix("NAVIGATE_TO::").unwrap();
+            let url = match Url::parse(url) {
+                Ok(url_parsed) => url_parsed,
+                Err(e) => {
+                    if e == url::ParseError::RelativeUrlWithoutBase {
+                        Url::parse(&format!("https://{}", url)).unwrap()
+                    } else {
+                        panic!("Verso Panel failed to parse URL: {}", e);
+                    }
+                }
+            };
+            send_to_constellation(
+                &sender,
+                EmbedderToConstellationMessage::LoadUrl(tab.id(), ServoUrl::from_url(url.clone())),
+            );
+            return;
+        }
     }
 }
 
