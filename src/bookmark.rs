@@ -1,9 +1,9 @@
-use std::str::FromStr;
+use std::{fs::File, path::PathBuf, str::FromStr};
 
 use serde::{Deserialize, Serialize};
 
 /// A struct representing a bookmark with a name and URL.
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Bookmark {
     /// The ID of the bookmark.
     pub id: BookmarkId,
@@ -36,12 +36,24 @@ pub struct BookmarkManager {
     /// A vector of bookmarks.
     bookmarks: Vec<Bookmark>,
 }
+
+impl Default for BookmarkManager {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl BookmarkManager {
     /// Creates a new `BookmarkManager`.
     pub fn new() -> Self {
         Self {
             bookmarks: Vec::new(),
         }
+    }
+
+    /// Set bookmarks from a vector of bookmarks.
+    pub fn set_bookmarks(&mut self, bookmarks: Vec<Bookmark>) {
+        self.bookmarks = bookmarks;
     }
 
     /// Adds a bookmark to the manager.
@@ -59,7 +71,7 @@ impl BookmarkManager {
             Err(format!("Bookmark with ID {} not found", id.0))
         }
     }
-    
+
     /// Renames a bookmark
     pub fn rename_bookmark(&mut self, id: BookmarkId, new_name: String) -> Result<(), String> {
         if let Some(bookmark) = self.bookmarks.iter_mut().find(|bookmark| bookmark.id == id) {
@@ -97,5 +109,34 @@ impl FromStr for BookmarkId {
 impl Default for BookmarkId {
     fn default() -> Self {
         Self::new()
+    }
+}
+
+pub(crate) struct BookmarkStorage {
+    config_dir_path: PathBuf,
+}
+
+impl BookmarkStorage {
+    /// Create a new `BookmarkStorage`.
+    pub fn new(config_dir_path: PathBuf) -> Self {
+        Self { config_dir_path }
+    }
+
+    fn bookmark_file_path(&self) -> PathBuf {
+        self.config_dir_path.join("bookmarks.json")
+    }
+
+    /// Load bookmarks from disk.
+    pub fn load_from_file(&self) -> Result<Vec<Bookmark>, std::io::Error> {
+        let file = File::open(self.bookmark_file_path())?;
+        let bookmarks: Vec<Bookmark> = serde_json::from_reader(file)?;
+        Ok(bookmarks)
+    }
+
+    /// Save bookmarks to disk.
+    pub fn save_to_file(&self, bookmarks: &Vec<Bookmark>) -> Result<(), std::io::Error> {
+        let file = File::create(self.bookmark_file_path())?;
+        serde_json::to_writer(file, bookmarks)?;
+        Ok(())
     }
 }

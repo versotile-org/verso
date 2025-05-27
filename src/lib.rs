@@ -33,6 +33,9 @@ pub use winit;
 pub mod bookmark;
 /// Download manager
 pub mod download;
+/// Storage manager, handles all the storage operations,
+/// such as reading and writing bookmarks, preferences, etc.
+pub(crate) mod storage;
 /// Window tabs manager
 pub mod tab;
 /// Utilities

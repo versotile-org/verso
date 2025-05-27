@@ -328,7 +328,7 @@ impl Window {
                         } => {
                             if message.starts_with("VERSO::") {
                                 self.handle_verso_internal_messages_with_webview(
-                                    &message.strip_prefix("VERSO::").unwrap(),
+                                    message.strip_prefix("VERSO::").unwrap(),
                                     response_sender,
                                     sender,
                                     tab,
@@ -599,11 +599,7 @@ impl Window {
                                     }
                                     let bookmark_previously_shown =
                                         !bookmark_manager.bookmarks().is_empty();
-                                    if let Some(_) = bookmark_manager
-                                        .bookmarks()
-                                        .iter()
-                                        .position(|b| b.url == url)
-                                    {
+                                    if bookmark_manager.bookmarks().iter().any(|b| b.url == url) {
                                         let _ = bookmark_manager.remove_bookmark(
                                             BookmarkId::from_str(url.as_str()).unwrap(),
                                         );
@@ -695,10 +691,8 @@ impl Window {
                             } else if message == "OPEN_BOOKMARK_MANAGER" {
                                 self.create_tab(
                                     &sender,
-                                    ServoUrl::parse(
-                                        "verso://resources/components/bookmark.html"
-                                    )
-                                    .unwrap(),
+                                    ServoUrl::parse("verso://resources/components/bookmark.html")
+                                        .unwrap(),
                                 );
                             } else {
                                 match message.as_str() {
@@ -966,7 +960,6 @@ impl Window {
             let _ = self
                 .verso_internal_sender
                 .send(VersoInternalMsg::UpdateDownloadsPage(response_sender));
-            return;
         } else if message.starts_with("ABORT_DOWNLOAD::") {
             if let Some(id) = message.strip_prefix("ABORT_DOWNLOAD::") {
                 let _ = response_sender.send(PromptResponse::Cancel);
@@ -1026,7 +1019,7 @@ impl Window {
                 }
             };
             send_to_constellation(
-                &sender,
+                sender,
                 EmbedderToConstellationMessage::LoadUrl(tab.id(), ServoUrl::from_url(url.clone())),
             );
             return;
