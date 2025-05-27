@@ -15,6 +15,13 @@ struct App {
 impl ApplicationHandler<EventLoopProxyMessage> for App {
     fn resumed(&mut self, event_loop: &winit::event_loop::ActiveEventLoop) {
         self.verso = Some(Verso::new(event_loop, self.proxy.clone()));
+        self.verso.as_mut().unwrap().init();
+    }
+
+    fn exiting(&mut self, _event_loop: &event_loop::ActiveEventLoop) {
+        if let Some(v) = self.verso.as_mut() {
+            v.before_shutdown();
+        }
     }
 
     fn window_event(

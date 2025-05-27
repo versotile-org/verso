@@ -49,6 +49,7 @@ use crate::{
     compositor::{IOCompositor, InitialCompositorState, ShutdownState},
     config::{Config, parse_cli_args},
     download::{DownloadId, DownloadItem, UpdateDownloadState},
+    storage::Storage,
     webview::execute_script,
     window::Window,
 };
@@ -68,6 +69,7 @@ pub struct Verso {
     /// FIXME: It's None on wayland in Flatpak. Find a way to support this.
     clipboard: Option<Clipboard>,
     config: Config,
+    storage: Storage,
     bookmark_manager: BookmarkManager,
     downloads: HashMap<DownloadId, DownloadItem>,
 }
@@ -391,10 +393,34 @@ impl Verso {
             bookmark_manager: BookmarkManager::new(),
             downloads: HashMap::new(),
             verso_internal_sender,
+            storage: Storage::new(),
         };
 
         verso.setup_logging();
         verso
+    }
+
+    /// Initialize Verso instance.
+    ///
+    /// This function is called when the Verso instance is created.
+    pub fn init(&mut self) {
+        // Load bookmarks from disk
+        if let Some(bookmark_storage) = self.storage.bookmark_storage() {
+            let bookmarks = bookmark_storage.load_from_file();
+            if let Ok(bookmarks) = bookmarks {
+                self.bookmark_manager.set_bookmarks(bookmarks);
+            }
+        }
+    }
+
+    /// Task to be done before shutting down.
+    ///
+    /// This function is called when the Verso instance is shutting down.
+    pub fn before_shutdown(&mut self) {
+        // Save bookmarks to disk
+        if let Some(bookmark_storage) = self.storage.bookmark_storage() {
+            let _ = bookmark_storage.save_to_file(self.bookmark_manager.bookmarks());
+        }
     }
 
     /// Handle Winit window events. The strategy to handle event are different between platforms
@@ -641,13 +667,12 @@ impl Verso {
                 }
             }
             VersoInternalMsg::BookmarkRemove(id) => {
-                if let Err(_) = self.bookmark_manager.remove_bookmark(id) {
+                if self.bookmark_manager.remove_bookmark(id).is_err() {
                     log::error!("Failed to remove bookmarks");
                 }
             }
-            VersoInternalMsg::BookmarkRename(id, name) => 
-            {
-                if let Err(_) = self.bookmark_manager.rename_bookmark(id, name) {
+            VersoInternalMsg::BookmarkRename(id, name) => {
+                if self.bookmark_manager.rename_bookmark(id, name).is_err() {
                     log::error!("Failed to rename bookmarks");
                 }
             }
