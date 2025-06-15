@@ -716,6 +716,24 @@ impl Window {
                     }
                     return true;
                 }
+                (modifiers, Code::KeyL) if modifiers == control_or_meta => {
+                    // focus on navigation input
+                    if let Some(panel) = &self.panel {
+                        let webview_id = &panel.webview.webview_id;
+
+                        let _ = compositor.constellation_chan.send(
+                            EmbedderToConstellationMessage::FocusWebView(webview_id.clone()),
+                        );
+
+                        let _ = execute_script(
+                            &compositor.constellation_chan,
+                            webview_id,
+                            "window.navbar.focusUrlInput()".to_string(),
+                        );
+                    }
+                    return true;
+                }
+
                 _ => (),
             }
         }
