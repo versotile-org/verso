@@ -33,6 +33,9 @@ modules:
       - install -d /app/share/applications
       - install -Dm755 ./org.versotile.verso.desktop /app/share/applications/${FLATPAK_ID}.desktop
       - install -Dm644 ./icons/icon256x256.png /app/share/icons/hicolor/256x256/apps/${FLATPAK_ID}.png
+      # net crate need rippy.png
+      - mkdir -p ${CARGO_HOME}/resources
+      - cp ./resources/rippy.png ${CARGO_HOME}/resources/
       # Build Verso release profile
       - cargo --offline fetch --manifest-path Cargo.toml
       - cargo --offline build --release --features flatpak
@@ -48,8 +51,8 @@ modules:
         path: .
       - type: file
         # Update the link whenever mozjs-sys is updated
-        url: https://github.com/servo/mozjs/releases/download/mozjs-sys-v0.128.9-2/libmozjs-x86_64-unknown-linux-gnu.tar.gz
-        sha256: 8e40ba8f3f97250974d468903bccdd9312502f4b928e0b5e1bee97781a8250f4
+        url: https://github.com/servo/mozjs/releases/download/mozjs-sys-v0.128.9-1/libmozjs-x86_64-unknown-linux-gnu.tar.gz
+        sha256: 26bdd1ece46ac00be28fadda72f3c5735d9adc9d846236d5d4c00ed4efbd9faf
         only-arches:
           - x86_64
 
