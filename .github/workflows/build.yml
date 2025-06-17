@@ -301,8 +301,8 @@ jobs:
 
       - name: Fetch Verso version
         run: |
-          echo "VERSO_VERSION=$(cargo metadata --format-version=1 --no-deps | jq -r '.packages[] | select(.name == "verso") | .version')" >> $GITHUB_ENV
-          echo "VERSO_RELEASE_NAME=$(cargo metadata --format-version=1 --no-deps | jq -r '.packages[] | select(.name == "verso") | .version')-$(date '+%Y%m%d')-nightly" >> $GITHUB_ENV
+          echo "VERSO_VERSION=$(cargo metadata --format-version=1 --no-deps | jq -r '.packages[] | select(.name == "versoview") | .version')" >> $GITHUB_ENV
+          echo "VERSO_RELEASE_NAME=$(cargo metadata --format-version=1 --no-deps | jq -r '.packages[] | select(.name == "versoview") | .version')-$(date '+%Y%m%d')-nightly" >> $GITHUB_ENV
 
       - name: Draft release
         uses: crabnebula-dev/cloud-release@v0.1.0
