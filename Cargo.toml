@@ -36,7 +36,7 @@ categories = ["web-programming"]
 name = "verso"
 product-name = "verso"
 identifier = "org.versotile.verso"
-version = "0.0.1"
+version = "0.0.3"
 before-each-package-command = "python etc/package_libs.py"
 resources = [
   "resources",
