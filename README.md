@@ -1,5 +1,10 @@
 # Verso
 
+> [!NOTE]  
+> Verso is currently no longer maintained. The Verso web browser project was an effort to build a functional web browser on top of the Servo web engine, with the goal of identifying what is needed for Servo to evolve into a mature browser. Several major contributions from this project have been integrated into Servo, as detailed in [Behind the Scenes of Verso Browser Development](https://wusyong.github.io/posts/verso-ui/).
+>  
+> As the project progressed, multiple significant revisions to Servo were released, and the Verso browser was unable to keep pace with these updates due to limited manpower and funding. Therefore, we will be archiving the repository for now and look forward to a future opportunity to revitalize the project and continue contributing to the Servo ecosystem.
+
 [![project chat](https://img.shields.io/badge/zulip-57a7ff?style=for-the-badge&labelColor=555555&logo=zulip)](https://versotile.zulipchat.com/)
 
 A web browser that plays old world blues to build new world hope.
